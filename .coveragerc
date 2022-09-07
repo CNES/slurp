@@ -1,0 +1,5 @@
+[run]
+source = slum
+omit =
+    # Omit tests
+    /tests/*
