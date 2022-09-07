@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://gitlab.cnes.fr/cars/slum"><img src="docs/source/images/picto_transparent.png" alt="CARS" title="CARS"  width="20%"></a>
+  <a href="https://gitlab.cnes.fr/pluto/slum"><img src="docs/source/images/logo_SLUM_256.png" alt="SLUM" title="SLUM"  width="20%"></a>
 
 <h4>slum</h4>
 
@@ -8,7 +8,6 @@
 
 <p>
   <a href="#overview">Overview</a> •
-  <a href="#requirements">Requirements</a> •
   <a href="#features">Features</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#documentation">Documentation</a> •
@@ -19,27 +18,28 @@
 
 ## Overview
 
-slum short description:
+SLUM : Simple Land Use Masks
 
-simple land use maks
-
-
-
-## Requirements
-
-TODO
+SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data.
 
 ## Features
 
-TODO
+### Water mask
 
-- Feature 1
-- Feature 2
-- ...
+### Vegetation mask
+
+### Urban (building / roads) mask
+
+### Shadow mask
+
+### Stack all together
+
+### Regularization step with Magiclip
+
 
 ## Quick Start
 
-TODO
+
 
 ## Documentation
 
