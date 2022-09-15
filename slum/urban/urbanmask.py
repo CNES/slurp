@@ -732,8 +732,7 @@ def getarguments():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-
+def main():
     try:
         arguments = getarguments()
         classify(arguments)
@@ -753,3 +752,6 @@ if __name__ == "__main__":
     except Exception as exception:  # pylint: disable=broad-except
         print("oups...", exception)
         traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
