@@ -24,16 +24,16 @@ SLUM proposes different algorithms to perform Land Use/Land Cover masks, with fe
 <table>
 <tr>
 <td>
-<img src="docs/source/images/example_step0_PHR_image.png" alt="Initial VHR image" title="Initial VHR image"  width="20%">
+<img src="docs/source/images/example_step0_PHR_image.png" alt="Initial VHR image" title="Initial VHR image"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step1_watermask.png" alt="Water mask" title="Water mask"  width="20%">
+<img src="docs/source/images/example_step1_watermask.png" alt="Water mask" title="Water mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation mask" title="Low/High vegetation mask"  width="20%">
+<img src="docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation mask" title="Low/High vegetation mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step5_stack_regul.png" alt="Final mask" title="Final mask"  width="20%">
+<img src="docs/source/images/example_step5_stack_regul.png" alt="Final mask" title="Final mask"  width="80%">
 </td>
 </tr>
 </table>
