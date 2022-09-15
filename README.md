@@ -63,11 +63,12 @@ pip install scikit-image scikit-learn geopandas scikit-learn-intelex matplotlib 
 pip install rasterio --no-binary :all:
 ```
 ### Pip install
-
-
-
-
-
+Go to the directory where SLUM had been cloned and pip install it.
+```
+cd slum
+pip install .
+```
+Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
 ## Documentation
 
