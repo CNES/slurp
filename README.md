@@ -20,7 +20,7 @@
 
 **SLUM** : **S**imple **L**and **U**se **M**asks
 
-SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data.
+SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data. Several algorithms perform binary mask (water, vegetation, building, etc.) and some methods are then applied to regularize and merge masks into a single multiclass mask.
 <table border="0">
 <tr>
 <td>
@@ -38,22 +38,6 @@ SLUM proposes different algorithms to perform Land Use/Land Cover masks, with fe
 </tr>
 </table>
 
-
-## Features
-
-### Water mask
-
-### Vegetation mask
-
-### Urban (building / roads) mask
-
-### Shadow mask
-
-### Stack all together
-
-### Regularization step with Magiclip
-
-
 ## Install
 You need to clone the repository and pip install SLUM.
 ```
@@ -62,8 +46,8 @@ git clone git@gitlab.cnes.fr:pluto/slum.git
 To install SLUM, you need OTB and some libraries already installed on VRE OT.
 Otherwise, if you are are connected to HAL, or working on your personal computer (Linux), 
 you may set the environment as mentioned below.
-### Create a virtual env with all libraries (HAL only)
-Connect to HAL (computing node) to create & compile the virtual environment (needed to compile rasterio at install time)
+### Create a virtual env with all libraries (if you don't use VRE OT)
+On HAL, connect to a computing node to create & compile the virtual environment (needed to compile rasterio at install time)
 ```
 qsub -l select=1:ncpus=4 -l walltime=01:00:00 -I
 ```
@@ -87,21 +71,31 @@ pip install .
 ```
 Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
+## Features
+
+### Water mask
+
+### Vegetation mask
+
+### Urban (building / roads) mask
+
+### Shadow mask
+
+### Stack all together
+
+### Regularization step with Magiclip
+
 ## Documentation
 
 Go in docs/ directory
-
-
 
 ## Contribution
 
 See [Contribution](./CONTRIBUTING.md) manual
 
-
-
 ## References
 
-This package was created with cars-cookiecutter project template.
+This package was created with PLUTO-cookiecutter project template.
 
 Inspired by [main cookiecutter template](https://github.com/audreyfeldroy/cookiecutter-pypackage) and 
-[AI4GEO cookiecutter template](https://gitlab.cnes.fr/ai4geo/lot2/cookiecutter-python)
+[CARS cookiecutter template](https://gitlab.cnes.fr/cars/cars-cookiecutter)
