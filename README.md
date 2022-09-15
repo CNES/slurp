@@ -9,7 +9,7 @@
 <p>
   <a href="#overview">Overview</a> •
   <a href="#features">Features</a> •
-  <a href="#quick-start">Quick Start</a> •
+  <a href="#install">Install</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#contribution">Contribution</a> •
   <a href="#references">References</a>
@@ -37,9 +37,38 @@ SLUM proposes different algorithms to perform Land Use/Land Cover masks, with fe
 ### Regularization step with Magiclip
 
 
-## Quick Start
-
-
+## Install
+You need to clone the repository and pip install SLUM.
+```
+git clone git@gitlab.cnes.fr:pluto/slum.git
+```
+To install SLUM, you need OTB and some libraries already installed on VRE OT.
+Otherwise, if you are are connected to HAL, or working on your personal computer (Linux), 
+you may set the environment as mentioned below.
+### Create a virtual env with all libraries (HAL only)
+Connect to HAL (computing node) to create & compile the virtual environment (needed to compile rasterio at install time)
+```
+qsub -l select=1:ncpus=4 -l walltime=01:00:00 -I
+```
+Load OTB and create a virtual env with some Python libraries
+```
+module load otb/7.4-python3.8.4
+# Creates a virtual env base on Python 3.8.4
+python -m venv slum_env
+. slum_env/bin/activate
+# upgrade pip and install several libraries
+pip install pip --upgrade
+pip install scikit-image scikit-learn geopandas scikit-learn-intelex matplotlib cython
+# install and compile rasterio with compatible GDAL 
+pip install rasterio --no-binary :all:
+```
+### Pip install
+Go to the directory where SLUM had been cloned and pip install it.
+```
+cd slum
+pip install .
+```
+Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
 ## Documentation
 
