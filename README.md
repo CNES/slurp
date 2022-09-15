@@ -46,7 +46,7 @@ To install SLUM, you need OTB and some libraries already installed on VRE OT.
 Otherwise, if you are are connected to HAL, or working on your personal computer (Linux), 
 you may set the environment as mentioned below.
 ### Create a virtual env with all libraries (HAL only)
-Connect to a HAL (computing node) to create & compile the virtual environment
+Connect to HAL (computing node) to create & compile the virtual environment (needed to compile rasterio at install time)
 ```
 qsub -l select=1:ncpus=4 -l walltime=01:00:00 -I
 ```
