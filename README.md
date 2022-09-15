@@ -21,7 +21,7 @@
 **SLUM** : **S**imple **L**and **U**se **M**asks
 
 SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data.
-<table>
+<table border="0">
 <tr>
 <td>
 <img src="docs/source/images/example_step0_PHR_image.png" alt="Initial VHR image" title="Initial VHR image"  width="80%">
