@@ -142,10 +142,12 @@ def stack(args):
     # nb of layers
     profile['count'] = 3
     profile.update({'compress' : 'lzw'})
-    with rio.open(args.mask, 'w', **profile) as stack_file:
+    with rio.open(args.mask, 'w+', **profile) as stack_file:
         stack_file.write(stack, 1)
         stack_file.write(height, 2)
         stack_file.write(confidence, 3)
+        #Add class_label in the metadata
+        stack_file.update_tags(class_label=['undef','low_vegetation','high_vegetation', 'water', 'buildings', 'undef_water_urban', 'bare_ground', 'undef_urban_bare_ground', 'water_pred', 'shadow', 'roads'])
     return
 
 
