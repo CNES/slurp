@@ -78,6 +78,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
+from slum.tools import io_utils
 
 try:
     from sklearnex import patch_sklearn
@@ -99,36 +100,6 @@ def print_dataset_infos(dataset, prefix=""):
     print(prefix, "Image crs :", dataset.crs)
     print(prefix, "Image bounds :", dataset.bounds)
     print()
-
-
-def save_image(
-    image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs
-):
-    """Save 1 band numpy image to file with lzw compression.
-    Note that rio.dtype is string so convert np.dtype to string.
-    rpc must be a dictionnary.
-    """
-
-    with rio.open(
-        file,
-        "w",
-        driver="GTiff",
-        compress="lzw",
-        height=image.shape[0],
-        width=image.shape[1],
-        count=1,
-        dtype=str(image.dtype),
-        crs=crs,
-        transform=transform,
-        **kwargs
-    ) as dataset:
-        dataset.write(image, 1)
-        dataset.nodata = nodata
-
-        if rpc:
-            dataset.update_tags(**rpc, ns="RPC")
-
-        dataset.close()
 
 
 def show_images(image1, title1, image2, title2, **kwargs):
@@ -320,7 +291,7 @@ def save_indexes(filename, water_idxs, other_idxs, shape, crs, transform, rpc):
         img[row, col] = 1
     for row, col in other_idxs:
         img[row, col] = 2
-    save_image(img, filename, crs, transform, 0, rpc)
+    io_utils.save_image(img, filename, crs, transform, 0, rpc)
     return
 
 
@@ -379,7 +350,7 @@ def build_stack(args):
 
     # Valid_phr (boolean numpy array, True = valid data, False = no data)
     valid_phr = np.logical_and.reduce(im_phr != nodata_phr, axis=0)
-    save_image(
+    io_utils.save_image(
         valid_phr.astype(np.uint8),
         join(dirname(args.file_classif), "valid.tif"),
         ds_phr.crs,
@@ -407,7 +378,7 @@ def build_stack(args):
             im_phr[names_stack.index("R")],
             valid_phr,
         )
-        save_image(
+        io_utils.save_image(
             im_ndvi,
             join(dirname(args.file_classif), "ndvi.tif"),
             ds_phr.crs,
@@ -429,7 +400,7 @@ def build_stack(args):
             im_phr[names_stack.index("NIR")],
             valid_phr,
         )
-        save_image(
+        io_utils.save_image(
             im_ndwi,
             join(dirname(args.file_classif), "ndwi.tif"),
             ds_phr.crs,
@@ -580,13 +551,23 @@ def predict(classifier, im_stack, valid_stack):
 
     start_time = time.time()
     im_predict = np.zeros(im_stack[0].shape, dtype=np.uint8)
+    im_proba = np.zeros((2,im_stack[0].shape[0],im_stack[0].shape[1]), dtype=np.uint8)
     print("DBG >> Prediction ")
     im_predict[valid_stack] = classifier.predict(
         np.transpose(im_stack[:, valid_stack])
     )
+    print(" len data "+str(len(np.transpose(im_stack[:, valid_stack]))))
+    proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
+    #print("Shape : "+str(proba.shape()))
+    print(im_proba.shape)
+    #im_proba = proba.reshape(2, im_stack[0].shape[0], im_stack[0].shape[1])
+    im_proba[0,:,:] = 100*proba[:,0].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
+    im_proba[1,:,:] = 100*proba[:,1].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
+
+    #im_proba[valid_stack] = [0]
     print("Prediction time :", time.time() - start_time)
 
-    return im_predict
+    return im_predict, im_proba
 
 
 def classify(args):
@@ -613,13 +594,12 @@ def classify(args):
     gc.collect()
 
     # Predict and filter with Hand
-    im_predict = predict(classifier, im_stack, valid_stack)
+    im_predict, im_proba = predict(classifier, im_stack, valid_stack)
     print(">> DEBUG >> prediction OK")
-    # im_predict[np.logical_not(mask_hand)] = 0
-    im_classif = im_predict
+    
 
     crs, transform, rpc = get_crs_transform(args.file_phr)
-    save_image(
+    io_utils.save_image(
         im_predict,
         join(dirname(args.file_classif), "predict.tif"),
         crs,
@@ -627,6 +607,16 @@ def classify(args):
         255,
         rpc,
     )
+
+    io_utils.save_image_2_bands(
+        im_proba,
+        join(dirname(args.file_classif), "proba.tif"),
+        crs,
+        transform,
+        255,
+        rpc,
+    )
+
     #    save_image(im_classif, args.file_classif,
     #               crs, transform, 255, rpc)
 
