@@ -97,5 +97,6 @@ See [Contribution](./CONTRIBUTING.md) manual
 
 This package was created with PLUTO-cookiecutter project template.
 
+
 Inspired by [main cookiecutter template](https://github.com/audreyfeldroy/cookiecutter-pypackage) and 
 [CARS cookiecutter template](https://gitlab.cnes.fr/cars/cars-cookiecutter)
