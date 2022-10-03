@@ -3,6 +3,7 @@
 
 import rasterio as rio
 
+
 def save_image(
     image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs
 ):
