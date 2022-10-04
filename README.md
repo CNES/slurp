@@ -74,10 +74,30 @@ Your environment is ready, you can compute SLUM masks with slum_watermask, slum_
 ## Features
 
 ### Water mask
+Water model is learned from Peckel (Global Surface Water) reference data and is based on NDVI/NDWI2 indices. 
+Then the predicted mask is cleaned with Peckel, possibly with HAND maps and post-processed to clean artefacts.
+```
+slum_watermask <VHR input image> <your watermask.tif>
+```
+Type `slum_watermask -h` for complete list of options :
 
+- bands identification (-red <1/3>), 
+- add other raster features (-layers layer1 [layer 2 ..]), 
+- post-process mask (-remove_small_holes, -binary_closing, etc.), 
+- etc.
 ### Vegetation mask
 
 ### Urban (building / roads) mask
+An urban model (either building or road) is learned from OSM reference map (provided as raster covering same extent as input VHR image). Adding an other OSM ground truth improves model (by learning counter-example) and thus eliminates a lot of false positive detection.
+The resulting mask is supposed to be stack with other masks (water, vegetation) to improve final rendering.
+```
+slum_urbanmask -building_mask <raster ground truth - OSM, ..> <VHR input image> <your urban mask>
+```
+Type `slum_urbanmask -h` for complete list of options :
+
+- add road mask to improve roads/building separation (-road_mask <raster ground truth>)
+- use RGB, add other features, etc.
+
 
 ### Shadow mask
 
