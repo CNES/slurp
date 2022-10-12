@@ -602,7 +602,7 @@ def classify(args):
     crs, transform, rpc = get_crs_transform(args.file_phr)
     io_utils.save_image(
         im_predict,
-        join(dirname(args.file_classif), "predict.tif"),
+        args.file_classif,
         crs,
         transform,
         255,
@@ -720,6 +720,15 @@ def getarguments():
         help="Output classification value (default is 1)",
     )
 
+    parser.add_argument(
+        "-nb_samples",
+        type=int,
+        default=2000,
+        required=False,
+        action="store",
+        dest="nb_samples",
+        help="Number of samples for the class of interest",
+    )
     return parser.parse_args()
 
 
