@@ -18,7 +18,7 @@
 
 ## Overview
 
-**SLUM** : **S**imple **L**and **U**se **M**asks
+**SLUM** : **S**mart **L**and **U**se **M**asks
 
 SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data. Several algorithms perform binary mask (water, vegetation, building, etc.) and some methods are then applied to regularize and merge masks into a single multiclass mask.
 <table border="0">
@@ -86,6 +86,22 @@ Type `slum_watermask -h` for complete list of options :
 - post-process mask (-remove_small_holes, -binary_closing, etc.), 
 - etc.
 ### Vegetation mask
+Vegetation mask are computed with an unsupervised clustering algorithm. First some primitives are computed from VHR image (NDVI, NDWI2, textures).
+Then a segmentation is processed (SLIC, Large Scale Mean Shift, Felzenswalb) and segments are dispatched in several clusters depending
+on their features.
+A final labellisation affects a class to each segment (ie : high NDVI and low texture denotes for low vegetation).
+```
+slum_vegetationmask <VHR input image> <your vegetation mask.tif/.shp/.geojson/.gpkg>
+```
+Type `slum_vegetationmask -h` for complete list of options : 
+
+- red/NIR bands
+- segmentation mode and parameter for SLIC or Felzenswalb algorithms
+- spectral threshold for texture (Structural Feature Set) computation
+- number of workers (parallel processing for primitives and segmentation tasks)
+- number of clusters affected to vegetation (3 by default - 33%)
+- etc.
+
 
 ### Urban (building / roads) mask
 An urban model (either building or road) is learned from OSM reference map (provided as raster covering same extent as input VHR image). Adding an other OSM ground truth improves model (by learning counter-example) and thus eliminates a lot of false positive detection.
