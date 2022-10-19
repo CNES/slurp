@@ -38,10 +38,12 @@ def rasterize(args):
         appMorpho.SetParameterInt("xradius",args.dilate)
         appMorpho.SetParameterInt("yradius",args.dilate)
         appMorpho.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        appMorpho.SetParameterOutputImagePixelType("out",otb.ImagePixelType_uint8)
         appMorpho.ExecuteAndWriteOutput()
     else:
         print("Write final result")
         appSI.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        appSI.SetParameterOutputImagePixelType("out",otb.ImagePixelType_uint8)
         appSI.ExecuteAndWriteOutput()
 
     os.system("rm tmp_OSM_data.sqlite")

@@ -92,13 +92,16 @@ def stack(args):
 
     #height[undefined_urban] = NOT_CONFIDENT
 
-    confidence[mask_building == 1] = 1
+    confidence[buildings] += 1
+    confidence[roads] += 1 
 
     bare_ground = np.logical_and(mask_water_pred == 0, mask_veg == 11)
     natural_bare_ground = np.logical_and(np.logical_and(mnh_data < height_threshold, artificial == False), bare_ground)
     
     stack[natural_bare_ground] = BARE_GROUND
     height[natural_bare_ground] = LOW
+
+    confidence[natural_bare_ground] += 1
     
     low_veg = mask_veg == 21
     high_veg = np.logical_or(mask_veg == 22, mask_veg == 23)
@@ -112,23 +115,16 @@ def stack(args):
     height[low_veg] = LOW
     height[high_veg] = HIGH    
 
-    confidence[mask_veg == 21] += 1
-    confidence[mask_veg == 22] += 1
-    confidence[mask_veg == 23] += 1
-
-    # Shadow
-    shadow_pred = mask_shadow == 1
-    stack[shadow_pred] = SHADOW
-    height[shadow_pred] = NOT_CONFIDENT
-
-    confidence[shadow_pred] += 1
+    confidence[high_veg] += 1
+    confidence[low_veg] += 1
 
     # Water layer : may be low (classif.tif) or not confident (predict.tif + urban)
     water = mask_water == 1
     water_pred = np.logical_and(mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_building == 0))
     mix_water_building = np.logical_and(mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_building == 1))
 
-    stack[mix_water_building] = UNDEF_WATER_URBAN
+    #stack[mix_water_building] = UNDEF_WATER_URBAN
+    confidence[mix_water_building] += 1
     stack[water_pred] = WATER_PRED
     stack[water] = WATER
  
@@ -136,8 +132,17 @@ def stack(args):
     height[mix_water_building] = NOT_CONFIDENT
     height[water] = LOW
 
-    confidence[mask_water_pred == 1] += 1
+    confidence[water] += 1
+    confidence[water_pred] += 1
    
+    # Shadow
+    shadow_pred = mask_shadow == 1
+    #stack[shadow_pred] = SHADOW
+    height[shadow_pred] = NOT_CONFIDENT
+
+    confidence[shadow_pred] = -1
+
+
 
     # nb of layers
     profile['count'] = 3

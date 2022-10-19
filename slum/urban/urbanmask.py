@@ -562,8 +562,8 @@ def predict(classifier, im_stack, valid_stack):
     #print("Shape : "+str(proba.shape()))
     print(im_proba.shape)
     #im_proba = proba.reshape(2, im_stack[0].shape[0], im_stack[0].shape[1])
-    im_proba[0,:,:] = 100*proba[:,0].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-    im_proba[1,:,:] = 100*proba[:,1].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
+    #im_proba[0,:,:] = 100*proba[:,0].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
+    #im_proba[1,:,:] = 100*proba[:,1].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
 
     #im_proba[valid_stack] = [0]
     print("Prediction time :", time.time() - start_time)
