@@ -12,10 +12,11 @@ import time
 
 def rasterize(args):
     start_time = time.time()
-    appReproj = otb.Registry.CreateApplication('VectorDataReprojection')
-    appReproj.SetParameterString("in.vd",args.osm)
-    appReproj.SetParameterString("out.proj.image.in",args.im)
-    appReproj.SetParameterString("out.vd","tmp_OSM_data.sqlite")
+
+    appReproj = otb.Registry.CreateApplication('VectorDataExtractROI')
+    appReproj.SetParameterString("io.vd",args.osm)
+    appReproj.SetParameterString("io.in",args.im)
+    appReproj.SetParameterString("io.out","tmp_OSM_data.sqlite")
     appReproj.ExecuteAndWriteOutput()
 
     appRaster = otb.Registry.CreateApplication('Rasterization')
@@ -46,7 +47,7 @@ def rasterize(args):
         appSI.SetParameterOutputImagePixelType("out",otb.ImagePixelType_uint8)
         appSI.ExecuteAndWriteOutput()
 
-    os.system("rm tmp_OSM_data.sqlite")
+    #os.system("rm tmp_OSM_data.sqlite")
 
     print("Execution time : "+str(time.time() - start_time))
 
