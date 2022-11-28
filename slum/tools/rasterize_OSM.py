@@ -47,7 +47,7 @@ def rasterize(args):
         appSI.SetParameterOutputImagePixelType("out",otb.ImagePixelType_uint8)
         appSI.ExecuteAndWriteOutput()
 
-    #os.system("rm tmp_OSM_data.sqlite")
+    os.system("rm tmp_OSM_data.sqlite")
 
     print("Execution time : "+str(time.time() - start_time))
 

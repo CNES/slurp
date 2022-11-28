@@ -78,7 +78,7 @@ def stack(args):
 
     buildings_clean = np.logical_and(mask_building == 1, mask_road == 0)
     roads_clean = np.logical_and(mask_building == 0, mask_road == 1)
-    print(roads_clean)
+    
 
     buildings = np.logical_and(
         np.logical_and(buildings_clean, mnh_data >= height_threshold),
