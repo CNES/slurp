@@ -78,7 +78,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
-
+import random
 from tools import io_utils
 
 try:
@@ -151,10 +151,18 @@ def show_histograms2(image1, title1, image2, title2, **kwargs):
     del ignored
 
     axe.plot(
-        np.arange(-1000, 1001, step=10), hist1, color="blue", label=title1, **kwargs
+        np.arange(-1000, 1001, step=10),
+        hist1,
+        color="blue",
+        label=title1,
+        **kwargs
     )
     axe.plot(
-        np.arange(-1000, 1001, step=10), hist2, color="red", label=title2, **kwargs
+        np.arange(-1000, 1001, step=10),
+        hist2,
+        color="red",
+        label=title2,
+        **kwargs
     )
 
     fig.tight_layout()
@@ -252,48 +260,31 @@ def get_crs_transform(file):
     return crs, transform, rpc
 
 
-
-def get_indexes_from_masks(nb_indexes, mask1, value1, mask_valid, args):
+def get_indexes_from_masks(nb_indexes, mask1, value1, mask_valid):
     """Get valid indexes from masks.
     Mask 1 is a validity mask
     """
 
     nb_idxs = 0
-    number = args.random_seed
     rows_idxs = []
     cols_idxs = []
 
     height = mask_valid.shape[0]
     width = mask_valid.shape[1]
 
-    if args.random_seed:
-        np.random.seed(args.random_seed)
+    while nb_idxs < nb_indexes:
         row = np.random.randint(0, height)
-        np.random.seed(args.random_seed + number)
-        col = np.random.randint(0, height)
+        col = np.random.randint(0, width)
 
-        while nb_idxs < nb_indexes:
-            np.random.seed(row + number)
-            row = np.random.randint(0, height)
-            np.random.seed(col + number)
-            col = np.random.randint(0, width)
-            if mask1[row, col] == value1 and mask_valid[row, col]:
-                rows_idxs.append(row)
-                cols_idxs.append(col)
-                nb_idxs += 1
-            number += 1
-    else:
-        while nb_idxs < nb_indexes:
-            row = np.random.randint(0, height)
-            col = np.random.randint(0, width)
-
-            if mask1[row, col] == value1 and mask_valid[row, col]:
-                rows_idxs.append(row)
-                cols_idxs.append(col)
-                nb_idxs += 1
+        if mask1[row, col] == value1 and mask_valid[row, col]:
+            rows_idxs.append(row)
+            cols_idxs.append(col)
+            nb_idxs += 1
         # else:
         #    print("Row : "+str(row)+" Col : "+str(col)+" -> "+str(mask1[row, col]))
+
     return rows_idxs, cols_idxs
+
 
 
 def save_indexes(filename, water_idxs, other_idxs, shape, crs, transform, rpc):
@@ -321,7 +312,9 @@ def show_rftree(estimator, feature_names):
     )
 
     call(["dot", "-Tpng", "tree.dot", "-o", "tree.png", "-Gdpi=300"])
-    print(export_text(estimator, show_weights=True, feature_names=feature_names))
+    print(
+        export_text(estimator, show_weights=True, feature_names=feature_names)
+    )
 
 
 def print_feature_importance(classifier, feature_names):
@@ -330,11 +323,16 @@ def print_feature_importance(classifier, feature_names):
     importances = classifier.feature_importances_
     indices = np.argsort(importances)[::-1]
 
-    std = np.std([tree.feature_importances_ for tree in classifier.estimators_], axis=0)
+    std = np.std(
+        [tree.feature_importances_ for tree in classifier.estimators_], axis=0
+    )
 
     print("Feature ranking:")
     for idx in indices:
-        print("  %4s (%f) (std=%f)" % (feature_names[idx], importances[idx], std[idx]))
+        print(
+            "  %4s (%f) (std=%f)"
+            % (feature_names[idx], importances[idx], std[idx])
+        )
 
 
 def build_stack(args):
@@ -434,7 +432,10 @@ def build_stack(args):
                 *im_phr,
                 im_ndvi,
                 im_ndwi,
-                *(rio.open(file_layer).read(1) for file_layer in args.files_layers),
+                *(
+                    rio.open(file_layer).read(1)
+                    for file_layer in args.files_layers
+                ),
             )
         )
     else:
@@ -444,7 +445,10 @@ def build_stack(args):
                 im_phr[names_stack.index("NIR")],
                 im_ndvi,
                 im_ndwi,
-                *(rio.open(file_layer).read(1) for file_layer in args.files_layers),
+                *(
+                    rio.open(file_layer).read(1)
+                    for file_layer in args.files_layers
+                ),
             )
         )
 
@@ -462,7 +466,7 @@ def build_samples(im_stack, valid_stack, args):
     print("Build samples")
     start_time = time.time()
 
-    ds_gt = rio.open(args.urbanclass_interest)
+    ds_gt = rio.open(args.raster_building)
     im_gt = ds_gt.read(1)
     mask_building = im_gt == 1
 
@@ -471,6 +475,9 @@ def build_samples(im_stack, valid_stack, args):
     #       print('=> Warning : low water pixel number in Pekel Mask\n')
 
     # Prepare water and other samples
+
+    # If samples not fix:
+
     nb_building_samples = 2000
     nb_other_samples = 2000
 
@@ -478,29 +485,28 @@ def build_samples(im_stack, valid_stack, args):
     rows_b, cols_b = get_indexes_from_masks(
         nb_building_samples, im_gt, args.value_classif, valid_stack
     )
+    rows_road, cols_road = get_indexes_from_masks(
+        nb_building_samples, im_gt, 2, valid_stack
+    )
 
     rows_nob = []
     cols_nob = []
-    if args.urbanclass:
-        ds_roads = rio.open(args.urbanclass)
-        im_roads = ds_roads.read(1)
-        nb_samples = nb_other_samples / 2
-        rows_nob0, cols_nob0 = get_indexes_from_masks(
-            nb_samples, im_roads, 1, valid_stack
-        )
-        rows_nob1, cols_nob1 = get_indexes_from_masks(nb_samples, im_gt, 0, valid_stack)
-        rows_nob = [*rows_nob0, *rows_nob1]
-        cols_nob = [*cols_nob0, *cols_nob1]
-        del im_roads, ds_roads
-    else:
-        # Non building samples TODO : fix value
-        rows_nob, cols_nob = get_indexes_from_masks(
-            nb_other_samples, im_gt, 0, valid_stack
-        )
+    rows_nob, cols_nob = get_indexes_from_masks(
+        nb_other_samples, im_gt, 0, valid_stack
+    )
 
     save_indexes(
-        "samples.tif",
+        join(dirname(args.file_classif), "samples_building.tif"),
         zip(rows_b, cols_b),
+        zip(rows_nob, cols_nob),
+        args.shape,
+        args.crs,
+        args.transform,
+        args.rpc,
+    )
+    save_indexes(
+        join(dirname(args.file_classif), "samples_road.tif"),
+        zip(rows_road, cols_road),
         zip(rows_nob, cols_nob),
         args.shape,
         args.crs,
@@ -509,12 +515,11 @@ def build_samples(im_stack, valid_stack, args):
     )
 
     # samples = building+non building
-    rows = rows_b + rows_nob
-    cols = cols_b + cols_nob
+    rows = rows_b + rows_nob + rows_road
+    cols = cols_b + cols_nob + cols_road
 
     x_samples = np.transpose(im_stack[:, rows, cols])
     y_samples = im_gt[rows, cols]
-
     del im_gt, ds_gt
     print("Build samples time : ", time.time() - start_time)
 
@@ -547,9 +552,13 @@ def predict(classifier, im_stack, valid_stack):
 
     start_time = time.time()
     im_predict = np.zeros(im_stack[0].shape, dtype=np.uint8)
-    im_proba = np.zeros((2, im_stack[0].shape[0], im_stack[0].shape[1]), dtype=np.uint8)
+    im_proba = np.zeros(
+        (2, im_stack[0].shape[0], im_stack[0].shape[1]), dtype=np.uint8
+    )
     print("DBG >> Prediction ")
-    im_predict[valid_stack] = classifier.predict(np.transpose(im_stack[:, valid_stack]))
+    im_predict[valid_stack] = classifier.predict(
+        np.transpose(im_stack[:, valid_stack])
+    )
     print(" len data " + str(len(np.transpose(im_stack[:, valid_stack]))))
     proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
     # print("Shape : "+str(proba.shape()))
@@ -570,26 +579,17 @@ def classify(args):
     # Build stack with all layers
     im_stack, valid_stack, names_stack = build_stack(args)
 
-    if args.model:
-
-        classifier = joblib.load(args.model)
-    # Create and train classifier from samples
-    else:
-        x_samples, y_samples, mask_building = build_samples(
+    # Build samples from stack and control layers (ground truth building stack)
+    x_samples, y_samples, mask_building = build_samples(
         im_stack, valid_stack, args
     )
-        classifier = RandomForestClassifier(
-            n_estimators=100, max_depth=3, random_state=0, n_jobs=4
-        )
-        print("RandomForest parameters:\n", classifier.get_params(), "\n")
-        train_classifier(classifier, x_samples, y_samples)
-        print("Dump classifier to model_rf.dump")
 
-        joblib.dump(
-            classifier, join(dirname(args.file_classif), "model_rf.dump")
-        )
+    # Create and train classifier from samples
+    classifier = RandomForestClassifier(
+        n_estimators=100, max_depth=3, random_state=0, n_jobs=4
+    )
     print("RandomForest parameters:\n", classifier.get_params(), "\n")
-    
+    train_classifier(classifier, x_samples, y_samples)
     print("Dump classifier to model_rf.dump")
     joblib.dump(classifier, "model_rf.dump")
     # show_rftree(classifier.estimators_[5], names_stack)
@@ -690,19 +690,19 @@ def getarguments():
     )
 
     parser.add_argument(
-        "-urbanclass_interest",
+        "-building_mask",
         default=None,
         required=True,
         action="store",
-        dest="urbanclass_interest",
+        dest="raster_building",
     )
 
     parser.add_argument(
-        "-urbanclass",
+        "-road_mask",
         default=None,
         required=False,
         action="store",
-        dest="urbanclass",
+        dest="road_mask",
         help="Provide a road layer to better separate roads from buildings",
     )
 
@@ -730,24 +730,7 @@ def getarguments():
         dest="nb_samples",
         help="Number of samples for the class of interest",
     )
-    parser.add_argument(
-        "-random_seed",
-        type=int,
-        default=None,
-        required=False,
-        action="store",
-        dest="random_seed",
-        help="Fixed the samples with Random Seed",
-    )
 
-    parser.add_argument(
-        "-model",
-        default=None,
-        required=False,
-        action="store",
-        dest="model",
-        help="Filepath model",
-    )
     return parser.parse_args()
 
 
