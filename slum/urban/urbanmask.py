@@ -476,7 +476,7 @@ def build_samples(im_stack, valid_stack, args):
 
     # Building samples
     rows_b, cols_b = get_indexes_from_masks(
-        nb_building_samples, im_gt, args.value_classif, valid_stack
+        nb_building_samples, im_gt, args.value_classif, valid_stack,args
     )
 
     rows_nob = []
@@ -486,16 +486,16 @@ def build_samples(im_stack, valid_stack, args):
         im_roads = ds_roads.read(1)
         nb_samples = nb_other_samples / 2
         rows_nob0, cols_nob0 = get_indexes_from_masks(
-            nb_samples, im_roads, 1, valid_stack
+            nb_samples, im_roads, 1, valid_stack,args
         )
-        rows_nob1, cols_nob1 = get_indexes_from_masks(nb_samples, im_gt, 0, valid_stack)
+        rows_nob1, cols_nob1 = get_indexes_from_masks(nb_samples, im_gt, 0, valid_stack, args)
         rows_nob = [*rows_nob0, *rows_nob1]
         cols_nob = [*cols_nob0, *cols_nob1]
         del im_roads, ds_roads
     else:
         # Non building samples TODO : fix value
         rows_nob, cols_nob = get_indexes_from_masks(
-            nb_other_samples, im_gt, 0, valid_stack
+            nb_other_samples, im_gt, 0, valid_stack,args
         )
 
     save_indexes(
