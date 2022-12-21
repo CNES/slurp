@@ -79,8 +79,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 
-#from tools import io_utils
-import io_utils
+from tools import io_utils
 
 try:
     from sklearnex import patch_sklearn
