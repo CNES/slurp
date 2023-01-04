@@ -260,29 +260,46 @@ def get_crs_transform(file):
     return crs, transform, rpc
 
 
-def get_indexes_from_masks(nb_indexes, mask1, value1, mask_valid):
+def get_indexes_from_masks(nb_indexes, mask1, value1, mask_valid, args):
     """Get valid indexes from masks.
     Mask 1 is a validity mask
     """
 
     nb_idxs = 0
+    number = args.random_seed
     rows_idxs = []
     cols_idxs = []
 
     height = mask_valid.shape[0]
     width = mask_valid.shape[1]
 
-    while nb_idxs < nb_indexes:
+    if args.random_seed:
+        np.random.seed(args.random_seed)
         row = np.random.randint(0, height)
-        col = np.random.randint(0, width)
+        np.random.seed(args.random_seed + number)
+        col = np.random.randint(0, height)
 
-        if mask1[row, col] == value1 and mask_valid[row, col]:
-            rows_idxs.append(row)
-            cols_idxs.append(col)
-            nb_idxs += 1
+        while nb_idxs < nb_indexes:
+            np.random.seed(row + number)
+            row = np.random.randint(0, height)
+            np.random.seed(col + number)
+            col = np.random.randint(0, width)
+            if mask1[row, col] == value1 and mask_valid[row, col]:
+                rows_idxs.append(row)
+                cols_idxs.append(col)
+                nb_idxs += 1
+            number += 1
+    else:
+        while nb_idxs < nb_indexes:
+            row = np.random.randint(0, height)
+            col = np.random.randint(0, width)
+
+            if mask1[row, col] == value1 and mask_valid[row, col]:
+                rows_idxs.append(row)
+                cols_idxs.append(col)
+                nb_idxs += 1
         # else:
         #    print("Row : "+str(row)+" Col : "+str(col)+" -> "+str(mask1[row, col]))
-
     return rows_idxs, cols_idxs
 
 
@@ -466,7 +483,7 @@ def build_samples(im_stack, valid_stack, args):
     print("Build samples")
     start_time = time.time()
 
-    ds_gt = rio.open(args.raster_building)
+    ds_gt = rio.open(args.urban_raster)
     im_gt = ds_gt.read(1)
     mask_building = im_gt == 1
 
@@ -580,18 +597,26 @@ def classify(args):
 
     # Build stack with all layers
     im_stack, valid_stack, names_stack = build_stack(args)
+    if args.model:
 
-    # Build samples from stack and control layers (ground truth building stack)
-    x_samples, y_samples, mask_building = build_samples(
-        im_stack, valid_stack, args
-    )
-
+        classifier = joblib.load(args.model)
     # Create and train classifier from samples
-    classifier = RandomForestClassifier(
-        n_estimators=100, max_depth=3, random_state=0, n_jobs=4
-    )
+    else:
+        x_samples, y_samples, mask_building = build_samples(
+        im_stack, valid_stack, args
+        )
+        classifier = RandomForestClassifier(
+            n_estimators=100, max_depth=3, random_state=0, n_jobs=4
+        )
+        print("RandomForest parameters:\n", classifier.get_params(), "\n")
+        train_classifier(classifier, x_samples, y_samples)
+        print("Dump classifier to model_rf.dump")
+
+        joblib.dump(
+            classifier, join(dirname(args.file_classif), "model_rf.dump")
+        )
     print("RandomForest parameters:\n", classifier.get_params(), "\n")
-    train_classifier(classifier, x_samples, y_samples)
+
     print("Dump classifier to model_rf.dump")
     joblib.dump(classifier, "model_rf.dump")
     # show_rftree(classifier.estimators_[5], names_stack)
@@ -692,20 +717,11 @@ def getarguments():
     )
 
     parser.add_argument(
-        "-building_mask",
+        "-urban_raster",
         default=None,
         required=True,
         action="store",
-        dest="raster_building",
-    )
-
-    parser.add_argument(
-        "-road_mask",
-        default=None,
-        required=False,
-        action="store",
-        dest="road_mask",
-        help="Provide a road layer to better separate roads from buildings",
+        dest="urban_raster",
     )
 
     parser.add_argument(
@@ -733,7 +749,28 @@ def getarguments():
         help="Number of samples for the class of interest",
     )
 
+    parser.add_argument(
+        "-random_seed",
+        type=int,
+        default=None,
+        required=False,
+        action="store",
+        dest="random_seed",
+        help="Fixed the samples with Random Seed",
+    )
+
+    parser.add_argument(
+        "-model",
+        default=None,
+        required=False,
+        action="store",
+        dest="model",
+        help="Filepath model",
+    )
+
+
     return parser.parse_args()
+
 
 
 def main():
