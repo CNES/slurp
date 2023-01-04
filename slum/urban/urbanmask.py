@@ -491,28 +491,11 @@ def build_samples(im_stack, valid_stack, args):
 
     rows_nob = []
     cols_nob = []
-<<<<<<< HEAD
+
     rows_nob, cols_nob = get_indexes_from_masks(
         nb_other_samples, im_gt, 0, valid_stack
     )
-=======
-    if args.urbanclass:
-        ds_roads = rio.open(args.urbanclass)
-        im_roads = ds_roads.read(1)
-        nb_samples = nb_other_samples / 2
-        rows_nob0, cols_nob0 = get_indexes_from_masks(
-            nb_samples, im_roads, 1, valid_stack,args
-        )
-        rows_nob1, cols_nob1 = get_indexes_from_masks(nb_samples, im_gt, 0, valid_stack, args)
-        rows_nob = [*rows_nob0, *rows_nob1]
-        cols_nob = [*cols_nob0, *cols_nob1]
-        del im_roads, ds_roads
-    else:
-        # Non building samples TODO : fix value
-        rows_nob, cols_nob = get_indexes_from_masks(
-            nb_other_samples, im_gt, 0, valid_stack,args
-        )
->>>>>>> urbanmask_changement
+
 
     save_indexes(
         join(dirname(args.file_classif), "samples_building.tif"),
