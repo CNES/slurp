@@ -76,8 +76,8 @@ def stack(args):
     # Urban layer : may be high, or "not confident"
     no_water_no_veg = np.logical_and(mask_water_pred == 0, mask_veg < 21)
 
-    buildings_clean = np.logical_and(mask_building == 1, mask_road == 0)
-    roads_clean = np.logical_and(mask_building == 0, mask_road == 1)
+    buildings_clean = mask_building == 1
+    roads_clean = mask_building == 2
     
 
     buildings = np.logical_and(

@@ -270,10 +270,10 @@ def superimpose(file_in, file_ref, file_out, type_out):
     app = otb.Registry.CreateApplication("Superimpose")
     app.SetParameterString("inm", file_in)  # pekel or hand vrt
     app.SetParameterString("inr", file_ref)  # phr file
-    app.SetParameterString("elev.dem", "/datalake/static_aux/MNT/SRTM_30_hgt/")
-    app.SetParameterString(
-        "elev.geoid", "/softs/projets/cars/data/geoides/egm96.grd"
-    )
+    # app.SetParameterString("elev.dem", "/datalake/static_aux/MNT/SRTM_30_hgt/")
+    # app.SetParameterString(
+    #    "elev.geoid", "/softs/projets/cars/data/geoides/egm96.grd"
+    # )
     app.SetParameterString("interpolator", "nn")
     app.SetParameterString("out", file_out + "?&writerpctags=true")
     app.SetParameterOutputImagePixelType("out", type_out)
@@ -754,6 +754,9 @@ def build_samples(im_stack, valid_stack, args):
     # Check pekel mask
     if np.count_nonzero(mask_pekel) < 2000:
         print("=> Warning : low water pixel number in Pekel Mask\n")
+        mask_pekel = compute_mask(
+            join(dirname(args.file_classif), "ndwi.tif"), 0.3
+        )[0]
 
     # Image HAND (numpy array, first band) and mask
     if args.file_hand is None:
