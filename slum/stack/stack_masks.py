@@ -10,6 +10,11 @@ import rasterio as rio
 import numpy as np
 import argparse
 import os
+from skimage.morphology import (
+    binary_closing,
+    diameter_closing,
+    remove_small_holes
+)
 
 LOW_VEG = 1
 HIGH_VEG = 2
@@ -49,16 +54,11 @@ def stack(args):
     mask_fic_water_pred = rio.open(args.water_pred)
     mask_water_pred = mask_fic_water_pred.read(1)
 
-    mask_fic_building = rio.open(args.building)
-    mask_building = mask_fic_building.read(1)
+    mask_fic_urban = rio.open(args.urban)
+    mask_urban = mask_fic_urban.read(1)
 
     mask_fic_shadow = rio.open(args.shadow)
     mask_shadow = mask_fic_shadow.read(1)
-
-    mask_road = np.zeros_like(mask_veg)
-    if args.road != "":
-        mask_fic_road = rio.open(args.road)
-        mask_road = mask_fic_road.read(1)
 
     mnh_data = np.zeros_like(mask_veg)
     height_threshold = 0
@@ -69,6 +69,9 @@ def stack(args):
         mnh_data = mnh_fic.read(1)
         height_threshold = 5
 
+    
+    
+
     stack = np.zeros_like(mask_veg)
     height = np.zeros_like(mask_veg)
     confidence = np.zeros_like(mask_veg)
@@ -76,9 +79,13 @@ def stack(args):
     # Urban layer : may be high, or "not confident"
     no_water_no_veg = np.logical_and(mask_water_pred == 0, mask_veg < 21)
 
-    buildings_clean = mask_building == 1
-    roads_clean = mask_building == 2
-    
+    buildings_clean = mask_urban == 1
+    roads_clean = mask_urban == 2
+    # Small holes removal
+    if args.remove_small_holes:
+        area = int(args.remove_small_holes)
+        buildings_clean = remove_small_holes(buildings_clean.astype(bool), area, connectivity=2)
+        roads_clean = remove_small_holes(roads_clean.astype(bool), area, connectivity=2)
 
     buildings = np.logical_and(
         np.logical_and(buildings_clean, mnh_data >= height_threshold),
@@ -87,7 +94,7 @@ def stack(args):
 
     roads = np.logical_and(roads_clean, no_water_no_veg)
 
-    artificial = np.logical_or(mask_road == 1, mask_building == 1)
+    artificial = np.logical_or(mask_urban == 2, mask_urban == 1)
 
     urban_areas = np.logical_and(
         np.logical_and(artificial, mnh_data <= height_threshold),
@@ -97,13 +104,10 @@ def stack(args):
     stack[urban_areas] = UNDEF_URBAN_BARE_GROUND
     stack[buildings] = BUILDINGS
     stack[roads] = ROADS
-    # stack[undefined_urban] = UNDEF_URBAN_BARE_GROUND
 
     height[buildings] = HIGH
     height[roads] = LOW
     height[urban_areas] = LOW
-
-    # height[undefined_urban] = NOT_CONFIDENT
 
     confidence[buildings] += 1
     confidence[roads] += 1
@@ -135,21 +139,25 @@ def stack(args):
     confidence[low_veg] += 1
 
     # Water layer : may be low (classif.tif) or not confident (predict.tif + urban)
+    # Small holes removal
+    if args.remove_small_holes:
+        area = int(args.remove_small_holes)
+        mask_water = remove_small_holes(mask_water.astype(bool), area, connectivity=2)
     water = mask_water == 1
     water_pred = np.logical_and(
-        mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_building == 0)
+        mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_urban == 0)
     )
-    mix_water_building = np.logical_and(
-        mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_building == 1)
+    mix_water_urban = np.logical_and(
+        mask_veg < 11, np.logical_and(mask_water_pred == 1, mask_urban == 1)
     )
 
-    # stack[mix_water_building] = UNDEF_WATER_URBAN
-    confidence[mix_water_building] += 1
+    # stack[mix_water_urban] = UNDEF_WATER_URBAN
+    confidence[mix_water_urban] += 1
     stack[water_pred] = WATER_PRED
     stack[water] = WATER
 
     height[water_pred] = LOW
-    height[mix_water_building] = NOT_CONFIDENT
+    height[mix_water_urban] = NOT_CONFIDENT
     height[water] = LOW
 
     confidence[water] += 1
@@ -191,9 +199,6 @@ def stack(args):
 def main():
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "im_path", help="Image from which the masks are computed"
-        )
         parser.add_argument("mask", help="Final mask")
         parser.add_argument("-vegetation", default=None, help="Vegetation mask")
         parser.add_argument(
@@ -202,8 +207,7 @@ def main():
         parser.add_argument(
             "-water_pred", default=None, help="Water mask (prediction)"
         )
-        parser.add_argument("-building", default=None, help="Building mask")
-        parser.add_argument("-road", default="", help="Road mask")
+        parser.add_argument("-urban", default=None, help="Building & Road mask")
         parser.add_argument("-mnh", default="", help="Height elevation model")
         parser.add_argument("-shadow", default=None, help="Shadow mask")
         parser.add_argument(
@@ -211,6 +215,7 @@ def main():
             default=False,
             help="Use MNH to help categorize low/high veg",
         )
+        parser.add_argument("-remove_small_holes", default=None, help="Smaller objects will be removed")
         args = parser.parse_args()
         stack(args)
 

@@ -79,7 +79,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
-from tools import io_utils
+from slum.tools import io_utils
 
 try:
     from sklearnex import patch_sklearn
@@ -503,14 +503,14 @@ def build_samples(im_stack, valid_stack, args):
         nb_building_samples, im_gt, args.value_classif, valid_stack,args
     )
     rows_road, cols_road = get_indexes_from_masks(
-        nb_building_samples, im_gt, 2, valid_stack
+        nb_building_samples, im_gt, 2, valid_stack, args
     )
 
     rows_nob = []
     cols_nob = []
 
     rows_nob, cols_nob = get_indexes_from_masks(
-        nb_other_samples, im_gt, 0, valid_stack
+        nb_other_samples, im_gt, 0, valid_stack, args
     )
 
 
@@ -752,11 +752,11 @@ def getarguments():
     parser.add_argument(
         "-random_seed",
         type=int,
-        default=None,
+        default=712,
         required=False,
         action="store",
         dest="random_seed",
-        help="Fixed the samples with Random Seed",
+        help="Fix the random seed for samples selection",
     )
 
     parser.add_argument(
