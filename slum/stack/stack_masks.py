@@ -112,11 +112,9 @@ def stack(args):
     confidence[buildings] += 1
     confidence[roads] += 1
 
-    bare_ground = np.logical_and(mask_water_pred == 0, mask_veg == 11)
-    natural_bare_ground = np.logical_and(
-        np.logical_and(mnh_data < height_threshold, artificial == False),
-        bare_ground,
-    )
+    natural_bare_ground = np.logical_and(mask_urban == 0, mask_veg == 11)
+    #    natural_bare_ground = np.logical_and(mask_urban == 0, bare_ground)
+    
 
     stack[natural_bare_ground] = BARE_GROUND
     height[natural_bare_ground] = LOW

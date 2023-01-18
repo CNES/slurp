@@ -270,10 +270,6 @@ def superimpose(file_in, file_ref, file_out, type_out):
     app = otb.Registry.CreateApplication("Superimpose")
     app.SetParameterString("inm", file_in)  # pekel or hand vrt
     app.SetParameterString("inr", file_ref)  # phr file
-    # app.SetParameterString("elev.dem", "/datalake/static_aux/MNT/SRTM_30_hgt/")
-    # app.SetParameterString(
-    #    "elev.geoid", "/softs/projets/cars/data/geoides/egm96.grd"
-    # )
     app.SetParameterString("interpolator", "nn")
     app.SetParameterString("out", file_out + "?&writerpctags=true")
     app.SetParameterOutputImagePixelType("out", type_out)
