@@ -495,8 +495,8 @@ def build_samples(im_stack, valid_stack, args):
 
     # If samples not fix:
 
-    nb_building_samples = 2000
-    nb_other_samples = 2000
+    nb_building_samples = args.nb_samples
+    nb_other_samples = args.nb_samples
 
     # Building samples
     rows_b, cols_b = get_indexes_from_masks(
@@ -606,7 +606,7 @@ def classify(args):
         im_stack, valid_stack, args
         )
         classifier = RandomForestClassifier(
-            n_estimators=100, max_depth=3, random_state=0, n_jobs=4
+            n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced", random_state=0, n_jobs=4
         )
         print("RandomForest parameters:\n", classifier.get_params(), "\n")
         train_classifier(classifier, x_samples, y_samples)
@@ -742,11 +742,31 @@ def getarguments():
     parser.add_argument(
         "-nb_samples",
         type=int,
-        default=2000,
+        default=1000,
         required=False,
         action="store",
         dest="nb_samples",
         help="Number of samples for the class of interest",
+    )
+
+    parser.add_argument(
+        "-max_depth",
+        type=int,
+        default=8,
+        required=False,
+        action="store",
+        dest="max_depth",
+        help="Max depth of trees"
+    )
+
+    parser.add_argument(
+        "-nb_estimators",
+        type=int,
+        default=100,
+        required=False,
+        action="store",
+        dest="nb_estimators",
+        help="Nb of trees in random forest"
     )
 
     parser.add_argument(
