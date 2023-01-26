@@ -211,25 +211,44 @@ def apply_clustering(args, gdf):
     list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
 
     map_centroid = []
-    nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
-    if args.nb_clusters_veg >= 7:
-        nb_clusters_no_veg = 9 - args.nb_clusters_veg
+    
+    nb_clusters_no_veg = 0
+    nb_clusters_veg = 0
+    if args.min_ndvi_veg:
+        # Attribute veg class by threshold
+        for t in range(kmeans_rad_indices.n_clusters):
+            if list_clusters.iloc[t]['ndvi'] > float(args.min_ndvi_veg):
+                map_centroid.append(VEG_CODE)
+                nb_clusters_veg += 1
+            elif list_clusters.iloc[t]['ndvi'] < float(args.max_ndvi_noveg):
+                map_centroid.append(NO_VEG_CODE)
+                nb_clusters_no_veg += 1
+            else:
+                map_centroid.append(UNDEFINED_VEG)
 
-    for t in range(kmeans_rad_indices.n_clusters):
-        if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
-            # 0
-            map_centroid.append(NO_VEG_CODE)
-        elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
-            # 10
-            map_centroid.append(UNDEFINED_VEG)
-        else:
-            # 20
-            map_centroid.append(VEG_CODE)
+    else:
+        # Attribute class by thirds 
+        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
+        if args.nb_clusters_veg >= 7:
+            nb_clusters_no_veg = 9 - args.nb_clusters_veg
+            nb_clusters_veg = args.nb_clusters_veg
+
+        for t in range(kmeans_rad_indices.n_clusters):
+            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
+                # 0
+                map_centroid.append(NO_VEG_CODE)
+            elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
+                # 10
+                map_centroid.append(UNDEFINED_VEG)
+            else:
+                # 20
+                map_centroid.append(VEG_CODE)
+                
 
     gdf["pred_veg"] = apply_map(pred_veg, map_centroid)
 
     figure_name = os.path.splitext(args.out)[0] + "_centroids_veg.png"
-    display_clusters(list_clusters, "ndvi", "ndwi2", nb_clusters_no_veg, (9-args.nb_clusters_veg), figure_name)
+    display_clusters(list_clusters, "ndvi", "ndwi2", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
 
     # data_textures = np.stack((gdf[gdf.pred_veg==VEG_CODE].min_2.values, gdf[gdf.pred_veg==VEG_CODE].max_2.values), axis=1)
     data_textures = np.nan_to_num(np.stack(
@@ -414,6 +433,9 @@ def main():
                         help="Compute a confusion matrix with this reference data")
     parser.add_argument("-spth", "--spectral_threshold", type=float, nargs="?", help="Spectral threshold for texture computaton")
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
+    parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=float, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
+    parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=float, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
+    #parser.add_argument("-input_veg_centroids", "--input_veg_centroids", help="Input vegetation centroids file")
     parser.add_argument("-startx", "--startx", type=int, default=0, help="Start x coordinates (crop ROI)")
     parser.add_argument("-starty", "--starty", type=int, default=0, help="Start y coordinates (crop ROI)")
     parser.add_argument("-sizex", "--sizex", type=int, help="Size along x axis (crop ROI)")
