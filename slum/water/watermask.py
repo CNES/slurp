@@ -943,7 +943,7 @@ def classify(args):
 
     # Create and train classifier from samples
     classifier = RandomForestClassifier(
-        n_estimators=100, max_depth=3, random_state=0, n_jobs=4
+        n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
     )
     print("RandomForest parameters:\n", classifier.get_params(), "\n")
     train_classifier(classifier, x_samples, y_samples)
@@ -1270,6 +1270,37 @@ def getarguments():
         dest="grid_spacing",
         help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)",
     )
+
+    parser.add_argument(
+        "-max_depth",
+        type=int,
+        default=8,
+        required=False,
+        action="store",
+        dest="max_depth",
+        help="Max depth of trees"
+    )
+
+    parser.add_argument(
+        "-nb_estimators",
+        type=int,
+        default=100,
+        required=False,
+        action="store",
+        dest="nb_estimators",
+        help="Nb of trees in Random Forest"
+    )
+
+    parser.add_argument(
+        "-n_jobs",
+        type=int,
+        default=4,
+        required=False,
+        action="store",
+        dest="nb_jobs",
+        help="Nb of parallel jobs for Random Forest"
+    )
+
 
     # Post processing
     group4.add_argument(

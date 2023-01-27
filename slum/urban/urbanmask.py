@@ -406,6 +406,20 @@ def build_stack(args):
             rpc=ds_phr.tags(ns="RPC"),
         )
 
+    valid_watermask = np.zeros(valid_phr.shape, dtype=np.uint8)
+    if args.file_watermask:
+        ds_wm = rio.open(args.file_watermask)
+        watermask = ds_wm.read(1)
+        valid_watermask = watermask != 1
+        del watermask, ds_wm
+        
+    valid_vegmask = np.zeros(valid_phr.shape, dtype=np.uint8)
+    if args.file_vegetationmask:
+        ds_vegmask = rio.open(args.file_vegetationmask)
+        vegmask = ds_vegmask.read(1)
+        valid_vegmask = vegmask < args.vegmask_max_value
+        del vegmask, ds_vegmask
+        
     # Compute NDWI
     if args.file_ndwi:
         ds_ndwi = rio.open(args.file_ndwi)
@@ -435,6 +449,10 @@ def build_stack(args):
 
     # Global mask construction
     valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
+    if args.file_watermask:
+        valid_stack = np.logical_and.reduce((valid_stack, valid_watermask))
+    if args.file_vegetationmask:
+        valid_stack = np.logical_and.reduce((valid_stack, valid_vegmask))
     del valid_ndvi, valid_ndwi
 
     # Show PHR and stack validity masks
@@ -606,7 +624,8 @@ def classify(args):
         im_stack, valid_stack, args
         )
         classifier = RandomForestClassifier(
-            n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced", random_state=0, n_jobs=4
+            n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced", 
+            random_state=0, n_jobs=args.n_jobs
         )
         print("RandomForest parameters:\n", classifier.get_params(), "\n")
         train_classifier(classifier, x_samples, y_samples)
@@ -695,6 +714,35 @@ def getarguments():
         dest="file_ndwi",
         help="NDWI filename (computed if missing option)",
     )
+    
+    parser.add_argument(
+        "-watermask",
+        default=None,
+        required=False,
+        action="store",
+        dest="file_watermask",
+        help="Watermask filename : urban mask will be learned & predicted, excepted on water areas"
+    )
+    
+    parser.add_argument(
+        "-vegetationmask",
+        default=None,
+        required=False,
+        action="store",
+        dest="file_vegetationmask",
+        help="Vegetation mask filename : urban mask will be learned & predicted, excepted on vegetated areas"
+    )
+
+    parser.add_argument(
+        "-vegmask_max_value",
+        required=False,
+        type=int,
+        default=21,
+        action="store",
+        dest="vegmask_max_value",
+        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted"
+    )
+
 
     parser.add_argument(
         "-use_rgb_layers",
@@ -766,8 +814,19 @@ def getarguments():
         required=False,
         action="store",
         dest="nb_estimators",
-        help="Nb of trees in random forest"
+        help="Nb of trees in Random Forest"
     )
+
+    parser.add_argument(
+        "-n_jobs",
+        type=int,
+        default=4,
+        required=False,
+        action="store",
+        dest="nb_jobs",
+        help="Nb of parallel jobs for Random Forest"
+    )
+
 
     parser.add_argument(
         "-random_seed",
