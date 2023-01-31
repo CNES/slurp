@@ -520,10 +520,14 @@ def build_samples(im_stack, valid_stack, args):
     rows_b, cols_b = get_indexes_from_masks(
         nb_building_samples, im_gt, args.value_classif, valid_stack,args
     )
-    rows_road, cols_road = get_indexes_from_masks(
-        nb_building_samples, im_gt, 2, valid_stack, args
-    )
+    rows_road = []
+    cols_road = []
 
+    if args.nb_classes == 2:
+        rows_road, cols_road = get_indexes_from_masks(
+            nb_building_samples, im_gt, 2, valid_stack, args
+        )
+    
     rows_nob = []
     cols_nob = []
 
@@ -541,19 +545,23 @@ def build_samples(im_stack, valid_stack, args):
         args.transform,
         args.rpc,
     )
-    save_indexes(
-        join(dirname(args.file_classif), "samples_road.tif"),
-        zip(rows_road, cols_road),
-        zip(rows_nob, cols_nob),
-        args.shape,
-        args.crs,
-        args.transform,
-        args.rpc,
-    )
+    if args.nb_classes == 2:
+        save_indexes(
+            join(dirname(args.file_classif), "samples_road.tif"),
+            zip(rows_road, cols_road),
+            zip(rows_nob, cols_nob),
+            args.shape,
+            args.crs,
+            args.transform,
+            args.rpc,
+        )
 
     # samples = building+non building
-    rows = rows_b + rows_nob + rows_road
-    cols = cols_b + cols_nob + cols_road
+    rows = rows_b + rows_nob
+    cols = cols_b + cols_nob
+    if args.nb_classes == 2:
+        rows = rows + rows_road
+        cols = cols + cols_road
 
     x_samples = np.transpose(im_stack[:, rows, cols])
     y_samples = im_gt[rows, cols]
@@ -625,7 +633,7 @@ def classify(args):
         )
         classifier = RandomForestClassifier(
             n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced", 
-            random_state=0, n_jobs=args.n_jobs
+            random_state=0, n_jobs=args.nb_jobs
         )
         print("RandomForest parameters:\n", classifier.get_params(), "\n")
         train_classifier(classifier, x_samples, y_samples)
@@ -770,6 +778,16 @@ def getarguments():
         required=True,
         action="store",
         dest="urban_raster",
+    )
+
+    parser.add_argument(
+        "-nb_classes",
+        default=2,
+        type=int,
+        required=False,
+        action="store",
+        dest="nb_classes",
+        help="Nb of classes in the ground-truth (2 by default - buildings/roads. Can be fix to 1 to classify buildings only"
     )
 
     parser.add_argument(
