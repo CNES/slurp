@@ -221,7 +221,13 @@ def apply_clustering(args, gdf):
                 map_centroid.append(VEG_CODE)
                 nb_clusters_veg += 1
             elif list_clusters.iloc[t]['ndvi'] < float(args.max_ndvi_noveg):
-                map_centroid.append(NO_VEG_CODE)
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
                 nb_clusters_no_veg += 1
             else:
                 map_centroid.append(UNDEFINED_VEG)
@@ -235,8 +241,13 @@ def apply_clustering(args, gdf):
 
         for t in range(kmeans_rad_indices.n_clusters):
             if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
-                # 0
-                map_centroid.append(NO_VEG_CODE)
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
             elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
                 # 10
                 map_centroid.append(UNDEFINED_VEG)
@@ -292,7 +303,7 @@ def apply_clustering(args, gdf):
         # Compressed .tif ouptut
         im = rasterio.open(args.im)
         meta = im.meta.copy()
-        meta.update(compress='lzw')
+        meta.update(compress='lzw', driver='GTiff')
         with rasterio.open(args.out, 'w+', **meta) as out:
             out_arr = out.read(1)
             shapes = ((geom, value) for geom, value in zip(gdf.geometry, gdf.ClasseN))
@@ -435,6 +446,8 @@ def main():
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=float, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=float, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
+    parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
+                        help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     #parser.add_argument("-input_veg_centroids", "--input_veg_centroids", help="Input vegetation centroids file")
     parser.add_argument("-startx", "--startx", type=int, default=0, help="Start x coordinates (crop ROI)")
     parser.add_argument("-starty", "--starty", type=int, default=0, help="Start y coordinates (crop ROI)")
