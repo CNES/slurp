@@ -34,10 +34,10 @@ def save_image(
         dataset.close()
 
 
-def save_image_2_bands(
+def save_image_n_bands(
     image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs
 ):
-    """Save 1 band numpy image to file with lzw compression.
+    """Save n bands numpy image to file with lzw compression.
     Note that rio.dtype is string so convert np.dtype to string.
     rpc must be a dictionnary.
     """
@@ -49,14 +49,15 @@ def save_image_2_bands(
         compress="lzw",
         height=image.shape[1],
         width=image.shape[2],
-        count=2,
+        count=image.shape[0],
         dtype=str(image.dtype),
         crs=crs,
         transform=transform,
         **kwargs
     ) as dataset:
-        dataset.write(image[0], 1)
-        dataset.write(image[1], 2)
+        for i in range(image.shape[0]):
+            dataset.write(image[i], i+1)
+
         dataset.nodata = nodata
 
         if rpc:
