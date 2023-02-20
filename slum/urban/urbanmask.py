@@ -605,16 +605,11 @@ def predict(args, classifier, im_stack, valid_stack):
         np.transpose(im_stack[:, valid_stack])
     )
     print(" len data " + str(len(np.transpose(im_stack[:, valid_stack]))))
-    proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
-    print("Shape : "+str(proba.shape))
-    print(im_proba.shape)
+    res_proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
+    #print("res_proba.shape "+str(res_proba.shape))
+    im_proba[:,valid_stack] = 100*np.transpose(res_proba)
+    #print("im_proba.shape " +str( im_proba.shape))
     
-    im_proba[0,:,:] = 100*proba[:,0].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-    im_proba[1,:,:] = 100*proba[:,1].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-    if args.nb_classes == 2:
-        im_proba[2,:,:] = 100*proba[:,2].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-
-
     print("Prediction time :", time.time() - start_time)
 
     return im_predict, im_proba
