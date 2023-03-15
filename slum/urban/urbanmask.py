@@ -75,7 +75,7 @@ import rasterio as rio
 from skimage.measure import label
 from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
@@ -582,15 +582,41 @@ def train_classifier(classifier, x_samples, y_samples):
     print("Train time :", time.time() - start_time)
 
     # Compute accuracy on train and test sets
+    x_train_prediction = classifier.predict(x_train)
+    x_test_prediction = classifier.predict(x_test)
+    
     print(
         "Accuracy on train set :",
-        accuracy_score(y_train, classifier.predict(x_train)),
+        accuracy_score(y_train, x_train_prediction),
     )
     print(
         "Accuracy on test set :",
-        accuracy_score(y_test, classifier.predict(x_test)),
+        accuracy_score(y_test, x_test_prediction),
     )
-
+    print(
+        "Log loss on train set :",
+        log_loss(y_train, x_train_prediction),
+    )
+    print(
+        "Log loss on test set :",
+        log_loss(y_test, x_test_prediction),
+    )
+    print(
+        "Confusion matrix on train set :",
+        confusion_matrix(y_train, x_train_prediction),
+    )
+    print(
+        "Confusion matrix on test set :",
+        confusion_matrix(y_test, x_test_prediction),
+    )
+    print(
+        "F1 on train set :",
+        f1_score(y_train, x_train_prediction),
+    )
+    print(
+        "F1 on test set :",
+        f1_score(y_test, x_test_prediction),
+    )
 
 def predict(args, classifier, im_stack, valid_stack):
     """Predict."""
