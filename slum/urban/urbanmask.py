@@ -65,7 +65,7 @@ import argparse
 import gc
 import time
 import traceback
-from os.path import dirname, join
+from os.path import dirname, join, basename
 from subprocess import call
 
 import joblib
@@ -618,27 +618,24 @@ def train_classifier(classifier, x_samples, y_samples):
         f1_score(y_test, x_test_prediction),
     )
 
-def predict(classifier, im_stack, valid_stack):
+def predict(args, classifier, im_stack, valid_stack):
     """Predict."""
 
     start_time = time.time()
     im_predict = np.zeros(im_stack[0].shape, dtype=np.uint8)
     im_proba = np.zeros(
-        (2, im_stack[0].shape[0], im_stack[0].shape[1]), dtype=np.uint8
+        ((args.nb_classes+1), im_stack[0].shape[0], im_stack[0].shape[1]), dtype=np.uint8
     )
     print("DBG >> Prediction ")
     im_predict[valid_stack] = classifier.predict(
         np.transpose(im_stack[:, valid_stack])
     )
     print(" len data " + str(len(np.transpose(im_stack[:, valid_stack]))))
-    proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
-    # print("Shape : "+str(proba.shape()))
-    print(im_proba.shape)
-    # im_proba = proba.reshape(2, im_stack[0].shape[0], im_stack[0].shape[1])
-    # im_proba[0,:,:] = 100*proba[:,0].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-    # im_proba[1,:,:] = 100*proba[:,1].reshape(im_stack[0].shape[0], im_stack[0].shape[1])
-
-    # im_proba[valid_stack] = [0]
+    res_proba = classifier.predict_proba(np.transpose(im_stack[:, valid_stack]))
+    #print("res_proba.shape "+str(res_proba.shape))
+    im_proba[:,valid_stack] = 100*np.transpose(res_proba)
+    #print("im_proba.shape " +str( im_proba.shape))
+    
     print("Prediction time :", time.time() - start_time)
 
     return im_predict, im_proba
@@ -677,7 +674,7 @@ def classify(args):
     gc.collect()
 
     # Predict and filter with Hand
-    im_predict, im_proba = predict(classifier, im_stack, valid_stack)
+    im_predict, im_proba = predict(args, classifier, im_stack, valid_stack)
     print(">> DEBUG >> prediction OK")
 
     crs, transform, rpc = get_crs_transform(args.file_phr)
@@ -690,9 +687,9 @@ def classify(args):
         rpc,
     )
 
-    io_utils.save_image_2_bands(
+    io_utils.save_image_n_bands(
         im_proba,
-        join(dirname(args.file_classif), "proba.tif"),
+        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif", "_proba.tif")),
         crs,
         transform,
         255,
