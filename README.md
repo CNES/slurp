@@ -71,6 +71,19 @@ pip install .
 ```
 Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
+## Use SLUM on HAL
+On HAL, you can directly use SLUM by sourcing the following environment.
+```
+source /softs/projets/pluto/init_slum_v2.sh
+```
+This will load OTB 8.1-python3.8.4.
+
+You can also use a .pbs script to launch different masks algorithms on your images.
+```
+qsub -v "PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/" /softs/projets/pluto/demo_slum/compute_all_masks.pbs
+```
+
+
 ## Features
 
 ### Water mask
