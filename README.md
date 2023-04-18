@@ -59,7 +59,7 @@ python -m venv slum_env
 . slum_env/bin/activate
 # upgrade pip and install several libraries
 pip install pip --upgrade
-pip install scikit-image scikit-learn geopandas scikit-learn-intelex matplotlib cython
+pip install scikit-image scikit-learn geopandas scikit-learn-intelex matplotlib cython psutil
 # install and compile rasterio with compatible GDAL 
 pip install rasterio --no-binary :all:
 ```
