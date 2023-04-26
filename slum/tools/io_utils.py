@@ -15,7 +15,7 @@ def save_image(
     rpc must be a dictionnary.
     """
 
-    with rio.open(
+    dataset = rio.open(
         file,
         "w",
         driver="GTiff",
@@ -27,14 +27,15 @@ def save_image(
         crs=crs,
         transform=transform,
         **kwargs
-    ) as dataset:
-        dataset.write(image, 1)
-        dataset.nodata = nodata
-
-        if rpc:
-            dataset.update_tags(**rpc, ns="RPC")
-
-        dataset.close()
+    )
+    dataset.write(image, 1)
+    dataset.nodata = nodata
+    
+    if rpc:
+        dataset.update_tags(**rpc, ns="RPC")
+    
+    dataset.close()
+    del dataset
 
 
 def save_image_n_bands(

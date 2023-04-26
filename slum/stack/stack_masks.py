@@ -27,7 +27,7 @@ UNDEF_URBAN_BARE_GROUND = (
 )
 WATER_PRED = 8  # Prediction of water, but not in Peckel database
 SHADOW = 9
-ROADS = 10
+BUILDINGS_FALSE_POSITIVE = 10
 
 LOW = 1
 HIGH = 2
@@ -80,19 +80,19 @@ def stack(args):
     no_water_no_veg = np.logical_and(mask_water_pred == 0, mask_veg < 21)
 
     buildings_clean = mask_urban == 1
-    roads_clean = mask_urban == 2
+    urban_false_positive_clean = mask_urban == 2
     # Small holes removal
     if args.remove_small_holes:
         area = int(args.remove_small_holes)
         buildings_clean = remove_small_holes(buildings_clean.astype(bool), area, connectivity=2)
-        roads_clean = remove_small_holes(roads_clean.astype(bool), area, connectivity=2)
+        urban_false_positive_clean = remove_small_holes(urban_false_positive_clean.astype(bool), area, connectivity=2)
 
     buildings = np.logical_and(
         np.logical_and(buildings_clean, mnh_data >= height_threshold),
         no_water_no_veg,
     )
 
-    roads = np.logical_and(roads_clean, no_water_no_veg)
+    urban_false_positive = np.logical_and(urban_false_positive_clean, no_water_no_veg)
 
     artificial = np.logical_or(mask_urban == 2, mask_urban == 1)
 
@@ -103,14 +103,14 @@ def stack(args):
 
     stack[urban_areas] = UNDEF_URBAN_BARE_GROUND
     stack[buildings] = BUILDINGS
-    stack[roads] = ROADS
+    stack[urban_false_positive] = BUILDINGS_FALSE_POSITIVE
 
     height[buildings] = HIGH
-    height[roads] = LOW
+    height[urban_false_positive] = NOT_CONFIDENT
     height[urban_areas] = LOW
 
     confidence[buildings] += 1
-    confidence[roads] += 1
+    confidence[urban_false_positive] += 1
 
     natural_bare_ground = np.logical_and(mask_urban == 0, mask_veg == 11)
 
@@ -186,7 +186,7 @@ def stack(args):
                 "undef_urban_bare_ground",
                 "water_pred",
                 "shadow",
-                "roads",
+                "buildings_false_positive",
             ]
         )
     return
@@ -203,7 +203,7 @@ def main():
         parser.add_argument(
             "-water_pred", default=None, help="Water mask (prediction)"
         )
-        parser.add_argument("-urban", default=None, help="Building & Road mask")
+        parser.add_argument("-urban", default=None, help="Urban mask (with false positive)")
         parser.add_argument("-mnh", default="", help="Height elevation model")
         parser.add_argument("-shadow", default=None, help="Shadow mask")
         parser.add_argument(
