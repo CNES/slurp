@@ -101,6 +101,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import export_graphviz, export_text
+import concurrent.futures
+from multiprocessing import shared_memory, get_context
+from pylab import *
 
 try:
     from sklearnex import patch_sklearn
@@ -139,8 +142,8 @@ def save_image(
     Note that rio.dtype is string so convert np.dtype to string.
     rpc must be a dictionnary.
     """
-
-    with rio.open(
+    
+    dataset = rio.open(
         file,
         "w",
         driver="GTiff",
@@ -152,21 +155,21 @@ def save_image(
         crs=crs,
         transform=transform,
         **kwargs,
-    ) as dataset:
-        dataset.write(image, 1)
-        dataset.nodata = nodata
+    )
+    dataset.write(image, 1)
+    dataset.nodata = nodata
 
-        if rpc:
-            dataset.update_tags(**rpc, ns="RPC")
+    if rpc:
+        dataset.update_tags(**rpc, ns="RPC")
 
-        if colormap:
-            dataset.write_colormap(1, colormap)
+    if colormap:
+        dataset.write_colormap(1, colormap)
 
-        if tags:
-            dataset.update_tags(**tags)
-
-        dataset.close()
-
+    if tags:
+        dataset.update_tags(**tags)
+        
+    dataset.close()
+    del dataset
 
 def show_images(image1, title1, image2, title2, **kwargs):
     """Show 2 images with matplotlib."""
@@ -263,7 +266,7 @@ def show_histograms4(
     plt.show()
 
 
-def superimpose(file_in, file_ref, file_out, type_out):
+def superimpose(file_in, file_ref, file_out, type_out, write=False):
     """SuperImpose file_in with file_ref, output to file_out."""
 
     start_time = time.time()
@@ -273,56 +276,83 @@ def superimpose(file_in, file_ref, file_out, type_out):
     app.SetParameterString("interpolator", "nn")
     app.SetParameterString("out", file_out + "?&writerpctags=true")
     app.SetParameterOutputImagePixelType("out", type_out)
-    app.ExecuteAndWriteOutput()
+    app.Execute()
+    
+    res = np.int16(np.copy(app.GetVectorImageAsNumpyArray("out")))
+    
+    if write:
+        app.WriteOutput()
+       
     print("Superimpose in", time.time() - start_time, "seconds.")
+    
+    return res
 
 
-def pekel_recovery(file_ref, file_out):
+def pekel_recovery(file_ref, file_out, write=False):
     """Recover Occurrence Pekel image."""
-
-    print("Recover Occurrence Pekel file to", file_out)
-    superimpose(
+    
+    if write:
+        print("Recover Occurrence Pekel file to", file_out)
+    else:
+        print("Recover Occurrence Pekel file")    
+    pekel_image = superimpose(
         "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
         file_ref,
         file_out,
         otb.ImagePixelType_uint8,
+        write
     )
+    
+    return pekel_image.transpose(2,0,1)[0]
 
 
-def pekel_month_recovery(file_ref, month, file_data_out, file_mask_out):
+def pekel_month_recovery(file_ref, month, file_data_out, file_mask_out, write=False):
     """Recover Monthly Recurrence Pekel image.
     monthlyRecurrence and has_observations are signed int8 but coded on int16.
     """
 
-    print("Recover Monthly Recurrence Pekel file to", file_data_out)
-
-    superimpose(
+    if write:
+        print("Recover Monthly Recurrence Pekel file to", file_data_out)
+    else:
+        print("Recover Monthly Recurrence Pekel file") 
+        
+    pekel_image = superimpose(
         "/work/datalake/static_aux/MASQUES/PEKEL/data2021/MonthlyRecurrence/"
         f"monthlyRecurrence{month}/monthlyRecurrence{month}.vrt",
         file_ref,
         file_data_out,
         otb.ImagePixelType_int16,
+        write
     )
 
-    superimpose(
+    pekel_mask_out = superimpose(
         "/work/datalake/static_aux/MASQUES/PEKEL/data2021/MonthlyRecurrence/"
         f"has_observations{month}/has_observations{month}.vrt",
         file_ref,
         file_mask_out,
         otb.ImagePixelType_int16,
+        write
     )
+    
+    return pekel_image.transpose(2,0,1)[0]
 
 
-def hand_recovery(file_ref, file_out):
+def hand_recovery(file_ref, file_out, write=False):
     """Recover HAND image."""
 
-    print("Recover HAND file to", file_out)
-    superimpose(
+    if write:
+        print("Recover HAND file to", file_out)
+    else:
+        print("Recover HAND file")        
+    hand_image = superimpose(
         "/work/datalake/static_aux/MASQUES/HAND_MERIT/" "hnd.vrt",
         file_ref,
         file_out,
         otb.ImagePixelType_float,
+        write
     )
+    
+    return hand_image.transpose(2,0,1)[0]
 
 
 def esri_recovery(file_ref, file_out):
@@ -351,16 +381,18 @@ def cloud_from_gml(file_cloud, file_ref):
     return mask_cloud
 
 
-def compute_mask(file_ref, thresh_ref, desc_ref=""):
-    """Compute mask with a threshold value."""
-
-    ds_ref = rio.open(file_ref)
-    im_ref = ds_ref.read(1)
-    valid_ref = im_ref != ds_ref.nodata
-    mask_ref = im_ref > thresh_ref
-    print_dataset_infos(ds_ref, desc_ref)
-    del im_ref, ds_ref
-
+def compute_mask(im_ref, im_nodata, thresh_ref):
+    """Compute mask with one or multiple threshold values."""
+    
+    valid_ref = im_ref != im_nodata
+    if isinstance(thresh_ref, list):
+        mask_ref = []
+        for thresh in thresh_ref:
+            mask_ref.append(im_ref > thresh)
+    else:
+        mask_ref = im_ref > thresh_ref    
+    del im_ref
+    
     return mask_ref, valid_ref
 
 
@@ -448,7 +480,6 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
     max_row = np.max(nz_rows)
     min_col = np.min(nz_cols)
     max_col = np.max(nz_cols)
-    print(min_row, min_col, max_row, max_col)
 
     while nb_idxs < nb_indexes:
         row = np.random.randint(0, height)
@@ -481,7 +512,6 @@ def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
     for prop in props:
         n3_indexes = n1_indexes + int(n2_indexes * prop.area)
         n3_indexes = max(minimum, n3_indexes)
-        print(prop.bbox, prop.area, prop.eccentricity, n3_indexes)
 
         min_row = np.min(prop.bbox[0])
         max_row = np.max(prop.bbox[2])
@@ -581,10 +611,10 @@ def print_feature_importance(classifier, feature_names):
             % (feature_names[idx], importances[idx], std[idx])
         )
 
-
+        
 def build_stack(args):
     """Build stack."""
-
+    
     # Band positions in PHR image
     if args.red == 1:
         names_stack = ["R", "G", "B", "NIR"]
@@ -594,47 +624,61 @@ def build_stack(args):
     # Image PHR (numpy array, 4 bands, band number is first dimension),
     ds_phr = rio.open(args.file_phr)
     print_dataset_infos(ds_phr, "PHR")
-    im_phr = ds_phr.read()
     nodata_phr = ds_phr.nodata
-
-    # Valid_phr (boolean numpy array, True = valid data, False = no data)
-    valid_phr = np.logical_and.reduce(im_phr != nodata_phr, axis=0)
-    save_image(
-        valid_phr.astype(np.uint8),
-        join(dirname(args.file_classif), "valid.tif"),
-        ds_phr.crs,
-        ds_phr.transform,
-        nodata=None,
-        rpc=ds_phr.tags(ns="RPC"),
-    )
-
+    
     # Save crs, transform and rpc in args
     args.shape = ds_phr.shape
     args.crs = ds_phr.crs
     args.transform = ds_phr.transform
     args.rpc = ds_phr.tags(ns="RPC")
+    
+    # Read image
+    im_phr = ds_phr.read()
+    ds_phr.close()
+    del ds_phr
+    
+    if not np.issubdtype(im_phr.dtype, np.integer):
+        raise Exception("The input image must have an integer (signed or unsigned) type but is in " + str(im_phr.dtype))
 
+    # Valid_phr (boolean numpy array, True = valid data, False = no data)
+    valid_phr = np.logical_and.reduce(im_phr != nodata_phr, axis=0)
+    if args.save_mode == "debug":
+        save_image(
+            valid_phr.astype(np.uint8),
+            join(dirname(args.file_classif), "valid.tif"),
+            args.crs,
+            args.transform,
+            nodata=None,
+            rpc=args.rpc,
+        )
+    
     # Compute NDVI
     if args.file_ndvi:
         ds_ndvi = rio.open(args.file_ndvi)
         print_dataset_infos(ds_ndvi, "NDVI")
+        ds_ndvi.read()  # necessary for a true clean with del
         im_ndvi = ds_ndvi.read(1)
-        valid_ndvi = im_ndvi != ds_ndvi.nodata
+        ndvi_nodata = ds_ndvi.nodata
+        ds_ndvi.close()
         del ds_ndvi
-    else:
+        valid_ndvi = im_ndvi != ndvi_nodata
+        
+    else:        
         im_ndvi, valid_ndvi = compute_ndxi(
             im_phr[names_stack.index("NIR")],
             im_phr[names_stack.index("R")],
             valid_phr,
-        )
-        save_image(
-            im_ndvi,
-            join(dirname(args.file_classif), "ndvi.tif"),
-            ds_phr.crs,
-            ds_phr.transform,
-            nodata=32767,
-            rpc=ds_phr.tags(ns="RPC"),
-        )
+        )   
+        if (args.save_mode != "none" and args.save_mode != "aux"):
+            save_image(
+                im_ndvi,
+                join(dirname(args.file_classif), "ndvi.tif"),
+                args.crs,
+                args.transform,
+                nodata=32767,
+                rpc=args.rpc,
+            )
+    
     print(
         "NDVI : min =",
         np.min(im_ndvi, where=(im_ndvi != 32767), initial=1000),
@@ -646,23 +690,28 @@ def build_stack(args):
     if args.file_ndwi:
         ds_ndwi = rio.open(args.file_ndwi)
         print_dataset_infos(ds_ndwi, "NDWI")
+        ds_ndwi.read()  # necessary for a true clean with del
         im_ndwi = ds_ndwi.read(1)
-        valid_ndwi = im_ndwi != ds_ndwi.nodata
+        ndwi_nodata = ds_ndwi.nodata
+        ds_ndwi.close()
         del ds_ndwi
+        valid_ndwi = im_ndwi != ndwi_nodata
+        
     else:
         im_ndwi, valid_ndwi = compute_ndxi(
             im_phr[names_stack.index("G")],
             im_phr[names_stack.index("NIR")],
             valid_phr,
         )
-        save_image(
-            im_ndwi,
-            join(dirname(args.file_classif), "ndwi.tif"),
-            ds_phr.crs,
-            ds_phr.transform,
-            nodata=32767,
-            rpc=ds_phr.tags(ns="RPC"),
-        )
+        if (args.save_mode != "none" and args.save_mode != "aux"):
+            save_image(
+                im_ndwi,
+                join(dirname(args.file_classif), "ndwi.tif"),
+                args.crs,
+                args.transform,
+                nodata=32767,
+                rpc=args.rpc,
+            )
     print(
         "NDWI : min =",
         np.min(im_ndwi, where=(im_ndwi != 32767), initial=1000),
@@ -678,54 +727,78 @@ def build_stack(args):
     # Global mask construction
     valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
     del valid_ndvi, valid_ndwi
-
+    
     # Show PHR and stack validity masks
     if args.display:
         show_images(valid_phr, "Valid PHR", valid_stack, "Valid Stack")
-
-    # Stack construction
+        
+    # Stack construction in a shared memory :
+    # 1 : im_phr (1 or 4 bands)
+    # 2 : ndvi
+    # 3 : ndwi
+    # 4 : file_layers (1 band for each layer)
+    # 5 : valid_stack
     start_time = time.time()
+    bands_phr = im_phr.shape[0] if args.use_rgb_layers else 1
+    shm_shape = (bands_phr + 3 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
+    shm_dtype = np.dtype(np.int16)
+    d_size = shm_dtype.itemsize * np.prod(shm_shape)
+    shm_key = "slumImStack"
+    shmSlumIn = shared_memory.SharedMemory(create=True, size=d_size, name=shm_key)
+    shmNpArray_stack = np.ndarray(shape=shm_shape, dtype=shm_dtype, buffer=shmSlumIn.buf)
+    
+    #Add im_phr
     if args.use_rgb_layers:
-        im_stack = np.stack(
-            (
-                *im_phr,
-                im_ndvi,
-                im_ndwi,
-                *(
-                    rio.open(file_layer).read(1)
-                    for file_layer in args.files_layers
-                ),
-            )
-        )
+        np.copyto(shmNpArray_stack[:bands_phr, :, :], im_phr.astype(shm_dtype))
     else:
+        np.copyto(shmNpArray_stack[:bands_phr, :, :], im_phr[names_stack.index("NIR")].astype(shm_dtype))
         names_stack = ["NIR"]
-        im_stack = np.stack(
-            (
-                im_phr[names_stack.index("NIR")],
-                im_ndvi,
-                im_ndwi,
-                *(
-                    rio.open(file_layer).read(1)
-                    for file_layer in args.files_layers
-                ),
-            )
-        )
-
+    del im_phr
+    
+    #Add im_ndvi and im_ndwi
+    np.copyto(shmNpArray_stack[bands_phr, :, :], im_ndvi)
+    np.copyto(shmNpArray_stack[bands_phr+1, :, :], im_ndwi)
+    del im_ndvi, im_ndwi
+    
+    #Add files_layers
+    for i in range(len(args.files_layers)):
+        file_layer = files_layers[i]
+        ds_layer = rio.open(file_layer)
+        layer = ds_layer.read(1)
+        ds_layer.close()
+        del ds_layer
+        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], valid_stack.astype(shm_dtype))
+        
+    #Add valid_stack
+    shmNpArray_stack[-1, :, :] = valid_stack[:, :]
+    del valid_stack
+          
+    shmSlumIn.close()
+        
     names_stack.extend(["NDVI", "NDWI"])
     names_stack.extend(args.files_layers)
     print("\nStack : ", names_stack)
     print("Stack time :", time.time() - start_time)
-    print("Stack shape :", im_stack.shape)
+    print("Stack shape :", shm_shape)
     print("\n")
 
-    return im_stack, valid_stack, names_stack
+    return shm_key, shm_shape, shm_dtype, names_stack
 
 
-def build_samples(im_stack, valid_stack, args):
+def build_samples(shm_key, shm_shape, shm_dtype, args):
     """Build samples."""
-
-    # Image Pekel (numpy array, first band) and mask
-    if args.file_pekel is None:
+    
+    write = False if (args.save_mode == "none" or args.save_mode == "prim") else True
+    
+    # Image Pekel (numpy array, first band)
+    if args.file_pekel:
+        ds_ref = rio.open(args.file_pekel)
+        print_dataset_infos(ds_ref, "PEKEL")
+        pekel_nodata = ds_ref.nodata
+        im_pekel = ds_ref.read(1)
+        ds_ref.close()
+        del ds_ref
+    else:
         if 1 <= args.pekel_month <= 12:
             args.file_data_pekel = join(
                 dirname(args.file_classif), f"pekel{args.pekel_month}.tif"
@@ -735,39 +808,63 @@ def build_samples(im_stack, valid_stack, args):
                 f"has_observations{args.pekel_month}.tif",
             )
             args.file_pekel = args.file_data_pekel
-            pekel_month_recovery(
+            im_pekel = pekel_month_recovery(
                 args.file_phr,
                 args.pekel_month,
                 args.file_data_pekel,
                 args.file_mask_pekel,
+                write,
             )
         else:
             args.file_pekel = join(dirname(args.file_classif), "pekel.tif")
-            pekel_recovery(args.file_phr, args.file_pekel)
-
-    mask_pekel = compute_mask(args.file_pekel, args.thresh_pekel, "PEKEL")[0]
+            im_pekel = pekel_recovery(args.file_phr, args.file_pekel, write)
+        pekel_nodata = 255.0
+    
+    # Pekel masks
+    if args.hand_strict:
+        if args.pekel_filter:
+            [mask_pekel, mask_pekelxx, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh, 0])[0]
+        else:
+            [mask_pekel, mask_pekelxx] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh])[0]
+            mask_pekel0 = "not defined"
+    elif args.pekel_filter:
+        [mask_pekel, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, 0])[0]
+    else:
+        mask_pekel = compute_mask(im_pekel, pekel_nodata, args.thresh_pekel)[0]
+        mask_pekel0 = "not defined"
+    del im_pekel
 
     # Check pekel mask
     if np.count_nonzero(mask_pekel) < 2000:
-        print("=> Warning : low water pixel number in Pekel Mask\n")
-        mask_pekel = compute_mask(
-            join(dirname(args.file_classif), "ndwi.tif"), 0.3
-        )[0]
+        print("=> Warning : low water pixel number in Pekel Mask\n")        
+        shm = shared_memory.SharedMemory(name=shm_key)
+        im_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+        index_ndwi = shm_shape[0] - 1 - len(args.files_layers) if args.use_rgb_layers else 2
+        im_ndvi = np.copy(im_stack[index_ndwi])
+        shm.close()
+        del shm
+        mask_pekel = compute_mask(im_ndvi, 32767.0, 0.3)[0]
 
     # Image HAND (numpy array, first band) and mask
-    if args.file_hand is None:
+    if args.file_hand:
+        ds_hand = rio.open(args.file_hand)
+        print_dataset_infos(ds_hand, "HAND")
+        hand_nodata = ds_hand.nodata
+        im_hand = ds_hand.read(1)
+        ds_hand.close()
+        del ds_hand
+    else:
         args.file_hand = join(dirname(args.file_classif), "hand.tif")
-        hand_recovery(args.file_phr, args.file_hand)
-
+        im_hand = hand_recovery(args.file_phr, args.file_hand, write)
+        hand_nodata = -9999.0
+    
     # Create HAND mask
-    mask_hand = compute_mask(args.file_hand, args.thresh_hand, "HAND")[0]
-
+    mask_hand = compute_mask(im_hand, hand_nodata, args.thresh_hand)[0]
+    del im_hand
+    
     # Do not learn in water surface (usefull if image contains big water surfaces)
     # Add some robustness if hand_strict is not used
     if args.hand_strict:
-        mask_pekelxx = compute_mask(
-            args.file_pekel, args.strict_thresh, "PEKEL"
-        )[0]
         np.logical_not(np.logical_or(mask_hand, mask_pekelxx), out=mask_hand)
     else:
         np.logical_not(mask_hand, out=mask_hand)
@@ -780,151 +877,19 @@ def build_samples(im_stack, valid_stack, args):
             mask_hand,
             "HAND <" + str(args.thresh_hand),
         )
-
-    # Prepare samples
-    if args.samples_method != "grid":
-        # Prepare random water and other samples
-        if args.nb_samples_auto:
-            nb_valid_pixels = np.count_nonzero(valid_stack)
-            nb_valid_water_pixels = np.count_nonzero(
-                np.logical_and(mask_pekel, valid_stack)
-            )
-            nb_valid_other_pixels = nb_valid_pixels - nb_valid_water_pixels
-            nb_water_samples = int(nb_valid_water_pixels * args.auto_pct)
-            nb_other_samples = int(nb_valid_other_pixels * args.auto_pct)
-        else:
-            nb_water_samples = args.nb_samples_water
-            nb_other_samples = args.nb_samples_other
-        print("Use", nb_water_samples, "samples for water")
-        print("Use", nb_other_samples, "samples for other")
-
-        # Pekel samples
-        if args.samples_method == "random":
-            rows_pekel, cols_pekel = get_random_indexes_from_masks(
-                nb_water_samples, valid_stack, mask_pekel
-            )
-
-        if args.samples_method == "smart":
-            rows_pekel, cols_pekel = get_smart_indexes_from_mask(
-                nb_water_samples,
-                args.smart_area_pct,
-                args.smart_minimum,
-                np.logical_and(mask_pekel, valid_stack),
-            )
-
-        # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_samples, valid_stack, mask_hand
-        )
-
-        # All samples
-        rows = rows_pekel + rows_hand
-        cols = cols_pekel + cols_hand
-
-        colormap = {
-            0: (0, 0, 0, 0),  # nodata
-            1: (0, 0, 255),  # eau
-            2: (255, 0, 0),  # autre
-            3: (0, 0, 0, 0),
-        }
-        save_indexes(
-            "samples.tif",
-            zip(rows_pekel, cols_pekel),
-            zip(rows_hand, cols_hand),
-            args.shape,
-            args.crs,
-            args.transform,
-            args.rpc,
-            colormap,
-        )
-
-    else:
-        # Prepare regular samples
-        rows, cols = get_grid_indexes_from_masks(valid_stack, args.grid_spacing)
-
-        rc_pekel = [
-            (row, col)
-            for (row, col) in zip(rows, cols)
-            if mask_pekel[row, col] == 1
-        ]
-        rc_others = [
-            (row, col)
-            for (row, col) in zip(rows, cols)
-            if mask_pekel[row, col] != 1
-        ]
-
-        colormap = {
-            0: (0, 0, 0, 0),  # nodata
-            1: (0, 0, 255),  # eau
-            2: (255, 0, 0),  # autre
-            3: (0, 0, 0, 0),
-        }
-        save_indexes(
-            "samples.tif",
-            rc_pekel,
-            rc_others,
-            args.shape,
-            args.crs,
-            args.transform,
-            args.rpc,
-            colormap,
-        )
-
-    # Prepare samples for learning
-    x_samples = np.transpose(im_stack[:, rows, cols])
-    y_samples = mask_pekel[rows, cols]
-
-    return x_samples, y_samples, mask_pekel, mask_hand
-
-
-def train_classifier(classifier, x_samples, y_samples):
-    """Create and train classifier on samples."""
-
-    start_time = time.time()
-    x_train, x_test, y_train, y_test = train_test_split(
-        x_samples, y_samples, test_size=0.2, random_state=42
-    )
-    classifier.fit(x_train, y_train)
-    print("Train time :", time.time() - start_time)
-
-    # Compute accuracy on train and test sets
-    print(
-        "Accuracy on train set :",
-        accuracy_score(y_train, classifier.predict(x_train)),
-    )
-    print(
-        "Accuracy on test set :",
-        accuracy_score(y_test, classifier.predict(x_test)),
-    )
-
-
-def predict(classifier, im_stack, valid_stack):
-    """Predict."""
-
-    start_time = time.time()
-    im_predict = np.zeros(im_stack[0].shape, dtype=np.uint8)
-    im_predict[valid_stack] = classifier.predict(
-        np.transpose(im_stack[:, valid_stack])
-    )
-    print("Prediction time :", time.time() - start_time)
-
-    return im_predict
-
-
-def classify(args):
-    """Compute water mask of file_phr with help of Pekel and Hand images."""
-
-    # Build stack with all layers
-    im_stack, valid_stack, names_stack = build_stack(args)
-
+        
     # Get cloud mask if any
     if args.file_cloud_gml:
         mask_nocloud = np.logical_not(
             cloud_from_gml(args.file_cloud_gml, args.file_phr)
         )
     else:
-        mask_nocloud = np.ones(valid_stack.shape, dtype=np.uint8)
-
+        mask_nocloud = np.ones(shm_shape[1:], dtype=np.uint8)
+    
+    shm = shared_memory.SharedMemory(name=shm_key)
+    shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+    valid_stack = shmNpArray_stack[-1, :, :]
+                
     if args.display:
         show_images(
             mask_nocloud,
@@ -934,11 +899,213 @@ def classify(args):
             vmin=0,
             vmax=1,
         )
-
-    # Build samples from stack and control layers (pekel, hand)
+    
+    # Prepare samples
     valid_samples = np.logical_and(valid_stack, mask_nocloud)
-    x_samples, y_samples, mask_pekel, mask_hand = build_samples(
-        im_stack, valid_samples, args
+    shm.close()
+    del shm, mask_nocloud
+    if args.samples_method != "grid":
+        # Prepare random water and other samples
+        if args.nb_samples_auto:
+            nb_valid_pixels = np.count_nonzero(valid_samples)
+            nb_valid_water_pixels = np.count_nonzero(
+                np.logical_and(mask_pekel, valid_samples)
+            )
+            nb_valid_other_pixels = nb_valid_pixels - nb_valid_water_pixels
+            nb_water_samples = int(nb_valid_water_pixels * args.auto_pct)
+            nb_other_samples = int(nb_valid_other_pixels * args.auto_pct)
+        else:
+            nb_water_samples = args.nb_samples_water
+            nb_other_samples = args.nb_samples_other
+        print("Use", nb_water_samples, "samples for water")
+        print("Use", nb_other_samples, "samples for other")
+        
+        # Pekel samples
+        if args.samples_method == "random":
+            rows_pekel, cols_pekel = get_random_indexes_from_masks(
+                nb_water_samples, valid_samples, mask_pekel
+            )
+
+        if args.samples_method == "smart":
+            rows_pekel, cols_pekel = get_smart_indexes_from_mask(
+                nb_water_samples,
+                args.smart_area_pct,
+                args.smart_minimum,
+                np.logical_and(mask_pekel, valid_samples),
+            )
+
+        # Hand samples, always random (currently)
+        rows_hand, cols_hand = get_random_indexes_from_masks(
+            nb_other_samples, valid_samples, mask_hand
+        )
+        
+        # All samples
+        rows = rows_pekel + rows_hand
+        cols = cols_pekel + cols_hand
+        if args.save_mode == "debug":
+            colormap = {
+                0: (0, 0, 0, 0),  # nodata
+                1: (0, 0, 255),  # eau
+                2: (255, 0, 0),  # autre
+                3: (0, 0, 0, 0),
+            }
+            save_indexes(
+                "samples.tif",
+                zip(rows_pekel, cols_pekel),
+                zip(rows_hand, cols_hand),
+                args.shape,
+                args.crs,
+                args.transform,
+                args.rpc,
+                colormap,
+            )
+
+    else:
+        # Prepare regular samples
+        rows, cols = get_grid_indexes_from_masks(valid_samples, args.grid_spacing)
+        if args.save_mode == "debug":
+            rc_pekel = [
+                (row, col)
+                for (row, col) in zip(rows, cols)
+                if mask_pekel[row, col] == 1
+            ]
+            rc_others = [
+                (row, col)
+                for (row, col) in zip(rows, cols)
+                if mask_pekel[row, col] != 1
+            ]
+
+            colormap = {
+                0: (0, 0, 0, 0),  # nodata
+                1: (0, 0, 255),  # eau
+                2: (255, 0, 0),  # autre
+                3: (0, 0, 0, 0),
+            }
+            save_indexes(
+                "samples.tif",
+                rc_pekel,
+                rc_others,
+                args.shape,
+                args.crs,
+                args.transform,
+                args.rpc,
+                colormap,
+            )
+    
+    # Prepare samples for learning
+    shm = shared_memory.SharedMemory(name=shm_key)
+    shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+    im_stack = shmNpArray_stack[:-1, :, :]
+    x_samples = np.transpose(im_stack[:, rows, cols])
+    y_samples = mask_pekel[rows, cols]
+    shm.close()
+
+    return x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand
+
+
+def train_classifier(classifier, x_samples, y_samples):
+    """Create and train classifier on samples."""
+    
+    start_time = time.time()
+    x_train, x_test, y_train, y_test = train_test_split(
+        x_samples, y_samples, test_size=0.2, random_state=42
+    )
+    
+    classifier.fit(x_train, y_train)
+    print("Train time :", time.time() - start_time)
+    
+    # Compute accuracy on train and test sets
+    print(
+        "Accuracy on train set :",
+        accuracy_score(y_train, classifier.predict(x_train)),
+    )
+    print(
+        "Accuracy on test set :",
+        accuracy_score(y_test, classifier.predict(x_test)),
+    )
+    
+    
+def get_step(args, current_mem, shm_shape, lines):
+    base_gb = 215/1024  # Gb
+    mem_used_gb = current_mem / 1024  # Gb
+    weight_one_chunk = (shm_shape[0] - 1) * np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
+    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (2 * (args.nb_jobs + 1) * weight_one_chunk)  # float
+    
+    if max_step_predict < 1:
+        raise Exception("Insufficient memory, you need to increase the max memory")
+
+    step = min(int(max_step_predict), lines // args.nb_workers + 1)
+    
+    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (2 * (args.nb_jobs + 1) * step * weight_one_chunk)))
+                                                                     
+    return step
+
+
+def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
+    shm = shared_memory.SharedMemory(name=key)
+    shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
+    im_stack_buffer = shmNpArray_stack[:-1, :, index*step:min((index+1)*step, lines)]
+    valid_stack_buffer = np.copy(shmNpArray_stack[-1, :, index*step:min((index+1)*step, lines)]).astype(np.bool_)
+    chunkBuffer =  np.transpose(im_stack_buffer[:, valid_stack_buffer])
+    shm.close()
+    del shm
+    
+    predict_shape = (im_shape[1], min((index+1)*step, lines)-index*step)
+    prediction = np.zeros(predict_shape, dtype=np.uint8)    
+    prediction[valid_stack_buffer] = classifier.predict(chunkBuffer)
+    
+    return index, prediction
+    
+    
+def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
+    """Predict."""
+    start_time = time.time()
+    lines = shm_shape[2]
+    step = get_step(args, current_mem, shm_shape, lines)  # number of lines of each tile
+    nb_tiles = lines//step if (lines % step == 0) else lines//step + 1
+    print("Division in " + str(nb_tiles) + " tiles")
+    
+    print("DBG >> Prediction ")
+    start_time = time.time()
+    
+    context = get_context('spawn')    
+    future_seg = []
+    cpt = 0
+    
+    im_predict = np.zeros(shm_shape[1:], dtype=np.int16)
+    
+    while (cpt < nb_tiles):
+        endSession = min(cpt + args.nb_workers, nb_tiles)
+        workers = endSession - cpt
+        mem = 0
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers, mp_context=context) as executor:
+            for index in range(cpt, endSession):
+                future_seg.append(executor.submit(predict_shared, classifier, shm_key, shm_shape, shm_dtype, index, step, lines))
+                
+        for seg in concurrent.futures.as_completed(future_seg):
+            try:
+                num, res = seg.result()
+                np.copyto(im_predict[:, num*step:min((num+1)*step, shm_shape[2])], res)
+            except Exception as e:
+                print("Exception ---> "+str(e))
+
+        cpt += args.nb_workers
+        future_seg = []
+
+    print("Prediction time :", time.time() - start_time)
+    
+    return im_predict
+
+
+def classify(args):
+    """Compute water mask of file_phr with help of Pekel and Hand images."""
+
+    # Build stack with all layers
+    shm_key, shm_shape, shm_dtype, names_stack = build_stack(args) 
+    
+    # Build samples from stack and control layers (pekel, hand)
+    x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
+        shm_key, shm_shape, shm_dtype, args
     )
 
     # Create and train classifier from samples
@@ -954,20 +1121,25 @@ def classify(args):
     # show_rftree(classifier.estimators_[15], names_stack)
     print_feature_importance(classifier, names_stack)
     gc.collect()
-
+    
+    #Memory used
+    base = 210  # poids imports
+    suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
+    if args.pekel_filter:
+        suivi_mem += mask_pekel0.nbytes / (1024*1024)
+    
     # Predict and filter with Hand
-    im_predict = predict(classifier, im_stack, valid_stack)
-
+    im_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    
     # Filter with Hand
     if args.hand_filter:
         if not args.hand_strict:
             im_predict[np.logical_not(mask_hand)] = 0
         else:
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
-
+    
     # Filter with pekel0 for final classification
     if args.pekel_filter:
-        mask_pekel0 = compute_mask(args.file_pekel, 0, "PEKEL")[0]
         if args.file_esri:
             # esri_recovery...
             mask_esri = compute_esri(args.file_esri, "ESRI")[0]
@@ -995,13 +1167,20 @@ def classify(args):
             im_classif.astype(bool), args.remove_small_holes, connectivity=2
         ).astype(np.uint8)
     print("Closing time :", time.time() - start_time)
-
+    
     # Add nodata to predict and classif and save (must be done after mask_filter)
+    shm = shared_memory.SharedMemory(name=shm_key)
+    shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+    valid_stack = shmNpArray_stack[-1, :, :]
+    
     im_predict[np.logical_not(valid_stack)] = 255
     im_predict[im_predict == 1] = args.value_classif
 
     im_classif[np.logical_not(valid_stack)] = 255
     im_classif[im_classif == 1] = args.value_classif
+    
+    shm.close()
+    shm.unlink()
 
     crs, transform, rpc = get_crs_transform_rpc(args.file_phr)
     save_image(
@@ -1013,6 +1192,7 @@ def classify(args):
         rpc,
         tags=args.__dict__,
     )
+    
     save_image(
         im_classif,
         args.file_classif,
@@ -1022,7 +1202,7 @@ def classify(args):
         rpc,
         tags=args.__dict__,
     )
-
+    
     # Show output images
     if args.display:
         show_images(
@@ -1190,6 +1370,16 @@ def getarguments():
         action="store_true",
         help="Display images while running",
     )
+    
+    group2.add_argument(
+        "-save",
+        choices=["none", "prim", "aux", "all", "debug"],
+        default="none",
+        required=False,
+        action="store",
+        dest="save_mode",
+        help="Save all files (debug), only primitives (prim), only pekel and hand (aux), primitives, pekel and hand (all) or only output mask (none)",
+    )
 
     # Samples
     group3.add_argument(
@@ -1294,11 +1484,31 @@ def getarguments():
     parser.add_argument(
         "-n_jobs",
         type=int,
-        default=4,
+        default=1,
         required=False,
         action="store",
         dest="nb_jobs",
         help="Nb of parallel jobs for Random Forest"
+    )
+    
+    parser.add_argument(
+        "-max_mem",
+        type=int,
+        default=25,
+        required=False,
+        action="store",
+        dest="max_memory",
+        help="Max memory permitted for the prediction of the Random Forest (in Gb)"
+    )
+    
+    parser.add_argument(
+        "-n_workers",
+        type=int,
+        default=8,
+        required=False,
+        action="store",
+        dest="nb_workers",
+        help="Nb of CPU"
     )
 
 

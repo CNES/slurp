@@ -30,7 +30,7 @@
         <paletteEntry alpha="255" label="Route / parking ?" value="7" color="#ffb8dd"/>
         <paletteEntry alpha="255" label="Eau (prédiction)" value="8" color="#2bc7f7"/>
         <paletteEntry alpha="255" label="Ombre" value="9" color="#e2ff01"/>
-        <paletteEntry alpha="255" label="Routes" value="10" color="#969db0"/>
+        <paletteEntry alpha="255" label="Urbain (faux positifs)" value="10" color="#969db0"/>
       </colorPalette>
       <colorramp name="[source]" type="randomcolors"/>
     </rasterrenderer>

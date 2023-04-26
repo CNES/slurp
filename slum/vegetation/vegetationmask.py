@@ -125,18 +125,18 @@ def compute_segmentation(args, image, range, segmentation, primitives):
                 print("ndvi.shape = ", ndvi.shape)
                 # Estimation of the max number of segments (ie : each segment is > 100 pixels)
                 nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
-
+                
                 if args.mask_slic_bool == "True" :
                     # Open mask file with good shape
                     with rasterio.open(args.mask_slic_file) as ds_mask:
                         mask=ds_mask.read(1)
                         mask = mask.astype(bool)
-                        res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1)
+                        res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)
                 else:
-                    res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1)
+                    res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)
 
                 save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform,
-                        rpc=ds_img.tags(ns='RPC'), nodata=0)
+                        rpc=ds_img.tags(ns='RPC'), nodata=1)
     elif args.felzenszwalb:
         print("DBG > compute_segmentation (skimage Felzenszwalb)" + str(primitives))
         if args.segmentation_mode == "RGB":
@@ -195,7 +195,7 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
 def apply_clustering(args, gdf):
     t0 = time.time()
     # Extract NDVI and NDWI2 mean values of each segment
-    radiometric_indices = np.stack((gdf.mean_0.values, gdf.mean_1.values), axis=1)
+    radiometric_indices = np.stack((gdf.mean_0.values, gdf.mean_1.values), axis=1)    
 
     # Note : the seed for random generator is fixed to obtain reproductible results
     print("K-Means on radiometric indices : "+str(len(radiometric_indices))+" elements")
