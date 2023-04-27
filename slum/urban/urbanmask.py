@@ -789,7 +789,7 @@ def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_mar
     # markers map : -1, 1 and 2 : probable background, buildings or false positive
     proba = shmNpArray_stack[-2, :, start_with_margin:end_with_margin]
     markers = np.zeros_like(im_stack[0])       
-    probable_buildings = np.logical_and(proba > 85, clean_predict == 1)
+    probable_buildings = np.logical_and(proba > args.confidence_threshold, clean_predict == 1)
     probable_background = np.logical_and(proba < 20, clean_predict == 0)
     markers[probable_background] = -1
     markers[probable_buildings] = 1    
@@ -798,7 +798,7 @@ def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_mar
     if args.remove_false_positive:
         ground_truth = shmNpArray_stack[-5, :, start_with_margin:end_with_margin]
         # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, proba > 85)
+        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, proba > args.confidence_threshold)
         markers[false_positive] = 2
         del ground_truth, false_positive
         
@@ -1303,7 +1303,7 @@ def getarguments():
         dest="remove_small_objects",
         help="The minimum area, in pixels, of the objects to detect",
     )
-
+     
     parser.add_argument(
         "-remove_false_positive",
         default=False,
@@ -1312,7 +1312,19 @@ def getarguments():
         dest="remove_false_positive",
         help="Will dilate and use input ground-truth as mask to filter false positive from initial prediction"
     )
-
+    
+    parser.add_argument(
+        "-confidence_threshold",
+        type=int,
+        default=85,
+        required=False,
+        action="store",
+        dest="confidence_threshold",
+        help="Confidence threshold to consider true positive in regularization step (85% by default)",
+    )
+   
+    
+    
     return parser.parse_args()
 
 
