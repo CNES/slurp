@@ -838,9 +838,9 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     if np.count_nonzero(mask_pekel) < 2000:
         print("=> Warning : low water pixel number in Pekel Mask\n")        
         shm = shared_memory.SharedMemory(name=shm_key)
-        im_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
-        index_ndwi = shm_shape[0] - 1 - len(args.files_layers) if args.use_rgb_layers else 2
-        im_ndvi = np.copy(im_stack[index_ndwi])
+        shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+        index_ndwi = shm_shape[0] - 2 - len(args.files_layers) if args.use_rgb_layers else 2
+        im_ndvi = np.copy(shmNpArray_stack[index_ndwi])
         shm.close()
         del shm
         mask_pekel = compute_mask(im_ndvi, 32767.0, 0.3)[0]
