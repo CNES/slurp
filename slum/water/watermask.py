@@ -1042,6 +1042,7 @@ def get_step(args, current_mem, shm_shape, lines):
 
 
 def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
+    start_time = time.time()
     shm = shared_memory.SharedMemory(name=key)
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
     im_stack_buffer = shmNpArray_stack[:-1, :, index*step:min((index+1)*step, lines)]
@@ -1054,7 +1055,7 @@ def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
     prediction = np.zeros(predict_shape, dtype=np.uint8)    
     prediction[valid_stack_buffer] = classifier.predict(chunkBuffer)
     
-    return index, prediction
+    return index, prediction, time.time()-start_time
     
     
 def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
@@ -1074,6 +1075,9 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
     
     im_predict = np.zeros(shm_shape[1:], dtype=np.int16)
     
+    time_predict = 0
+    t0_predict = time.time()
+    
     while (cpt < nb_tiles):
         endSession = min(cpt + args.nb_workers, nb_tiles)
         workers = endSession - cpt
@@ -1084,29 +1088,37 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
                 
         for seg in concurrent.futures.as_completed(future_seg):
             try:
-                num, res = seg.result()
+                num, res, time_exec = seg.result()
                 np.copyto(im_predict[:, num*step:min((num+1)*step, shm_shape[2])], res)
+                time_predict += time_exec
             except Exception as e:
                 print("Exception ---> "+str(e))
 
         cpt += args.nb_workers
         future_seg = []
+        
+    time_predict_user = time.time() - t0_predict
 
     print("Prediction time :", time.time() - start_time)
     
-    return im_predict
+    return im_predict, time_predict_user, time_predict
 
 
 def classify(args):
-    """Compute water mask of file_phr with help of Pekel and Hand images."""
+    """Compute water mask of file_phr with help of Pekel and Hand images."""    
+    t0 = time.time()
 
     # Build stack with all layers
     shm_key, shm_shape, shm_dtype, names_stack = build_stack(args) 
+    
+    time_stack = time.time()
     
     # Build samples from stack and control layers (pekel, hand)
     x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
         shm_key, shm_shape, shm_dtype, args
     )
+
+    time_samples = time.time()
 
     # Create and train classifier from samples
     classifier = RandomForestClassifier(
@@ -1129,7 +1141,9 @@ def classify(args):
         suivi_mem += mask_pekel0.nbytes / (1024*1024)
     
     # Predict and filter with Hand
-    im_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    
+    time_random_forest = time.time()
     
     # Filter with Hand
     if args.hand_filter:
@@ -1230,6 +1244,24 @@ def classify(args):
             vmin=0,
             vmax=1,
         )
+
+    end_time = time.time()
+        
+    print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+    print("Total time (user)       :\t"+convert_time(end_time-t0))
+    print("- Build_stack           :\t"+convert_time(time_stack-t0))
+    print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
+    print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+    print("***")
+    print("Max workers used for parallel tasks "+str(args.nb_workers))
+    print("Prediction (user)       :\t"+convert_time(time_predict_user))
+    print("Prediction (parallel)   :\t"+convert_time(time_predict))
+    
+
+def convert_time(seconds):
+    full_time = time.gmtime(seconds)
+    return time.strftime("%H:%M:%S", full_time)
 
 
 def getarguments():
