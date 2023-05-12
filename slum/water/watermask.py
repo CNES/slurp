@@ -1138,16 +1138,25 @@ def classify(args):
         else:
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
     
-    # Filter with pekel0 for final classification
-    if args.pekel_filter:
-        if args.file_esri:
-            # esri_recovery...
+    # Filter for final classification
+    if args.pekel_filter or args.file_esri or (len(args.filter_layers) > 0):
+        mask = np.zeros(shm_shape[1:], dtype=bool)
+        if args.pekel_filter:  # filter with pekel0
+            mask = np.logical_or(mask, mask_pekel0)
+        if args.file_esri:  # esri_recovery...
             mask_esri = compute_esri(args.file_esri, "ESRI")[0]
-            im_classif = mask_filter(
-                im_predict, np.logical_or(mask_pekel0, mask_esri)
-            )
-        else:
-            im_classif = mask_filter(im_predict, mask_pekel0)
+            mask = np.logical_or(mask, mask_esri)
+        for i in range(len(args.filter_layers)):  # Other classification files
+            filter_layer = args.filter_layers[i]
+            ds_layer = rio.open(filter_layer)
+            layer = ds_layer.read(1)
+            ds_layer.close()
+            del ds_layer
+            mask = np.logical_or(mask, layer)
+                       
+        im_classif = mask_filter(im_predict, mask)
+    else:
+        im_classif = im_predict
 
     # Closing
     start_time = time.time()
@@ -1331,6 +1340,16 @@ def getarguments():
         action="store",
         dest="file_esri",
         help="ESRI filename, will be used in postprocessing",
+    )
+    
+    group1.add_argument(
+        "-filters",
+        nargs="+",
+        default=[],
+        required=False,
+        action="store",
+        dest="filter_layers",
+        help="Add filters used in postprocessing",
     )
 
     # Options
