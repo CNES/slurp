@@ -134,6 +134,19 @@ Type `slum_urbanmask -h` for complete list of options :
 
 ### Regularization step with Magiclip
 
+### Quantify the quality of a mask
+
+The predicted mask is compared to a given raster ground truth and some metrics such as the recall and the precision scores are calculated. The resulting mask shows the overlay of the prediction and the ground truth. An optional mode, useful for the urban mask, extracts the polygons of each raster and compare them.
+
+```
+slum_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
+```
+
+Type `slum_scores -h` for complete list of options :
+
+- calculation of the polygons (-polygonize ...)
+
+
 ## Documentation
 
 Go in docs/ directory
