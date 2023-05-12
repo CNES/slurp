@@ -695,6 +695,7 @@ def train_classifier(classifier, x_samples, y_samples):
 
 
 def predict_shared(args, classifier, key, im_shape, im_dtype, index, step, lines):
+    start_time = time.time()
     shm = shared_memory.SharedMemory(name=key)
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
     im_stack_buffer = shmNpArray_stack[:-5, :, index*step:min((index+1)*step, lines)]
@@ -728,7 +729,7 @@ def predict_shared(args, classifier, key, im_shape, im_dtype, index, step, lines
     
     shm.close()
     
-    return index
+    return index, time.time()-start_time
 
 
 def get_bornes(index, step, limit, margin):
@@ -752,6 +753,7 @@ def get_bornes(index, step, limit, margin):
 
 
 def regul_shared(args, key, im_shape, im_dtype, index, step):
+    start_time = time.time()
     start_with_margin, end_with_margin, start_extract, end_extract = get_bornes(index, step, im_shape[2], args.margin)
     # start_with_margin and end_with_margin : indexes to extract the tile with margin from im_predict
     # start_extract and end_extract : indexes to extract the tile without margin from predictBuffer 
@@ -768,7 +770,7 @@ def regul_shared(args, key, im_shape, im_dtype, index, step):
     # Watershed regulation
     im_seg, gradients, markers = watershed_regul(args, im_classif, key, im_shape, im_dtype, start_with_margin, end_with_margin)
     
-    return index, im_classif[:, start_extract:end_extract], im_seg[:, start_extract:end_extract], gradients[:, start_extract:end_extract], markers[:, start_extract:end_extract]
+    return index, im_classif[:, start_extract:end_extract], im_seg[:, start_extract:end_extract], gradients[:, start_extract:end_extract], markers[:, start_extract:end_extract], time.time()-start_time
 
 
 def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_margin, end_with_margin):    
@@ -867,6 +869,9 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
     future_seg = []
     cpt = 0
     
+    time_predict = 0
+    t0_predict = time.time()
+    
     # Prediction
     while (cpt < nb_tiles):
         endSession = min(cpt + args.nb_workers, nb_tiles)
@@ -877,16 +882,17 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
                 
         for seg in concurrent.futures.as_completed(future_seg):
             try:
-                num = seg.result()
-                #print(num, "OK")
+                num, time_exec = seg.result()
+                time_predict += time_exec
             except Exception as e:
                 print("Exception ---> "+str(e))
         
         cpt += args.nb_workers
         future_seg = []
     
-    print("Prediction time :", time.time() - start_time)
+    time_predict_user = time.time() - t0_predict
     
+    print("Prediction time :", time.time() - start_time)
     
     print("DBG >> Regularization ")
     t0 = time.time()
@@ -899,6 +905,9 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
     context = get_context('spawn')
     future_seg = []
     cpt = 0
+    
+    time_regul = 0
+    t0_regul = time.time()
 
     # Regularization
     while (cpt < nb_tiles):
@@ -910,30 +919,38 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
                 
         for seg in concurrent.futures.as_completed(future_seg):
             try:
-                num, res_clean, res_seg, res_gradients, res_markers = seg.result()
+                num, res_clean, res_seg, res_gradients, res_markers, time_exec = seg.result()
                 np.copyto(im_clean[:, num*step:min((num+1)*step, shm_shape[2])], res_clean)
                 np.copyto(segment[:, num*step:min((num+1)*step, shm_shape[2])], res_seg)
                 np.copyto(grad[:, num*step:min((num+1)*step, shm_shape[2])], res_gradients)
                 np.copyto(marks[:, num*step:min((num+1)*step, shm_shape[2])], res_markers)
+                time_regul += time_exec
             except Exception as e:
                 print("Exception ---> "+str(e)) 
         
         cpt += args.nb_workers
         future_seg = []
+        
+    time_regul_user = time.time() - t0_regul
     
     print(">> Regularization in %d sec " % (time.time()-t0))
 
-    return im_clean, segment, grad, marks
+    return im_clean, segment, grad, marks, [time_predict_user, time_predict, time_regul_user, time_regul]
 
 
 def classify(args):
     """Compute water mask of file_phr with help of Pekel and Hand images."""
+    t0 = time.time()
 
     # Build stack with all layers
-    shm_key, shm_shape, shm_dtype, names_stack = build_stack(args)   
+    shm_key, shm_shape, shm_dtype, names_stack = build_stack(args)
+    
+    time_stack = time.time()
     
     # Create and train classifier from samples
     x_samples, y_samples = build_samples(shm_key, shm_shape, shm_dtype, args)
+    
+    time_samples = time.time()
         
     classifier = RandomForestClassifier(
         n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced",
@@ -959,8 +976,10 @@ def classify(args):
     suivi_mem = base + (x_samples.nbytes + y_samples.nbytes) / (1024*1024)
 
     # Predict and filter with Hand
-    im_classif, im_seg, gradients, markers = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    im_classif, im_seg, gradients, markers, all_times = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
     print(">> DEBUG >> prediction OK")
+    
+    time_random_forest = time.time()
 
     #Save outputs
     crs, transform, rpc = get_crs_transform(args.file_phr)
@@ -1044,6 +1063,26 @@ def classify(args):
         
     shm.close()
     shm.unlink()
+    
+    end_time = time.time()
+        
+    print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+    print("Total time (user)       :\t"+convert_time(end_time-t0))
+    print("- Build_stack           :\t"+convert_time(time_stack-t0))
+    print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
+    print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+    print("***")
+    print("Max workers used for parallel tasks "+str(args.nb_workers))
+    print("Prediction (user)       :\t"+convert_time(all_times[0]))
+    print("Prediction (parallel)   :\t"+convert_time(all_times[1]))
+    print("Regularization (user)   :\t"+convert_time(all_times[2]))
+    print("Regularization (parallel):\t"+convert_time(all_times[3]))
+    
+    
+def convert_time(seconds):
+    full_time = time.gmtime(seconds)
+    return time.strftime("%H:%M:%S", full_time)
 
 
 def clean(args, im_classif):
