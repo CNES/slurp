@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """ Compute building and road masks from VHR images thanks to OSM layers """
 
@@ -531,14 +531,14 @@ def build_stack(args):
         show_images(valid_phr, "Valid PHR", valid_stack, "Valid Stack")     
     
     # Stack construction in a shared memory :
-    # 1 : im_phr (1 or 4 bands)
-    # 2 : ndvi
-    # 3 : ndwi
-    # 4 : file_layers (1 band for each layer)
-    # 5 : valid_stack
-    # 6 : mask_building
-    # 7 : proba (2 bands)
-    # 8 : predict
+    # 0 -> bands_phr : im_phr (1 or 4 bands)
+    # bands_phr : ndvi
+    # bands_phr + 1 : ndwi
+    # bands_phr + 2 -> bands_phr + 2 + len(file_layers) : file_layers (1 band for each layer)
+    # -5 : mask_building
+    # -4 : valid_stack
+    # -3 and -2 : proba (2 bands)
+    # -1 : predict -> index -1
     start_time = time.time()
     bands_phr = im_phr.shape[0] if args.use_rgb_layers else 1
     shm_shape = (bands_phr + 7 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
@@ -563,12 +563,12 @@ def build_stack(args):
     
     #Add files_layers
     for i in range(len(args.files_layers)):
-        file_layer = files_layers[i]
+        file_layer = args.files_layers[i]
         ds_layer = rio.open(file_layer)
         layer = ds_layer.read(1)
         ds_layer.close()
         del ds_layer
-        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], valid_stack.astype(shm_dtype))
+        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], layer.astype(shm_dtype))
         
     #Add valid_stack
     shmNpArray_stack[-4, :, :] = valid_stack[:, :]
@@ -656,10 +656,11 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         rows = rows + rows_road
         cols = cols + cols_road
 
-    im_stack = shmNpArray_stack[:-5, :, :]
+    im_stack = shmNpArray_stack[:-5, :, :] # PHR image + ndvi + ndwi + file layers
     x_samples = np.transpose(im_stack[:, rows, cols])
     y_samples = im_gt[rows, cols]
     
+    # Add mask_building in shared memory
     shmNpArray_stack[-5, :, :] = mask_building[:,:] 
     
     shm.close()
@@ -697,7 +698,7 @@ def train_classifier(classifier, x_samples, y_samples):
 def predict_shared(args, classifier, key, im_shape, im_dtype, index, step, lines):
     shm = shared_memory.SharedMemory(name=key)
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    im_stack_buffer = shmNpArray_stack[:-5, :, index*step:min((index+1)*step, lines)]
+    im_stack_buffer = shmNpArray_stack[:-5, :, index*step:min((index+1)*step, lines)] # PHR image + ndvi + ndwi + file layers
     valid_stack_buffer = shmNpArray_stack[-4, :, index*step:min((index+1)*step, lines)]
     chunkBuffer =  np.transpose(im_stack_buffer[:, valid_stack_buffer.astype(np.bool_)])
     shm.close()
@@ -776,7 +777,7 @@ def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_mar
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
     
     # Compute gradient : either on NDVI image, or on RGB image 
-    im_stack = shmNpArray_stack[:-5, :, start_with_margin:end_with_margin]
+    im_stack = shmNpArray_stack[:-5, :, start_with_margin:end_with_margin] # PHR image + ndvi + ndwi + file layers
     if args.use_rgb_layers:
         im_mono = 0.29*im_stack[0] + 0.58*im_stack[1] + 0.114*im_stack[2]
     else:
@@ -787,7 +788,7 @@ def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_mar
     del im_mono
 
     # markers map : -1, 1 and 2 : probable background, buildings or false positive
-    proba = shmNpArray_stack[-2, :, start_with_margin:end_with_margin]
+    proba = shmNpArray_stack[-2, :, start_with_margin:end_with_margin] # proba of building class
     markers = np.zeros_like(im_stack[0])       
     probable_buildings = np.logical_and(proba > args.confidence_threshold, clean_predict == 1)
     probable_background = np.logical_and(proba < 20, clean_predict == 0)
@@ -814,7 +815,7 @@ def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_mar
         res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
         # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
         seg = np.multiply(res, seg)
-
+    
     return seg, edges, markers
 
 
@@ -1159,7 +1160,7 @@ def getarguments():
         metavar="FILE_LAYER",
         help="Add layers as features used by learning algorithm",
     )
-
+    
     parser.add_argument(
         "-urban_raster",
         default=None,
@@ -1168,7 +1169,7 @@ def getarguments():
         dest="urban_raster",
         help="Ground Truth (could be OSM, WSF). By default, WSF is automatically retrieved"
     )
-
+    
     parser.add_argument(
         "-nb_classes",
         default=1,
@@ -1293,7 +1294,7 @@ def getarguments():
         dest="binary_opening",
         help="Size of square structuring element"
     )
-
+    
     parser.add_argument(
         "-remove_small_objects",
         type=int,
@@ -1303,7 +1304,7 @@ def getarguments():
         dest="remove_small_objects",
         help="The minimum area, in pixels, of the objects to detect",
     )
-     
+    
     parser.add_argument(
         "-remove_false_positive",
         default=False,
@@ -1320,10 +1321,8 @@ def getarguments():
         required=False,
         action="store",
         dest="confidence_threshold",
-        help="Confidence threshold to consider true positive in regularization step (85% by default)",
+        help="Confidence threshold to consider true positive in regularization step (85 by default)",
     )
-   
-    
     
     return parser.parse_args()
 

@@ -733,11 +733,11 @@ def build_stack(args):
         show_images(valid_phr, "Valid PHR", valid_stack, "Valid Stack")
         
     # Stack construction in a shared memory :
-    # 1 : im_phr (1 or 4 bands)
-    # 2 : ndvi
-    # 3 : ndwi
-    # 4 : file_layers (1 band for each layer)
-    # 5 : valid_stack
+    # 0 -> bands_phr : im_phr (1 or 4 bands)
+    # bands_phr : ndvi
+    # bands_phr + 1 : ndwi
+    # bands_phr + 2 -> bands_phr + 2 + len(file_layers) : file_layers (1 band for each layer)
+    # -1 : valid_stack
     start_time = time.time()
     bands_phr = im_phr.shape[0] if args.use_rgb_layers else 1
     shm_shape = (bands_phr + 3 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
@@ -762,12 +762,12 @@ def build_stack(args):
     
     #Add files_layers
     for i in range(len(args.files_layers)):
-        file_layer = files_layers[i]
+        file_layer = args.files_layers[i]
         ds_layer = rio.open(file_layer)
         layer = ds_layer.read(1)
         ds_layer.close()
         del ds_layer
-        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], valid_stack.astype(shm_dtype))
+        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], layer.astype(shm_dtype))
         
     #Add valid_stack
     shmNpArray_stack[-1, :, :] = valid_stack[:, :]
@@ -1044,7 +1044,7 @@ def get_step(args, current_mem, shm_shape, lines):
 def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
     shm = shared_memory.SharedMemory(name=key)
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    im_stack_buffer = shmNpArray_stack[:-1, :, index*step:min((index+1)*step, lines)]
+    im_stack_buffer = shmNpArray_stack[:-1, :, index*step:min((index+1)*step, lines)] # PHR image + ndvi + ndwi + file layers
     valid_stack_buffer = np.copy(shmNpArray_stack[-1, :, index*step:min((index+1)*step, lines)]).astype(np.bool_)
     chunkBuffer =  np.transpose(im_stack_buffer[:, valid_stack_buffer])
     shm.close()
