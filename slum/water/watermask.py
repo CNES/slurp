@@ -104,6 +104,7 @@ from sklearn.tree import export_graphviz, export_text
 import concurrent.futures
 from multiprocessing import shared_memory, get_context
 from pylab import *
+from slum.tools import io_utils
 
 try:
     from sklearnex import patch_sklearn
@@ -1028,15 +1029,17 @@ def train_classifier(classifier, x_samples, y_samples):
 def get_step(args, current_mem, shm_shape, lines):
     base_gb = 215/1024  # Gb
     mem_used_gb = current_mem / 1024  # Gb
+    valid_one_chunk = np.dtype(np.bool_).itemsize * shm_shape[1] / (1024*1024*1024)
     weight_one_chunk = (shm_shape[0] - 1) * np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
-    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (2 * (args.nb_jobs + 1) * weight_one_chunk)  # float
+    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk)  # float
     
     if max_step_predict < 1:
         raise Exception("Insufficient memory, you need to increase the max memory")
 
     step = min(int(max_step_predict), lines // args.nb_workers + 1)
     
-    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (2 * (args.nb_jobs + 1) * step * weight_one_chunk)))
+    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
+    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (2 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
                                                                      
     return step
 
@@ -1052,7 +1055,7 @@ def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
     del shm
     
     predict_shape = (im_shape[1], min((index+1)*step, lines)-index*step)
-    prediction = np.zeros(predict_shape, dtype=np.uint8)    
+    prediction = np.zeros(predict_shape, dtype=np.uint8)
     prediction[valid_stack_buffer] = classifier.predict(chunkBuffer)
     
     return index, prediction, time.time()-start_time
