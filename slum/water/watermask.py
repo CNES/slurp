@@ -104,7 +104,7 @@ from sklearn.tree import export_graphviz, export_text
 import concurrent.futures
 from multiprocessing import shared_memory, get_context
 from pylab import *
-from slum.tools import io_utils
+import uuid
 
 try:
     from sklearnex import patch_sklearn
@@ -420,19 +420,20 @@ def compute_ndxi(im_b1, im_b2, valid):
     return im_ndxi, valid_ndxi
 
 
-def compute_esri(file_esri, desc_esri=""):
-    """Compute ESRI mask. Water value is 1."""
+def compute_filter(file_filter, desc_filter):
+    """Compute filter mask. Water value is 1."""
 
     id_water = 1
 
-    ds_esri = rio.open(file_esri)
-    im_esri = ds_esri.read(1)
-    valid_esri = im_esri != ds_esri.nodata
-    mask_esri = im_esri == id_water
-    print_dataset_infos(ds_esri, desc_esri)
-    del im_esri, ds_esri
+    ds_filter = rio.open(file_filter)
+    im_filter = ds_filter.read(1)
+    valid_filter = im_filter != ds_filter.nodata
+    mask_filter = im_filter == id_water
+    print_dataset_infos(ds_filter, desc_filter)
+    ds_filter.close()
+    del im_filter, ds_filter
 
-    return mask_esri, valid_esri
+    return mask_filter, valid_filter
 
 
 def get_crs_transform_rpc(file):
@@ -744,7 +745,7 @@ def build_stack(args):
     shm_shape = (bands_phr + 3 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
     shm_dtype = np.dtype(np.int16)
     d_size = shm_dtype.itemsize * np.prod(shm_shape)
-    shm_key = "slumImStack"
+    shm_key = str(uuid.uuid4())
     shmSlumIn = shared_memory.SharedMemory(create=True, size=d_size, name=shm_key)
     shmNpArray_stack = np.ndarray(shape=shm_shape, dtype=shm_dtype, buffer=shmSlumIn.buf)
     
@@ -823,12 +824,12 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     
     # Pekel masks
     if args.hand_strict:
-        if args.pekel_filter:
+        if not args.no_pekel_filter:
             [mask_pekel, mask_pekelxx, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh, 0])[0]
         else:
             [mask_pekel, mask_pekelxx] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh])[0]
             mask_pekel0 = "not defined"
-    elif args.pekel_filter:
+    elif not args.no_pekel_filter:
         [mask_pekel, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, 0])[0]
     else:
         mask_pekel = compute_mask(im_pekel, pekel_nodata, args.thresh_pekel)[0]
@@ -1038,8 +1039,7 @@ def get_step(args, current_mem, shm_shape, lines):
 
     step = min(int(max_step_predict), lines // args.nb_workers + 1)
     
-    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
-    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (2 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
+    #print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
                                                                      
     return step
 
@@ -1140,7 +1140,7 @@ def classify(args):
     #Memory used
     base = 210  # poids imports
     suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
-    if args.pekel_filter:
+    if not args.no_pekel_filter:
         suivi_mem += mask_pekel0.nbytes / (1024*1024)
     
     # Predict and filter with Hand
@@ -1156,21 +1156,13 @@ def classify(args):
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
     
     # Filter for final classification
-    if args.pekel_filter or args.file_esri or (len(args.filter_layers) > 0):
+    if len(args.file_filters) > 0 or not args.no_pekel_filter:
         mask = np.zeros(shm_shape[1:], dtype=bool)
-        if args.pekel_filter:  # filter with pekel0
+        if not args.no_pekel_filter:  # filter with pekel0
             mask = np.logical_or(mask, mask_pekel0)
-        if args.file_esri:  # esri_recovery...
-            mask_esri = compute_esri(args.file_esri, "ESRI")[0]
-            mask = np.logical_or(mask, mask_esri)
-        for i in range(len(args.filter_layers)):  # Other classification files
-            filter_layer = args.filter_layers[i]
-            ds_layer = rio.open(filter_layer)
-            layer = ds_layer.read(1)
-            ds_layer.close()
-            del ds_layer
-            mask = np.logical_or(mask, layer)
-                       
+        for i in range(len(args.file_filters)):  # Other classification files
+            filter_mask = compute_filter(args.file_filters[i], "FILTER " + str(i))[0]
+            mask = np.logical_or(mask, filter_mask)                       
         im_classif = mask_filter(im_predict, mask)
     else:
         im_classif = im_predict
@@ -1367,15 +1359,6 @@ def getarguments():
         dest="file_cloud_gml",
         help="Cloud file in .GML format",
     )
-
-    group1.add_argument(
-        "-esri",
-        default=None,
-        required=False,
-        action="store",
-        dest="file_esri",
-        help="ESRI filename, will be used in postprocessing",
-    )
     
     group1.add_argument(
         "-filters",
@@ -1383,8 +1366,8 @@ def getarguments():
         default=[],
         required=False,
         action="store",
-        dest="filter_layers",
-        help="Add filters used in postprocessing",
+        dest="file_filters",
+        help="Add files used in filtering (postprocessing)",
     )
 
     # Options
@@ -1568,12 +1551,12 @@ def getarguments():
 
     # Post processing
     group4.add_argument(
-        "-pekel_filter",
-        default=True,
+        "-no_pekel_filter",
+        default=False,
         required=False,
         action="store_true",
-        dest="pekel_filter",
-        help="Postprocess with pekel, only keep surfaces already known by pekel",
+        dest="no_pekel_filter",
+        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel",
     )
 
     group4.add_argument(

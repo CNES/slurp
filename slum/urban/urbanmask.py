@@ -99,6 +99,7 @@ import otbApplication as otb
 from multiprocessing import shared_memory, get_context
 import concurrent.futures
 import sys
+import uuid
 
 
 try:
@@ -544,7 +545,7 @@ def build_stack(args):
     shm_shape = (bands_phr + 7 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
     shm_dtype = np.dtype(np.int16)
     d_size = shm_dtype.itemsize * np.prod(shm_shape)
-    shm_key = "slumImStack"
+    shm_key = str(uuid.uuid4())
     shmSlumIn = shared_memory.SharedMemory(create=True, size=d_size, name=shm_key)
     shmNpArray_stack = np.ndarray(shape=shm_shape, dtype=shm_dtype, buffer=shmSlumIn.buf)
     
