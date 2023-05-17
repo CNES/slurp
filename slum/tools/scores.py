@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+0#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import traceback
@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score
 import rasterio as rio
 from rasterio import features
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import shape
 import numpy as np
 from slum.tools import io_utils
@@ -24,10 +25,26 @@ def generate_polygons_in_gdf(im, crs, transform):
     #print(buildings.shape)
     geometry = np.array([shape(buildings[i][0]) for i in range(0, len(buildings))])
     gdf = gpd.GeoDataFrame(
-        {'id': list(range(1, len(geometry)+1)), 'geometry': geometry },
+        {'id': list(range(0, len(geometry))), 'geometry': geometry },
         crs=crs
     )
     return gdf
+
+
+def get_union_gdf(gdf, gdf_ref, gdf_predict, crs):
+    polys = []    
+    indexes = gdf.dropna()["id_1"].unique()
+    for index in indexes:
+        index_predict = gdf[gdf["id_1"] == index]["id_2"].dropna()
+        gdf_unary = gdf[(gdf["id_1"] == index) | (gdf["id_2"].isin(index_predict.values))]["geometry"]
+        gdf_unary = pd.concat([gdf_unary, gdf_ref.iloc[[index]]["geometry"]])
+        gdf_unary = pd.concat([gdf_unary, gdf_predict.iloc[index_predict.values]["geometry"]])
+        polys.append(gdf_unary.unary_union)
+    gdf_union = gpd.GeoDataFrame(
+        {'id_1': indexes.astype("int"), 'geometry': polys},
+        crs=crs
+    )
+    return gdf_union
 
 
 def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, crs_predict, transform_predict):
@@ -49,14 +66,36 @@ def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, c
         gdf_predict.to_file(join(dir_out, "buildings_predict.shp"))
         gdf_ref_filtered.to_file(join(dir_out, "buildings_ref.shp"))
 
-    # Intersection calculation
+    # Intersection and union calculation
     if crs_ref != crs_predict:
         gdf_ref_filtered = gdf_ref_filtered.to_crs(crs_predict)
 
     gdf_intersect = gpd.overlay(gdf_ref_filtered, gdf_predict, how="intersection", keep_geom_type=True)
+    gdf_intersect["area_inter"] = gdf_intersect.area
+    gdf_intersect_area = gdf_intersect.groupby('id_1')["area_inter"].sum().reset_index()
     
-    print("Detected buildings : " + str(gdf_intersect["id_1"].nunique()) + "/" + str(gdf_ref_filtered.shape[0]))
-    print("Buildings count execution time : "+str(time.time() - start_time)) 
+    gdf_union = get_union_gdf(gdf_intersect, gdf_ref, gdf_predict, crs_ref)
+    gdf_union["area_union"] = gdf_union.area
+    
+    if args.save:
+        gdf_intersect.to_file(join(dir_out, "intersection.shp"))
+        gdf_union.to_file(join(dir_out, "union.shp"))
+    
+    # Generate stack GeoDataFrame
+    df_merged = gdf_intersect_area.merge(gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index').drop(columns="index")
+    df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on='id_1', right_on='id_1')
+    
+    df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
+    print("Mean IoU", df_merged["iou"].mean())
+
+    # Scores
+    detected_buildings = len(df_merged[100 * df_merged["area_inter"] / df_merged["area_ref"] > args.thresh_overlay])
+    iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
+    
+    print(f'Detected buildings : {gdf_intersect["id_1"].nunique()}/{gdf_ref_filtered.shape[0]}')
+    print(f'Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}')
+    print(f'Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}')
+    print("Buildings count execution time :", time.time() - start_time) 
 
 
 def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
@@ -111,6 +150,10 @@ def getarguments():
                        help='Minimal area required in the ground truth file (default is 0)')
     parser.add_argument('-polygonize.unit', required=False, action='store', dest='unit', choices=["meter", "degree"], default="meter",
                        help='Unit of spacing (default is meter)')
+    parser.add_argument('-polygonize.iou', required=False, action='store', dest='thresh_iou', type=int, default=50,
+                       help='IoU threshold (default is 50)')
+    parser.add_argument('-polygonize.overlay', required=False, action='store', dest='thresh_overlay', type=int, default=50,
+                       help='Threshold proportion oto detect a building (default is 50)')
     parser.add_argument('-save', required=False, action='store_true', dest='save', default=False,
                        help='Save SHP files containing the buildings')
 
