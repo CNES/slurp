@@ -7,7 +7,7 @@
 # OUTPUT_DIR folder containing the outputs
 # Compute all the masks for a given image and archive them in a tar
 # Example of command to lauch the script :
-# qsub -v "PHR_IM=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Images/Toulouse/xt_PHR_uint16.tif,OUTPUT_DIR=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Tests/Toulouse" all_masks.pbs
+# qsub -v "PHR_IM=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Images/Toulouse/xt_PHR_uint16.tif,OUTPUT_DIR=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Tests/Toulouse" compute_all_masks.pbs
 
 module load otb/8.1-python3.8.4
 . /softs/projets/pluto/slum_env_v2/bin/activate
