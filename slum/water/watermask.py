@@ -104,6 +104,7 @@ from sklearn.tree import export_graphviz, export_text
 import concurrent.futures
 from multiprocessing import shared_memory, get_context
 from pylab import *
+import uuid
 
 try:
     from sklearnex import patch_sklearn
@@ -419,19 +420,20 @@ def compute_ndxi(im_b1, im_b2, valid):
     return im_ndxi, valid_ndxi
 
 
-def compute_esri(file_esri, desc_esri=""):
-    """Compute ESRI mask. Water value is 1."""
+def compute_filter(file_filter, desc_filter):
+    """Compute filter mask. Water value is 1."""
 
     id_water = 1
 
-    ds_esri = rio.open(file_esri)
-    im_esri = ds_esri.read(1)
-    valid_esri = im_esri != ds_esri.nodata
-    mask_esri = im_esri == id_water
-    print_dataset_infos(ds_esri, desc_esri)
-    del im_esri, ds_esri
+    ds_filter = rio.open(file_filter)
+    im_filter = ds_filter.read(1)
+    valid_filter = im_filter != ds_filter.nodata
+    mask_filter = im_filter == id_water
+    print_dataset_infos(ds_filter, desc_filter)
+    ds_filter.close()
+    del im_filter, ds_filter
 
-    return mask_esri, valid_esri
+    return mask_filter, valid_filter
 
 
 def get_crs_transform_rpc(file):
@@ -743,7 +745,7 @@ def build_stack(args):
     shm_shape = (bands_phr + 3 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
     shm_dtype = np.dtype(np.int16)
     d_size = shm_dtype.itemsize * np.prod(shm_shape)
-    shm_key = "slumImStack"
+    shm_key = str(uuid.uuid4())
     shmSlumIn = shared_memory.SharedMemory(create=True, size=d_size, name=shm_key)
     shmNpArray_stack = np.ndarray(shape=shm_shape, dtype=shm_dtype, buffer=shmSlumIn.buf)
     
@@ -822,12 +824,12 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     
     # Pekel masks
     if args.hand_strict:
-        if args.pekel_filter:
+        if not args.no_pekel_filter:
             [mask_pekel, mask_pekelxx, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh, 0])[0]
         else:
             [mask_pekel, mask_pekelxx] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, args.strict_thresh])[0]
             mask_pekel0 = "not defined"
-    elif args.pekel_filter:
+    elif not args.no_pekel_filter:
         [mask_pekel, mask_pekel0] = compute_mask(im_pekel, pekel_nodata, [args.thresh_pekel, 0])[0]
     else:
         mask_pekel = compute_mask(im_pekel, pekel_nodata, args.thresh_pekel)[0]
@@ -1028,20 +1030,22 @@ def train_classifier(classifier, x_samples, y_samples):
 def get_step(args, current_mem, shm_shape, lines):
     base_gb = 215/1024  # Gb
     mem_used_gb = current_mem / 1024  # Gb
+    valid_one_chunk = np.dtype(np.bool_).itemsize * shm_shape[1] / (1024*1024*1024)
     weight_one_chunk = (shm_shape[0] - 1) * np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
-    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (2 * (args.nb_jobs + 1) * weight_one_chunk)  # float
+    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk)  # float
     
     if max_step_predict < 1:
         raise Exception("Insufficient memory, you need to increase the max memory")
 
     step = min(int(max_step_predict), lines // args.nb_workers + 1)
     
-    print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (2 * (args.nb_jobs + 1) * step * weight_one_chunk)))
+    #print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
                                                                      
     return step
 
 
 def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
+    start_time = time.time()
     shm = shared_memory.SharedMemory(name=key)
     shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
     im_stack_buffer = shmNpArray_stack[:-1, :, index*step:min((index+1)*step, lines)] # PHR image + ndvi + ndwi + file layers
@@ -1051,10 +1055,10 @@ def predict_shared(classifier, key, im_shape, im_dtype, index, step, lines):
     del shm
     
     predict_shape = (im_shape[1], min((index+1)*step, lines)-index*step)
-    prediction = np.zeros(predict_shape, dtype=np.uint8)    
+    prediction = np.zeros(predict_shape, dtype=np.uint8)
     prediction[valid_stack_buffer] = classifier.predict(chunkBuffer)
     
-    return index, prediction
+    return index, prediction, time.time()-start_time
     
     
 def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
@@ -1074,6 +1078,9 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
     
     im_predict = np.zeros(shm_shape[1:], dtype=np.int16)
     
+    time_predict = 0
+    t0_predict = time.time()
+    
     while (cpt < nb_tiles):
         endSession = min(cpt + args.nb_workers, nb_tiles)
         workers = endSession - cpt
@@ -1084,29 +1091,37 @@ def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
                 
         for seg in concurrent.futures.as_completed(future_seg):
             try:
-                num, res = seg.result()
+                num, res, time_exec = seg.result()
                 np.copyto(im_predict[:, num*step:min((num+1)*step, shm_shape[2])], res)
+                time_predict += time_exec
             except Exception as e:
                 print("Exception ---> "+str(e))
 
         cpt += args.nb_workers
         future_seg = []
+        
+    time_predict_user = time.time() - t0_predict
 
     print("Prediction time :", time.time() - start_time)
     
-    return im_predict
+    return im_predict, time_predict_user, time_predict
 
 
 def classify(args):
-    """Compute water mask of file_phr with help of Pekel and Hand images."""
+    """Compute water mask of file_phr with help of Pekel and Hand images."""    
+    t0 = time.time()
 
     # Build stack with all layers
     shm_key, shm_shape, shm_dtype, names_stack = build_stack(args) 
+    
+    time_stack = time.time()
     
     # Build samples from stack and control layers (pekel, hand)
     x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
         shm_key, shm_shape, shm_dtype, args
     )
+
+    time_samples = time.time()
 
     # Create and train classifier from samples
     classifier = RandomForestClassifier(
@@ -1125,11 +1140,13 @@ def classify(args):
     #Memory used
     base = 210  # poids imports
     suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
-    if args.pekel_filter:
+    if not args.no_pekel_filter:
         suivi_mem += mask_pekel0.nbytes / (1024*1024)
     
     # Predict and filter with Hand
-    im_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+    
+    time_random_forest = time.time()
     
     # Filter with Hand
     if args.hand_filter:
@@ -1138,16 +1155,17 @@ def classify(args):
         else:
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
     
-    # Filter with pekel0 for final classification
-    if args.pekel_filter:
-        if args.file_esri:
-            # esri_recovery...
-            mask_esri = compute_esri(args.file_esri, "ESRI")[0]
-            im_classif = mask_filter(
-                im_predict, np.logical_or(mask_pekel0, mask_esri)
-            )
-        else:
-            im_classif = mask_filter(im_predict, mask_pekel0)
+    # Filter for final classification
+    if len(args.file_filters) > 0 or not args.no_pekel_filter:
+        mask = np.zeros(shm_shape[1:], dtype=bool)
+        if not args.no_pekel_filter:  # filter with pekel0
+            mask = np.logical_or(mask, mask_pekel0)
+        for i in range(len(args.file_filters)):  # Other classification files
+            filter_mask = compute_filter(args.file_filters[i], "FILTER " + str(i))[0]
+            mask = np.logical_or(mask, filter_mask)                       
+        im_classif = mask_filter(im_predict, mask)
+    else:
+        im_classif = im_predict
 
     # Closing
     start_time = time.time()
@@ -1221,6 +1239,24 @@ def classify(args):
             vmin=0,
             vmax=1,
         )
+
+    end_time = time.time()
+        
+    print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+    print("Total time (user)       :\t"+convert_time(end_time-t0))
+    print("- Build_stack           :\t"+convert_time(time_stack-t0))
+    print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
+    print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+    print("***")
+    print("Max workers used for parallel tasks "+str(args.nb_workers))
+    print("Prediction (user)       :\t"+convert_time(time_predict_user))
+    print("Prediction (parallel)   :\t"+convert_time(time_predict))
+    
+
+def convert_time(seconds):
+    full_time = time.gmtime(seconds)
+    return time.strftime("%H:%M:%S", full_time)
 
 
 def getarguments():
@@ -1323,14 +1359,15 @@ def getarguments():
         dest="file_cloud_gml",
         help="Cloud file in .GML format",
     )
-
+    
     group1.add_argument(
-        "-esri",
-        default=None,
+        "-filters",
+        nargs="+",
+        default=[],
         required=False,
         action="store",
-        dest="file_esri",
-        help="ESRI filename, will be used in postprocessing",
+        dest="file_filters",
+        help="Add files used in filtering (postprocessing)",
     )
 
     # Options
@@ -1514,12 +1551,12 @@ def getarguments():
 
     # Post processing
     group4.add_argument(
-        "-pekel_filter",
-        default=True,
+        "-no_pekel_filter",
+        default=False,
         required=False,
         action="store_true",
-        dest="pekel_filter",
-        help="Postprocess with pekel, only keep surfaces already known by pekel",
+        dest="no_pekel_filter",
+        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel",
     )
 
     group4.add_argument(
