@@ -82,6 +82,7 @@ You can also use a .pbs script to launch different masks algorithms on your imag
 ```
 qsub -v "PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/" /softs/projets/pluto/demo_slum/compute_all_masks.pbs
 ```
+Two scripts (to calculate all the masks and the scores) are available in conf/ directory.
 
 
 ## Features
