@@ -49,7 +49,7 @@ you may set the environment as mentioned below.
 ### Create a virtual env with all libraries (if you don't use VRE OT)
 On HAL, connect to a computing node to create & compile the virtual environment (needed to compile rasterio at install time)
 ```
-qsub -l select=1:ncpus=4 -l walltime=01:00:00 -I
+qsub -l select=1:ncpus=8 -l walltime=01:00:00 -I
 ```
 Load OTB and create a virtual env with some Python libraries
 ```
@@ -88,7 +88,7 @@ qsub -v "PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUT
 
 ### Water mask
 Water model is learned from Peckel (Global Surface Water) reference data and is based on NDVI/NDWI2 indices. 
-Then the predicted mask is cleaned with Peckel, possibly with HAND maps and post-processed to clean artefacts.
+Then the predicted mask is cleaned with Peckel, possibly with HAND or OSM maps and post-processed to clean artefacts.
 ```
 slum_watermask <VHR input image> <your watermask.tif>
 ```
@@ -96,7 +96,9 @@ Type `slum_watermask -h` for complete list of options :
 
 - bands identification (-red <1/3>), 
 - add other raster features (-layers layer1 [layer 2 ..]), 
-- post-process mask (-remove_small_holes, -binary_closing, etc.), 
+- add other raster filters (-filters file1 [file2 ..])
+- post-process mask (-remove_small_holes, -binary_closing, etc.),
+- saving of intermediate files (-save),
 - etc.
 ### Vegetation mask
 Vegetation mask are computed with an unsupervised clustering algorithm. First some primitives are computed from VHR image (NDVI, NDWI2, textures).
@@ -116,16 +118,20 @@ Type `slum_vegetationmask -h` for complete list of options :
 - etc.
 
 
-### Urban (building / roads) mask
-An urban model (either building or road) is learned from OSM reference map (provided as raster covering same extent as input VHR image). Adding an other OSM ground truth improves model (by learning counter-example) and thus eliminates a lot of false positive detection.
+### Urban (building) mask
+An urban model (building) is learned from WSF reference map. Adding an other OSM ground truth or water and vegetation masks improves model (by learning counter-example) and thus eliminates a lot of false positive detection. Then the predicted mask is regularized with a watershed algorithm, post-processed to clean artefacts and possibly cleaned with WSF to identify false positives.
 The resulting mask is supposed to be stack with other masks (water, vegetation) to improve final rendering.
 ```
-slum_urbanmask -building_mask <raster ground truth - OSM, ..> <VHR input image> <your urban mask>
+slum_urbanmask <VHR input image> <your urban mask>
 ```
 Type `slum_urbanmask -h` for complete list of options :
 
-- add road mask to improve roads/building separation (-road_mask <raster ground truth>)
-- use RGB, add other features, etc.
+- bands identification (-red <1/3>), 
+- elimination of pixels identified as water or vegetation (-watermask <your watermask.tif>, -vegetationmask <your vegetationmask.tif>),
+- post-process mask (-remove_small_holes, -binary_closing, -confidence_threshold, etc.), 
+- identification of false positives (-remove_false_positive),
+- saving of intermediate files (-save),
+- etc.
 
 
 ### Shadow mask
@@ -136,7 +142,8 @@ Type `slum_urbanmask -h` for complete list of options :
 
 ### Quantify the quality of a mask
 
-The predicted mask is compared to a given raster ground truth and some metrics such as the recall and the precision scores are calculated. The resulting mask shows the overlay of the prediction and the ground truth. An optional mode, useful for the urban mask, extracts the polygons of each raster and compare them.
+The predicted mask is compared to a given raster ground truth and some metrics such as the recall and the precision scores are calculated. The resulting mask shows the overlay of the prediction and the ground truth. An optional mode, useful for the urban mask, extracts the polygons of each raster and compare them, giving the number of expected buildings identified and the IoU score.
+The analysis can be performed on a window of the input files.
 
 ```
 slum_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
@@ -144,7 +151,9 @@ slum_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your 
 
 Type `slum_scores -h` for complete list of options :
 
-- calculation of the polygons (-polygonize ...)
+- selection of a window (-startx, -starty, -sizex, -sizey),
+- detection of the buildings (-polygonize) and iou score (-polygonize.union) with some parameters (-polygonize.area, -polygonize.unit, etc.),
+- saving of intermediate files (-save)
 
 
 ## Documentation
