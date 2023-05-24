@@ -6,16 +6,15 @@ import argparse
 import time
 from os.path import dirname, join
 
-from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score, precision_score, recall_score, jaccard_score
 import rasterio as rio
 from rasterio import features
+from rasterio.windows import Window
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import shape
 import numpy as np
 from slum.tools import io_utils
-
-import sys
 
 
 def generate_polygons_in_gdf(im, crs, transform):
@@ -49,6 +48,7 @@ def get_union_gdf(gdf, gdf_ref, gdf_predict, crs):
 
 def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, crs_predict, transform_predict):
     start_time = time.time()
+    print("## BUILDINGS ANALYSIS ##")
     
     # Generate GeoDataFrame
     gdf_predict = generate_polygons_in_gdf(im_predict, crs_predict, transform_predict)
@@ -59,42 +59,43 @@ def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, c
         crs_ref = gdf_ref.estimate_utm_crs()
         gdf_ref = gdf_ref.to_crs(crs_ref)
     
+    if crs_predict != crs_ref:
+        gdf_predict = gdf_predict.to_crs(crs_ref)
+    
     # Remove small builidings from ground truth
-    gdf_ref_filtered = gdf_ref[gdf_ref.geometry.area > args.area]
+    gdf_ref_filtered = gdf_ref[gdf_ref.geometry.area > args.area]    
     
     if args.save:  
         gdf_predict.to_file(join(dir_out, "buildings_predict.shp"))
         gdf_ref_filtered.to_file(join(dir_out, "buildings_ref.shp"))
 
-    # Intersection and union calculation
-    if crs_ref != crs_predict:
-        gdf_ref_filtered = gdf_ref_filtered.to_crs(crs_predict)
-
+    # Buildings detection
     gdf_intersect = gpd.overlay(gdf_ref_filtered, gdf_predict, how="intersection", keep_geom_type=True)
-    gdf_intersect["area_inter"] = gdf_intersect.area
-    gdf_intersect_area = gdf_intersect.groupby('id_1')["area_inter"].sum().reset_index()
-    
-    gdf_union = get_union_gdf(gdf_intersect, gdf_ref, gdf_predict, crs_ref)
-    gdf_union["area_union"] = gdf_union.area
-    
-    if args.save:
-        gdf_intersect.to_file(join(dir_out, "intersection.shp"))
-        gdf_union.to_file(join(dir_out, "union.shp"))
-    
-    # Generate stack GeoDataFrame
-    df_merged = gdf_intersect_area.merge(gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index').drop(columns="index")
-    df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on='id_1', right_on='id_1')
-    
-    df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
-    print("Mean IoU", df_merged["iou"].mean())
-
-    # Scores
-    detected_buildings = len(df_merged[100 * df_merged["area_inter"] / df_merged["area_ref"] > args.thresh_overlay])
-    iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
-    
     print(f'Detected buildings : {gdf_intersect["id_1"].nunique()}/{gdf_ref_filtered.shape[0]}')
-    print(f'Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}')
-    print(f'Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}')
+    
+    # Intersection and union calculation
+    if args.union:
+        gdf_intersect["area_inter"] = gdf_intersect.area
+        gdf_intersect_area = gdf_intersect.groupby('id_1')["area_inter"].sum().reset_index()
+        gdf_union = get_union_gdf(gdf_intersect, gdf_ref, gdf_predict, crs_ref)
+        gdf_union["area_union"] = gdf_union.area
+
+        if args.save:
+            gdf_intersect.to_file(join(dir_out, "intersection.shp"))
+            gdf_union.to_file(join(dir_out, "union.shp"))
+
+        # Generate stack GeoDataFrame
+        df_merged = gdf_intersect_area.merge(gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index').drop(columns="index")
+        df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on='id_1', right_on='id_1')
+        
+        # Scores
+        detected_buildings = len(df_merged[100 * df_merged["area_inter"] / df_merged["area_ref"] > args.thresh_overlay])
+        print(f'Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}')
+        df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
+        iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
+        print(f'Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}')
+        print("Mean IoU {:.2f}".format(df_merged["iou"].mean()))
+        
     print("Buildings count execution time :", time.time() - start_time) 
 
 
@@ -116,14 +117,17 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
 
 def get_score(im_ref, im_predict):
     start_time = time.time()
-    print("Accuracy >>>", accuracy_score(im_ref, im_predict)) 
-    precision = precision_score(im_ref, im_predict)
-    print("Precision >>>", precision) 
-    recall = recall_score(im_ref, im_predict)
-    print("Recall >>>", recall)
-    f1 = 2 * precision * recall / (precision + recall)
-    print("F1 >>>", f1)
+    print("## SCORES ##")
     
+    print("Accuracy >>> {:.2f}".format(accuracy_score(im_ref, im_predict)))     
+    precision = precision_score(im_ref, im_predict)
+    print("Precision >>> {:.2f}".format(precision)) 
+    recall = recall_score(im_ref, im_predict)
+    print("Recall >>> {:.2f}".format(recall))
+    f1 = 2 * precision * recall / (precision + recall)
+    print("F1 >>> {:.2f}".format(f1))
+    
+    print("Jaccard >>> {:.2f}".format(jaccard_score(im_ref, im_predict)))    
     # print("Log loss >>>", log_loss(im_ref, im_predict))
     # print("Confusion matrix >>>", confusion_matrix(im_ref, im_predict))
     #print("F1 >>>", f1_score(im_ref, im_predict))
@@ -144,8 +148,18 @@ def getarguments():
                        help='Output filename')
     parser.add_argument('-value_classif', required=False, action='store', dest='value_classif', type=int, default=1,
                        help='Ground truth classification value (default is 1)')
+    parser.add_argument('-startx', required=False, action='store', dest='startx', type=int,
+                       help='ROI start x position')
+    parser.add_argument('-starty', required=False, action='store', dest='starty', type=int,
+                       help='ROI start y position')
+    parser.add_argument('-sizex', required=False, action='store', dest='sizex', type=int,
+                       help='Size along x in pixels')
+    parser.add_argument('-sizey', required=False, action='store', dest='sizey', type=int,
+                       help='Size along y in pixels')
     parser.add_argument('-polygonize', required=False, action='store_true', dest='polygonize', default=False,
                        help='Will estimate the number of buildings from the truth file predicted')
+    parser.add_argument('-polygonize.union', required=False, action='store_true', dest='union', default=False,
+                       help='Will estimate IoU and overlay scores')
     parser.add_argument('-polygonize.area', required=False, action='store', dest='area', type=int, default=0,
                        help='Minimal area required in the ground truth file (default is 0)')
     parser.add_argument('-polygonize.unit', required=False, action='store', dest='unit', choices=["meter", "degree"], default="meter",
@@ -153,7 +167,7 @@ def getarguments():
     parser.add_argument('-polygonize.iou', required=False, action='store', dest='thresh_iou', type=int, default=50,
                        help='IoU threshold (default is 50)')
     parser.add_argument('-polygonize.overlay', required=False, action='store', dest='thresh_overlay', type=int, default=50,
-                       help='Threshold proportion oto detect a building (default is 50)')
+                       help='Threshold proportion to detect a building (default is 50)')
     parser.add_argument('-save', required=False, action='store_true', dest='save', default=False,
                        help='Save SHP files containing the buildings')
 
@@ -162,13 +176,13 @@ def getarguments():
 
 def main():
     try:
-        args = getarguments()
+        args = getarguments()                 
         
         # Get ground truth
         ds_ref = rio.open(args.gt)
         crs_ref = ds_ref.crs
         transform_ref = ds_ref.transform
-        im_ref = ds_ref.read(1)
+        im_ref = ds_ref.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_ref.read(1)
         ds_ref.close()
         del ds_ref
 
@@ -181,7 +195,7 @@ def main():
         crs_predict = ds_predict.crs
         transform_predict = ds_predict.transform
         rpc = ds_predict.tags(ns="RPC")
-        im_predict = ds_predict.read(1)
+        im_predict = ds_predict.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_predict.read(1)
         ds_predict.close()
         del ds_predict 
 
