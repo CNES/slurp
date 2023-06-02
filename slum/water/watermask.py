@@ -836,7 +836,10 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         mask_pekel0 = "not defined"
     del im_pekel
 
+    select_samples = True
     # Check pekel mask
+    # - if there are too few values : we threshold NDWI to detect water areas 
+    # - if there are even no "supposed water areas" : stop machine learning process (flag select_samples=False)
     if np.count_nonzero(mask_pekel) < 2000:
         print("=> Warning : low water pixel number in Pekel Mask\n")        
         shm = shared_memory.SharedMemory(name=shm_key)
@@ -845,8 +848,14 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         im_ndwi = np.copy(shmNpArray_stack[index_ndwi])
         shm.close()
         del shm
-        mask_pekel = compute_mask(im_ndwi, 32767, 100)[0]
+        # Threshold NDWI (and then pick-up samples in supposed water areas)
+        mask_pekel = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
+        print("DBG > nb pixels != 0 "+str(np.count_nonzero(mask_pekel)))
+        if np.count_nonzero(mask_pekel) < 2000:
+            print("** WARNING ** too few pixels are considered as water : skip machine learning step")
+            select_samples = False
 
+            
     # Image HAND (numpy array, first band) and mask
     if args.file_hand:
         ds_hand = rio.open(args.file_hand)
@@ -906,6 +915,13 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     valid_samples = np.logical_and(valid_stack, mask_nocloud)
     shm.close()
     del shm, mask_nocloud
+
+    if select_samples == False:
+        # Not enough supposed water areas : skip sample selection
+        # corner case : return None + mask_pekel (here, NDWI > threshold )
+        return None, None, [mask_pekel, mask_pekel], mask_hand 
+
+
     if args.samples_method != "grid":
         # Prepare random water and other samples
         if args.nb_samples_auto:
@@ -1116,37 +1132,66 @@ def classify(args):
     
     time_stack = time.time()
     
-    # Build samples from stack and control layers (pekel, hand)
-    x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
-        shm_key, shm_shape, shm_dtype, args
-    )
+    
+    if args.simple_ndwi_threshold:
+        # Compute a single mask on NDWI
+        print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
+        shm = shared_memory.SharedMemory(name=shm_key)
+        shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+        bands_phr = 4 if args.use_rgb_layers else 1
+        index_ndwi = bands_phr + 1
+        im_ndwi = np.copy(shmNpArray_stack[index_ndwi])
+        im_predict = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
+        # Force no cleaning with Pekel
+        args.no_pekel_filter = True
+        time_random_forest = time.time()
+        time_predict_user = 0
+        time_predict = 0
+        time_samples = 0 
+    else: 
 
-    time_samples = time.time()
+        # Build samples from stack and control layers (pekel, hand)
+        x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
+            shm_key, shm_shape, shm_dtype, args
+        )
+        if x_samples == None:
+            print("WARNING - Not enough pixels are supposed to be water : watermask is a simple threshold on NDWI")
+            # No samples mean there were not enough Pekel pixels and there were not enough "high NDWI" pixels
+            # => mask_pekel is the NDWI thresholded mask in that case
+            im_predict = mask_pekel.astype(np.uint8)
+            # Force no cleaning with Pekel
+            args.no_pekel_filter = True 
+            time_predict_user = 0
+            time_predict = 0
+            time_random_forest = 0
+            time_samples = 0
+        else:  
+            time_samples = time.time()
 
-    # Create and train classifier from samples
-    classifier = RandomForestClassifier(
-        n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
-    )
-    print("RandomForest parameters:\n", classifier.get_params(), "\n")
-    train_classifier(classifier, x_samples, y_samples)
-    print("Dump classifier to model_rf.dump")
-    joblib.dump(classifier, "model_rf.dump")
-    # show_rftree(classifier.estimators_[5], names_stack)
-    # show_rftree(classifier.estimators_[10], names_stack)
-    # show_rftree(classifier.estimators_[15], names_stack)
-    print_feature_importance(classifier, names_stack)
-    gc.collect()
-    
-    #Memory used
-    base = 210  # poids imports
-    suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
-    if not args.no_pekel_filter:
-        suivi_mem += mask_pekel0.nbytes / (1024*1024)
-    
-    # Predict and filter with Hand
-    im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
-    
-    time_random_forest = time.time()
+            # Create and train classifier from samples
+            classifier = RandomForestClassifier(
+                n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
+            )
+            print("RandomForest parameters:\n", classifier.get_params(), "\n")
+            train_classifier(classifier, x_samples, y_samples)
+            print("Dump classifier to model_rf.dump")
+            joblib.dump(classifier, "model_rf.dump")
+            # show_rftree(classifier.estimators_[5], names_stack)
+            # show_rftree(classifier.estimators_[10], names_stack)
+            # show_rftree(classifier.estimators_[15], names_stack)
+            print_feature_importance(classifier, names_stack)
+            gc.collect()
+            
+            #Memory used
+            base = 210  # poids imports
+            suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
+            if not args.no_pekel_filter:
+                suivi_mem += mask_pekel0.nbytes / (1024*1024)
+            
+            # Predict and filter with Hand
+            im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+            
+            time_random_forest = time.time()
     
     # Filter with Hand
     if args.hand_filter:
@@ -1416,6 +1461,25 @@ def getarguments():
         action="store",
         dest="save_mode",
         help="Save all files (debug), only primitives (prim), only pekel and hand (aux), primitives, pekel and hand (all) or only output mask (none)",
+    )
+
+    group2.add_argument(
+        "-simple_ndwi_threshold",
+        default = False,
+        required = False,
+        action = "store_true",
+        dest="simple_ndwi_threshold",
+        help="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel"
+    )
+
+    group2.add_argument(
+        "-ndwi_threshold",
+        default = 0.1,
+        required = False,
+        type = float,
+        action = "store",
+        dest="ndwi_threshold",
+        help="Threshold used when Pekel is empty in the area"
     )
 
     # Samples
