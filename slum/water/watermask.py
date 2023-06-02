@@ -842,10 +842,10 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         shm = shared_memory.SharedMemory(name=shm_key)
         shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
         index_ndwi = shm_shape[0] - 2 - len(args.files_layers) if args.use_rgb_layers else 2
-        im_ndvi = np.copy(shmNpArray_stack[index_ndwi])
+        im_ndwi = np.copy(shmNpArray_stack[index_ndwi])
         shm.close()
         del shm
-        mask_pekel = compute_mask(im_ndvi, 32767.0, 0.3)[0]
+        mask_pekel = compute_mask(im_ndwi, 32767, 100)[0]
 
     # Image HAND (numpy array, first band) and mask
     if args.file_hand:
@@ -1267,10 +1267,10 @@ def getarguments():
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
     group3 = parser.add_argument_group(
-        description="*** LEARNING SAMPLES SELECTION ***"
-    )
+        description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
+    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
 
     # Input files
     group1.add_argument("file_phr", help="PHR filename")
@@ -1498,7 +1498,7 @@ def getarguments():
         help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)",
     )
 
-    parser.add_argument(
+    group3.add_argument(
         "-max_depth",
         type=int,
         default=8,
@@ -1508,7 +1508,7 @@ def getarguments():
         help="Max depth of trees"
     )
 
-    parser.add_argument(
+    group3.add_argument(
         "-nb_estimators",
         type=int,
         default=100,
@@ -1518,37 +1518,16 @@ def getarguments():
         help="Nb of trees in Random Forest"
     )
 
-    parser.add_argument(
+    group3.add_argument(
         "-n_jobs",
         type=int,
         default=1,
         required=False,
         action="store",
         dest="nb_jobs",
-        help="Nb of parallel jobs for Random Forest"
+        help="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)"
     )
     
-    parser.add_argument(
-        "-max_mem",
-        type=int,
-        default=25,
-        required=False,
-        action="store",
-        dest="max_memory",
-        help="Max memory permitted for the prediction of the Random Forest (in Gb)"
-    )
-    
-    parser.add_argument(
-        "-n_workers",
-        type=int,
-        default=8,
-        required=False,
-        action="store",
-        dest="nb_workers",
-        help="Nb of CPU"
-    )
-
-
     # Post processing
     group4.add_argument(
         "-no_pekel_filter",
@@ -1615,6 +1594,27 @@ def getarguments():
         action="store",
         dest="value_classif",
         help="Output classification value (default is 1)",
+    )
+
+    # Parallel computing
+    group6.add_argument(
+        "-max_mem",
+        type=int,
+        default=25,
+        required=False,
+        action="store",
+        dest="max_memory",
+        help="Max memory permitted for the prediction of the Random Forest (in Gb)"
+    )
+    
+    group6.add_argument(
+        "-n_workers",
+        type=int,
+        default=8,
+        required=False,
+        action="store",
+        dest="nb_workers",
+        help="Nb of CPU"
     )
 
     return parser.parse_args()
