@@ -850,7 +850,8 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         del shm
         # Threshold NDWI (and then pick-up samples in supposed water areas)
         mask_pekel = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
-        print("DBG > nb pixels != 0 "+str(np.count_nonzero(mask_pekel)))
+        print("DBG > non zero pixels in new estimated water mask "+str(np.count_nonzero(mask_pekel)))
+        mask_pekel0 = mask_pekel
         if np.count_nonzero(mask_pekel) < 2000:
             print("** WARNING ** too few pixels are considered as water : skip machine learning step")
             select_samples = False
@@ -919,6 +920,8 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     if select_samples == False:
         # Not enough supposed water areas : skip sample selection
         # corner case : return None + mask_pekel (here, NDWI > threshold )
+        # --> we force NDWI threshold
+        args.simple_ndwi_threshold = True
         return None, None, [mask_pekel, mask_pekel], mask_hand 
 
 
@@ -1132,7 +1135,16 @@ def classify(args):
     
     time_stack = time.time()
     
+    if args.simple_ndwi_threshold == False:
+        # Default mode : watermask will be predicted thanks to samples picked up in Pekel database
+        # Build samples from stack and control layers (pekel, hand)
+        x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
+            shm_key, shm_shape, shm_dtype, args
+        )
     
+    # We check again because during sample selection, it can happen that Pekel does not know 
+    # enough waterbodies(or NDWI thresholded image)
+    # --> in such a case, we force to treshold NDWI image to compute watermask
     if args.simple_ndwi_threshold:
         # Compute a single mask on NDWI
         print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
@@ -1150,48 +1162,33 @@ def classify(args):
         time_samples = 0 
     else: 
 
-        # Build samples from stack and control layers (pekel, hand)
-        x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
-            shm_key, shm_shape, shm_dtype, args
-        )
-        if x_samples == None:
-            print("WARNING - Not enough pixels are supposed to be water : watermask is a simple threshold on NDWI")
-            # No samples mean there were not enough Pekel pixels and there were not enough "high NDWI" pixels
-            # => mask_pekel is the NDWI thresholded mask in that case
-            im_predict = mask_pekel.astype(np.uint8)
-            # Force no cleaning with Pekel
-            args.no_pekel_filter = True 
-            time_predict_user = 0
-            time_predict = 0
-            time_random_forest = 0
-            time_samples = 0
-        else:  
-            time_samples = time.time()
+       
+        time_samples = time.time()
 
-            # Create and train classifier from samples
-            classifier = RandomForestClassifier(
-                n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
-            )
-            print("RandomForest parameters:\n", classifier.get_params(), "\n")
-            train_classifier(classifier, x_samples, y_samples)
-            print("Dump classifier to model_rf.dump")
-            joblib.dump(classifier, "model_rf.dump")
-            # show_rftree(classifier.estimators_[5], names_stack)
-            # show_rftree(classifier.estimators_[10], names_stack)
-            # show_rftree(classifier.estimators_[15], names_stack)
-            print_feature_importance(classifier, names_stack)
-            gc.collect()
-            
-            #Memory used
-            base = 210  # poids imports
-            suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
-            if not args.no_pekel_filter:
-                suivi_mem += mask_pekel0.nbytes / (1024*1024)
-            
-            # Predict and filter with Hand
-            im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
-            
-            time_random_forest = time.time()
+        # Create and train classifier from samples
+        classifier = RandomForestClassifier(
+            n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
+        )
+        print("RandomForest parameters:\n", classifier.get_params(), "\n")
+        train_classifier(classifier, x_samples, y_samples)
+        print("Dump classifier to model_rf.dump")
+        joblib.dump(classifier, "model_rf.dump")
+        # show_rftree(classifier.estimators_[5], names_stack)
+        # show_rftree(classifier.estimators_[10], names_stack)
+        # show_rftree(classifier.estimators_[15], names_stack)
+        print_feature_importance(classifier, names_stack)
+        gc.collect()
+
+        #Memory used
+        base = 210  # poids imports
+        suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
+        if not args.no_pekel_filter:
+            suivi_mem += mask_pekel0.nbytes / (1024*1024)
+
+        # Predict and filter with Hand
+        im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
+
+        time_random_forest = time.time()
     
     # Filter with Hand
     if args.hand_filter:
