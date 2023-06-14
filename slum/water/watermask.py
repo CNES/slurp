@@ -850,7 +850,6 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
         del shm
         # Threshold NDWI (and then pick-up samples in supposed water areas)
         mask_pekel = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
-        print("DBG > non zero pixels in new estimated water mask "+str(np.count_nonzero(mask_pekel)))
         mask_pekel0 = mask_pekel
         if np.count_nonzero(mask_pekel) < 2000:
             print("** WARNING ** too few pixels are considered as water : skip machine learning step")
