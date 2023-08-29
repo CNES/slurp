@@ -92,139 +92,82 @@ def std_convoluted(im, N, filter_texture):
 
 
 def compute_stats(primitives, res_slic, args):
+    # Parameters
     stats = ['mean', 'std', 'min', 'max']
-    categorical = False
-    valid_threshold = 0.0
-    area = False
-    prefix_stats = ["ndvi", "ndwi", "texture"]
-    bands = [1] #, 2, 3]
-    output_format = "ESRI Shapefile"
-    geometries = None
-    within = False
-    sigma = None
-    chart_file = None
-    geometry_index = 'ID'
-    display_chart = False
-    category_file = None
-    category_file_type = None
-    category_index = None
-    category_labels = None
-    generated_stats = list()
-    generated_stats_dates = list()
+    prefix_stats = ["ndvi", "ndwi", "conv"]
+    bands = [1, 2, 3]
     
+    # Generate geodataframe of polygons
     res_slic = res_slic.astype("int32")
     polys = np.array(list(rasterio.features.shapes(res_slic, transform=args.transform)))
     geometry = np.array([shape(polys[i][0]) for i in range(0, len(polys))])
-    print(geometry)
     gdf = gpd.GeoDataFrame(
         {'id': list(range(0, len(geometry))), 'geometry': geometry },
         crs=args.crs
     )
-    print(gdf)
     #gdf.to_file("seg.shp")
     
+    # Calculate statistics for each polygon
     statistics = []
     nb_geoms = len(gdf)
     geom_gen = (gdf.iloc[i].geometry for i in range(nb_geoms))
-    src = rasterio.open("primitives.tif")
-    descr = src.descriptions
+    src = rasterio.open(args.im) # Comment se passer de cette ouverture fichier ??
     geom_windows = ((geom, features.geometry_window(src, [geom])) for geom in geom_gen)
-    disable = os.getenv("RASTERTOOLS_NOTQDM", 'False').lower() in ['true', '1']
-    for geom, window in tqdm(geom_windows, total=nb_geoms, disable=disable, desc="zonalstats"):
-            datas = src.read(bands, window=window)
-            transform = src.window_transform(window)
-            
-            all_geoms = [(g, 1) for g in [geom]]
-            nodata = src.nodata
-            mask = features.rasterize(shapes=all_geoms,
-                                      fill=0, out_shape=rasterio.windows.shape(window),
-                                      transform=transform,
-                                      dtype=rasterio.uint8).astype(bool)
-            all_stats = []
-            for data in datas:
-                dataset = np.ma.MaskedArray(data, mask=((data == nodata) | ~mask))
-                count = dataset.count()
-                if count == 0:
-                    # nothing here, fill with None and move on
-                    feature_stats = dict([(stat, None) for stat in stats])
-                else:
-                    # generate the statistics
-                    feature_stats = dict()
-                    functions = {
-                        'min': np.ma.min,
-                        'max': np.ma.max,
-                        'mean': np.ma.mean,
-                        'std': np.ma.std
-                    }
-                    for key, function in functions.items():
-                        if key in stats:
-                            feature_stats[f'{prefix_stats}{key}'] = float(function(dataset))
-
-                    if 'range' in stats:
-                        min_key = f'{prefix_stats}min'
-                        rmin = feature_stats[min_key] if min_key in feature_stats.keys() else float(dataset.min())
-                        max_key = f'{prefix_stats}max'
-                        rmax = feature_stats[max_key] if max_key in feature_stats.keys() else float(dataset.max())
-                        feature_stats[f'{prefix_stats}range'] = rmax - rmin
+    for geom, window in tqdm(geom_windows, total=nb_geoms, desc="zonalstats"):
+        all_stats = [] 
+        (col_off, row_off, width, height) = (window.col_off, window.row_off, window.width, window.height)       
+        datas = primitives[:, row_off:row_off+height, col_off:col_off+width]
+        all_geoms = [(g, 1) for g in [geom]]
+        nodata = src.nodata  # à remplacer
+        transform = src.window_transform(window) # à remplacer
+        mask = features.rasterize(shapes=all_geoms,
+                                  fill=0, out_shape=rasterio.windows.shape(window),
+                                  transform=transform,
+                                  dtype=rasterio.uint8).astype(bool)
+        for i in range(0, len(datas)):
+            feature_stats = dict()
+            dataset = np.ma.MaskedArray(datas[i], mask=((datas[i] == nodata) | ~mask))
+            count = dataset.count()
+            if i == 0:
+                feature_stats["count"] = float(count)
+            if count == 0:
+                # nothing here, fill with None and move on
+                for stat in stats:
+                    feature_stats[f'{prefix_stats[i]}_{stat}'] = None
+            else:
+                # generate the statistics                    
+                functions = {
+                    'min': np.ma.min,
+                    'max': np.ma.max,
+                    'mean': np.ma.mean,
+                    'std': np.ma.std
+                }
+                for key, function in functions.items():
+                    if key in stats:
+                        feature_stats[f'{prefix_stats[i]}_{key}'] = float(function(dataset))
                         
-                all_stats.append(feature_stats)
-            statistics.append(all_stats)
-    
-    # apply area
-    if area:
-        [d.update({key: area_square_meter * val})
-         for s in statistics
-         for d in s for key, val in d.items() if not np.isnan(val)]
+            all_stats.append(feature_stats)
+        statistics.append(all_stats)
 
-    # convert statistics to GeoDataFrame
-    prefix_stats
-    for i, band in enumerate(bands):
-        # add general metadata to geometries
-        if descr and descr[i]:
-            geometries[utils.get_metadata_name(band, prefix[i], "name")] = descr[i]
-
-        # get all statistics names since additional statistics coming from categorical
-        # option may have been computed
+    # Add statistics to GeoDataFrame
+    for i in range(0, len(bands)):
         categorical_stats = set()
-        [categorical_stats.update(s[i].keys()) for s in statistics]
-
-        if category_file is None:
-            # remove stats from the categorical stats
-            # and add the categorical stats to the stats
-            # remark: this operation seems strange but it ensures that stats are
-            # in the correct order
-            categorical_stats -= set(stats)
-            stats.extend(categorical_stats)
-        else:
-            # per_category mode do not compute overall stats.
-            # So stats is not exended but replaced
-            stats = categorical_stats
-        """
-        for stat in stats:
-            cond = valid_threshold < 1e-5 or stat == "valid"
-            metadataname = utils.get_metadata_name(band, prefix[i], stat)
-            geometries[metadataname] = [
+        [categorical_stats.update(s[i].keys()) for s in statistics]        
+        generated_stats  = sorted(categorical_stats)
+        for stat in generated_stats:
+            gdf[stat] = [
                 s[i][stat]
-                if stat in s[i] and (cond or s[i]["valid"] > valid_threshold) else np.nan
+                if stat in s[i] else np.nan
                 for s in statistics
             ]
-        """
-    geom_stats = geometries
-    print(geom_stats)
-
-
- 
-    sys.exit(-1)
-    
-    
-
+            
+    print(gdf)
+    gdf.to_file("segmentation_rastertools.shp")
 
 
 def compute_segmentation(args, img, range, segmentation, primitives):
     t0 = time.time()
     segmentation_raster = segmentation.replace(".shp", ".tif")
-    
-    print(img.shape)
 
     if args.algo_seg == "slic":
         print("DBG > compute_segmentation (skimage SLIC)")
@@ -252,6 +195,7 @@ def compute_segmentation(args, img, range, segmentation, primitives):
             else:
                 res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)
                 print(res_slic)
+                print(np. unique(res_slic))
             io_utils.save_image(res_slic.astype("int32"), segmentation_raster, args.crs, args.transform, 1, args.rpc)
             #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=1)
     """
@@ -275,15 +219,20 @@ def compute_segmentation(args, img, range, segmentation, primitives):
                 save_image(res_felz.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform,
                      rpc=ds_img.tags(ns='RPC'), nodata=0)
     """
-    
+    """
+    t0 = time.time()
     app_ZonalStats = otb.Registry.CreateApplication("ZonalStatistics")
     app_ZonalStats.SetParameterString("in", "primitives.tif")
     app_ZonalStats.SetParameterString("inzone", "labelimage")
     app_ZonalStats.SetParameterString("inzone.labelimage.in",segmentation_raster)
     app_ZonalStats.SetParameterString("out.vector.filename", segmentation)
     app_ZonalStats.ExecuteAndWriteOutput()
+    print("ZonalStats OTB :", time.time()-t0)
+    """
     
-    #compute_stats(primitives, res_slic, args)
+    #t0 = time.time()
+    compute_stats(primitives, res_slic, args)
+    #print("ZonalStats rastertools :", time.time()-t0)
     
     sys.exit(-1)
     
@@ -293,7 +242,7 @@ def segmentation_task(args, beginx, beginy, im_ndvi, im_ndwi):
     
     #image        = "image_"+str(beginx)+"_"+str(beginy)+".tif"
     #primitives   = "primitives_"+str(beginx)+"_"+str(beginy)+".tif"
-    segmentation = "segmentation_rastertools_"+str(beginx)+"_"+str(beginy)+".shp"
+    segmentation = "segmentation_"+str(beginx)+"_"+str(beginy)+".shp"
     
     ds_im = rasterio.open(args.im)
     crop_im = ds_im.read(window=Window(beginx, beginy, args.buffer_dimension, args.buffer_dimension))
@@ -413,7 +362,7 @@ def main():
                 rpc=args.rpc,
             )
             
-    # Compute NDVI
+    # Compute NDWI
     ## Remarque : ajouter la prise en compte les nodata ??
     if args.file_ndwi:
         ds_ndwi = rasterio.open(args.file_ndwi)
