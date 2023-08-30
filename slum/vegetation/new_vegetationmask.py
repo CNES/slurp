@@ -89,80 +89,47 @@ def std_convoluted(im, N, filter_texture):
     res[res > thresh_texture] = thresh_texture
     
     return res
+    
+
+def get_stats(res_slic, primitives, geom, value):
+    # Functions to use
+    functions = {
+        'min': np.min,
+        'max': np.max,
+        'mean': np.mean,
+        'std': np.std
+    }
+    # Filter primitives (select the zone of the polygon)
+    mask = (res_slic == value)
+    dataset = primitives[:, mask]
+    
+    # Generate statistics
+    if dataset.shape[1] == 0:
+        nb_stats = len(functions.keys())*dataset.shape[0]
+        statistics = np.concatenate(([geom, 0.0], nb_stats*[None]), axis=None)
+    else:
+        stats = np.array([[float(function(data)) for key, function in functions.items()] for data in dataset])
+        statistics = np.concatenate(([geom, float(dataset.shape[1])], stats.flatten()), axis=None)
+    
+    return statistics
 
 
 def compute_stats(primitives, res_slic, args):
-    # Parameters
-    stats = ['mean', 'std', 'min', 'max']
-    prefix_stats = ["ndvi", "ndwi", "conv"]
-    bands = [1, 2, 3]
+    # Stats calculation    
+    geometry = [get_stats(res_slic, primitives, shape(geom), int(val)) for geom, val in rasterio.features.shapes(res_slic, transform=args.transform)]
     
-    # Generate geodataframe of polygons
-    res_slic = res_slic.astype("int32")
-    polys = np.array(list(rasterio.features.shapes(res_slic, transform=args.transform)))
-    geometry = np.array([shape(polys[i][0]) for i in range(0, len(polys))])
-    gdf = gpd.GeoDataFrame(
-        {'id': list(range(0, len(geometry))), 'geometry': geometry },
-        crs=args.crs
-    )
-    #gdf.to_file("seg.shp")
+    # Generate geodataframe of polygons with statistics
+    columns = ["geometry", "count"]
+    stats = ["min", "max", "mean", "std"]
+    for i in range(len(primitives)):
+        columns = columns + [stat + "_" + str(i) for stat in stats]
+    df = pd.DataFrame(geometry, columns=columns)
+    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=args.crs)
     
-    # Calculate statistics for each polygon
-    statistics = []
-    nb_geoms = len(gdf)
-    geom_gen = (gdf.iloc[i].geometry for i in range(nb_geoms))
-    src = rasterio.open(args.im) # Comment se passer de cette ouverture fichier ??
-    geom_windows = ((geom, features.geometry_window(src, [geom])) for geom in geom_gen)
-    for geom, window in tqdm(geom_windows, total=nb_geoms, desc="zonalstats"):
-        all_stats = [] 
-        (col_off, row_off, width, height) = (window.col_off, window.row_off, window.width, window.height)       
-        datas = primitives[:, row_off:row_off+height, col_off:col_off+width]
-        all_geoms = [(g, 1) for g in [geom]]
-        nodata = src.nodata  # à remplacer
-        transform = src.window_transform(window) # à remplacer
-        mask = features.rasterize(shapes=all_geoms,
-                                  fill=0, out_shape=rasterio.windows.shape(window),
-                                  transform=transform,
-                                  dtype=rasterio.uint8).astype(bool)
-        for i in range(0, len(datas)):
-            feature_stats = dict()
-            dataset = np.ma.MaskedArray(datas[i], mask=((datas[i] == nodata) | ~mask))
-            count = dataset.count()
-            if i == 0:
-                feature_stats["count"] = float(count)
-            if count == 0:
-                # nothing here, fill with None and move on
-                for stat in stats:
-                    feature_stats[f'{prefix_stats[i]}_{stat}'] = None
-            else:
-                # generate the statistics                    
-                functions = {
-                    'min': np.ma.min,
-                    'max': np.ma.max,
-                    'mean': np.ma.mean,
-                    'std': np.ma.std
-                }
-                for key, function in functions.items():
-                    if key in stats:
-                        feature_stats[f'{prefix_stats[i]}_{key}'] = float(function(dataset))
-                        
-            all_stats.append(feature_stats)
-        statistics.append(all_stats)
-
-    # Add statistics to GeoDataFrame
-    for i in range(0, len(bands)):
-        categorical_stats = set()
-        [categorical_stats.update(s[i].keys()) for s in statistics]        
-        generated_stats  = sorted(categorical_stats)
-        for stat in generated_stats:
-            gdf[stat] = [
-                s[i][stat]
-                if stat in s[i] else np.nan
-                for s in statistics
-            ]
-            
-    print(gdf)
-    gdf.to_file("segmentation_rastertools.shp")
+    #print(gdf)
+    gdf.to_file("segmentation_rastertools.shp")  
+    
+    return gdf
 
 
 def compute_segmentation(args, img, range, segmentation, primitives):
@@ -174,9 +141,8 @@ def compute_segmentation(args, img, range, segmentation, primitives):
         if args.segmentation_mode == "RGB":
             nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
             data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3]
-            res_slic = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, convert2lab=True, channel_axis = 2)
-            #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=0)
-            print(res_slic)                
+            res_slic = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, convert2lab=True, channel_axis = 2).astype("int32")
+            #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=0)              
         else:
             # Note : we read primitives. NDVI is the first band
             ndvi = primitives[1, :, :]
@@ -193,10 +159,8 @@ def compute_segmentation(args, img, range, segmentation, primitives):
                         res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)
                 """
             else:
-                res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)
-                print(res_slic)
-                print(np. unique(res_slic))
-            io_utils.save_image(res_slic.astype("int32"), segmentation_raster, args.crs, args.transform, 1, args.rpc)
+                res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None).astype("int32")
+            io_utils.save_image(res_slic, segmentation_raster, args.crs, args.transform, 1, args.rpc)
             #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=1)
     """
     else:
@@ -220,6 +184,7 @@ def compute_segmentation(args, img, range, segmentation, primitives):
                      rpc=ds_img.tags(ns='RPC'), nodata=0)
     """
     """
+    # WITH OTB
     t0 = time.time()
     app_ZonalStats = otb.Registry.CreateApplication("ZonalStatistics")
     app_ZonalStats.SetParameterString("in", "primitives.tif")
@@ -230,9 +195,10 @@ def compute_segmentation(args, img, range, segmentation, primitives):
     print("ZonalStats OTB :", time.time()-t0)
     """
     
-    #t0 = time.time()
-    compute_stats(primitives, res_slic, args)
-    #print("ZonalStats rastertools :", time.time()-t0)
+    # WITHOUT OTB
+    t0 = time.time()
+    gdf = compute_stats(primitives, res_slic, args)
+    print("ZonalStats without OTB :", time.time()-t0)
     
     sys.exit(-1)
     
@@ -278,9 +244,6 @@ def segmentation_task(args, beginx, beginy, im_ndvi, im_ndwi):
     return t_prim, t_seg, segmentation
 
 def main():
-    """
-    """
-    print("hey")
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
     parser.add_argument("file_classif", help="Output classification filename")
