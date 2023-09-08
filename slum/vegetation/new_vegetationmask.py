@@ -41,6 +41,18 @@ VEG_CODE = 20
 MAX_BUFFER_SIZE = 5000 
 
 
+def get_transform(transform, beginx, beginy):
+    new_transform = rasterio.Affine(
+        transform[0],
+        transform[1],
+        transform[2] + beginy * transform[0],
+        transform[3],
+        transform[4],
+        transform[5] + beginx * transform[4]
+    )
+    return new_transform
+
+
 def compute_ndxi(im_b1, im_b2):
     """Compute Normalize Difference X Index.
     Rescale to [-1000, 1000] int16 with nodata value = 32767
@@ -63,7 +75,6 @@ def compute_ndxi(im_b1, im_b2):
 
 def print_dataset_infos(dataset, prefix=""):
     """Print information about rasterio dataset."""
-
     print()
     print(prefix, "Image name :", dataset.name)
     print(prefix, "Image size :", dataset.width, "x", dataset.height)
@@ -77,171 +88,92 @@ def print_dataset_infos(dataset, prefix=""):
 
 def std_convoluted(im, N, filter_texture):
     im2 = im**2
-    ones = np.ones(im.shape)
-    
     kernel = np.ones((2*N+1, 2*N+1))
-    s = scipy.signal.convolve2d(im, kernel, mode="same")
-    s2 = scipy.signal.convolve2d(im2, kernel, mode="same")
-    ns = scipy.signal.convolve2d(ones, kernel, mode="same")
+    s = scipy.signal.convolve2d(im, kernel, mode="same", boundary="symm") # Local mean with convolution
+    s2 = scipy.signal.convolve2d(im2, kernel, mode="same", boundary="symm") # local mean of the squared image with convolution
+    ns = kernel.size * np.ones(im.shape)
+    res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
-    res = np.sqrt((s2 - s**2 / ns) / ns)
+    # Filter
     thresh_texture = np.percentile(res, filter_texture)
     res[res > thresh_texture] = thresh_texture
     
     return res
-    
 
-def get_stats(res_slic, primitives, geom, value):
-    # Functions to use
-    functions = {
-        'min': np.min,
-        'max': np.max,
-        'mean': np.mean,
-        'std': np.std
+
+def accumulate(res_seg, ndvi, ndwi, texture, transform):
+    nb_polys = np.unique(res_seg).size
+    counter = np.zeros(nb_polys)
+    accumulator_ndvi = np.zeros(nb_polys)
+    accumulator_ndwi = np.zeros(nb_polys)
+    accumulator_texture = np.zeros(nb_polys)    
+    
+    nb_rows, nb_cols = res_seg.shape
+    for r in range(nb_rows):
+        for c in range(nb_cols):
+            value = res_seg[r][c] - 1
+            counter[value] += 1
+            accumulator_ndvi[value] += ndvi[r][c]
+            accumulator_ndwi[value] += ndwi[r][c]
+            accumulator_texture[value] += texture[r][c]
+    
+    for value in range(nb_polys):
+        accumulator_ndvi[value] /= counter[value]
+        accumulator_ndwi[value] /= counter[value]
+        accumulator_texture[value] /= counter[value]
+
+    geometry = nb_polys*[0]
+    for geom, val in rasterio.features.shapes(res_seg.astype("int16"), transform=transform):
+        geometry[int(val)-1] = shape(geom)
+   
+    datas = {
+        "geometry": geometry,
+        "count": counter,
+        "mean_ndvi": accumulator_ndvi,
+        "mean_ndwi": accumulator_ndwi,
+        "mean_texture": accumulator_texture
     }
-    # Filter primitives (select the zone of the polygon)
-    mask = (res_slic == value)
-    dataset = primitives[:, mask]
+    return pd.DataFrame(datas)
     
-    # Generate statistics
-    if dataset.shape[1] == 0:
-        nb_stats = len(functions.keys())*dataset.shape[0]
-        statistics = np.concatenate(([geom, 0.0], nb_stats*[None]), axis=None)
-    else:
-        stats = np.array([[float(function(data)) for key, function in functions.items()] for data in dataset])
-        statistics = np.concatenate(([geom, float(dataset.shape[1])], stats.flatten()), axis=None)
-    
-    return statistics
 
-
-def compute_stats(primitives, res_slic, args):
-    # Stats calculation    
-    geometry = [get_stats(res_slic, primitives, shape(geom), int(val)) for geom, val in rasterio.features.shapes(res_slic, transform=args.transform)]
-    
-    # Generate geodataframe of polygons with statistics
-    columns = ["geometry", "count"]
-    stats = ["min", "max", "mean", "std"]
-    for i in range(len(primitives)):
-        columns = columns + [stat + "_" + str(i) for stat in stats]
-    df = pd.DataFrame(geometry, columns=columns)
-    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=args.crs)
-    
-    #print(gdf)
-    gdf.to_file("segmentation_rastertools.shp")  
-    
-    return gdf
-
-
-def compute_segmentation(args, img, range, segmentation, primitives):
-    t0 = time.time()
-    segmentation_raster = segmentation.replace(".shp", ".tif")
-
+def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
     if args.algo_seg == "slic":
         print("DBG > compute_segmentation (skimage SLIC)")
         if args.segmentation_mode == "RGB":
+            # Note : we read RGB image.
             nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
             data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3]
-            res_slic = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, convert2lab=True, channel_axis = 2).astype("int32")
-            #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=0)              
+            res_seg = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, convert2lab=True, channel_axis = 2).astype("int32")            
         else:
-            # Note : we read primitives. NDVI is the first band
-            ndvi = primitives[1, :, :]
+            # Note : we read NDVI image.
             # Estimation of the max number of segments (ie : each segment is > 100 pixels)
-            nseg = int(img.shape[1] * img.shape[0] / args.slic_seg_size)
-            if args.mask_slic_bool == "True" :
-                # Open mask file with good shape
-                ### Ajouter le masque en argument ###
-                print("To do...")
-                """
-                with rasterio.open(args.mask_slic_file) as ds_mask:
-                        mask=ds_mask.read(1)
-                        mask = mask.astype(bool)
-                        res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)
-                """
-            else:
-                res_slic = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None).astype("int32")
-            io_utils.save_image(res_slic, segmentation_raster, args.crs, args.transform, 1, args.rpc)
-            #save_image(res_slic.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform, rpc=ds_img.tags(ns='RPC'), nodata=1)
-    """
+            nseg = int(ndvi.shape[1] * ndvi.shape[0] / args.slic_seg_size)
+            res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)        
     else:
-        print("DBG > compute_segmentation (skimage Felzenszwalb)" + str(primitives))
+        print("DBG > compute_segmentation (skimage Felzenszwalb)")
         if args.segmentation_mode == "RGB":
-            with rasterio.open(image) as ds_img :
-                # Note : we read RGB image.
-                img = ds_img.read()
-                data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] 
-                res_felz = felzenszwalb(data, scale=float(args.felzenszwalb_scale),channel_axis=2)
-                save_image(res_felz.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform,
-                     rpc=ds_img.tags(ns='RPC'), nodata=0)
+            # Note : we read RGB image.
+            data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] 
+            res_seg = felzenszwalb(data, scale=float(args.felzenszwalb_scale),channel_axis=2)
         else:
-            with rasterio.open(primitives) as ds_img :
-                # Note : we read primitives. NDVI is the first band
-                img = ds_img.read()
-                ndvi = 1000 * img[1, :, :]
-                                
-                res_felz = felzenszwalb(ndvi.astype("double"), scale=float(args.felzenszwalb_scale))
-                save_image(res_felz.astype("int16"), segmentation_raster, crs=ds_img.crs, transform=ds_img.transform,
-                     rpc=ds_img.tags(ns='RPC'), nodata=0)
-    """
-    """
-    # WITH OTB
-    t0 = time.time()
-    app_ZonalStats = otb.Registry.CreateApplication("ZonalStatistics")
-    app_ZonalStats.SetParameterString("in", "primitives.tif")
-    app_ZonalStats.SetParameterString("inzone", "labelimage")
-    app_ZonalStats.SetParameterString("inzone.labelimage.in",segmentation_raster)
-    app_ZonalStats.SetParameterString("out.vector.filename", segmentation)
-    app_ZonalStats.ExecuteAndWriteOutput()
-    print("ZonalStats OTB :", time.time()-t0)
-    """
+            # Note : we read NDVI image.
+            res_seg = felzenszwalb(ndvi.astype("double"), scale=float(args.felzenszwalb_scale))
+            
+    ## Save res_seg in tif in debug mode ??
     
-    # WITHOUT OTB
-    t0 = time.time()
-    gdf = compute_stats(primitives, res_slic, args)
-    print("ZonalStats without OTB :", time.time()-t0)
+    # Stats calculation    
+    df = accumulate(res_seg, ndvi, ndwi, texture, transform)
     
-    sys.exit(-1)
+    return df
     
 
-def segmentation_task(args, beginx, beginy, im_ndvi, im_ndwi):
-    print("Segmentation de "+str(args.im)+ " entre "+str(beginx)+" et "+str(beginx+args.buffer_dimension))
-    
-    #image        = "image_"+str(beginx)+"_"+str(beginy)+".tif"
-    #primitives   = "primitives_"+str(beginx)+"_"+str(beginy)+".tif"
-    segmentation = "segmentation_"+str(beginx)+"_"+str(beginy)+".shp"
-    
-    ds_im = rasterio.open(args.im)
-    crop_im = ds_im.read(window=Window(beginx, beginy, args.buffer_dimension, args.buffer_dimension))
-    io_utils.save_image_n_bands(crop_im, "cropped.tif", ds_im.crs, ds_im.transform, 0, ds_im.tags(ns='RPC'))
-    ds_im.close()
-    
-    if args.mask_slic_bool =="True":
-        print("Crop of the mask between " + str(beginx) + " and " + 
-              str(beginx + args.buffer_dimension) + " / " + str(beginy) + 
-              " and " + str(beginy + args.buffer_dimension))
-        ds_mask = rasterio.open(args.mask_slic_file)
-        crop_mask = ds_mask.read(window=Window(beginx, beginy, args.buffer_dimension, args.buffer_dimension))
-        
-    crop_ndvi = im_ndvi[beginx:beginx+args.buffer_dimension, beginy:beginy+args.buffer_dimension]
-    crop_ndwi = im_ndwi[beginx:beginx+args.buffer_dimension, beginy:beginy+args.buffer_dimension]
-        
-    # Compute primitives
-    std_conv = std_convoluted(crop_im[args.nir_band - 1].astype(float), 5, args.filter_texture)
-    io_utils.save_image(std_conv, "conv5.tif", args.crs, args.transform, 0, args.rpc)
-
-    primitives = np.concatenate(( [crop_ndvi], [crop_ndwi], [std_conv] ), axis=0 )
-    io_utils.save_image_n_bands(primitives, "primitives.tif", args.crs, args.transform, 0, args.rpc)
-    
+def segmentation_task(args, im_phr, im_ndvi, im_ndwi, mask_slic, transform):                
+    # Compute textures
+    texture = std_convoluted(im_phr[args.nir_band - 1].astype(float), 5, args.filter_texture)    
     # Segmentation
-    if args.segmentation_mode == "NDVI":
-        compute_segmentation(args, crop_ndvi, 4e-4, segmentation, primitives)
-    else:
-        compute_segmentation(args, crop_im, 50, segmentation, primitives)
-    
-    
-    sys.exit(-1) 
+    df = compute_segmentation(args, im_phr, mask_slic, im_ndvi, im_ndwi, texture, transform)
+    return df
 
-    return t_prim, t_seg, segmentation
 
 def main():
     parser = argparse.ArgumentParser()
@@ -253,9 +185,9 @@ def main():
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
-    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only pekel and hand (aux), primitives, pekel and hand (all) or only output mask (none)")
+    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
-    parser.add_argument("-seg", "--segmentation_mode", default="NDVI", help="Image to segment : RGB or NDVI")
+    parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
     parser.add_argument("-algo_seg", "--algo_seg", choices=["slic", "felz"], default="slic", required=False, action="store", help="Use SkImage SLIC algorithm (slic) or SkImage Felzenszwalb algorithm (felz) for segmentation")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
@@ -263,7 +195,6 @@ def main():
     parser.add_argument("-felz_scale", "--felzenszwalb_scale", type=float, default=1.0, help="Scale parameter for Felzenszwalb algorithm")
     #parser.add_argument("-ref", "--reference_data", nargs="?",
     #                    help="Compute a confusion matrix with this reference data")
-    #parser.add_argument("-spth", "--spectral_threshold", type=float, nargs="?", help="Spectral threshold for texture computaton")
     parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
     #parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
     #parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=float, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
@@ -276,7 +207,7 @@ def main():
     parser.add_argument("-sizex", "--sizex", type=int, help="Size along x axis (crop ROI)")
     parser.add_argument("-sizey", "--sizey", type=int, help="Size along y axis (crop ROI)")
     parser.add_argument("-buffer", "--buffer_dimension", type=int, default=512, help="Buffer dimension")
-    #parser.add_argument("-max_workers", "--max_workers", type=int, default=8, help="Max workers for multiprocessed tasks (primitives+segmentation)")
+    parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
     parser.add_argument("-mask_slic_bool", "--mask_slic_bool", default=False,
                         help="Boolean value wether to use a mask during slic calculation or not")
     parser.add_argument("-mask_slic_file", "--mask_slic_file", help="Raster mask file to use if mask_slic_bool==True")
@@ -285,9 +216,6 @@ def main():
     print("DBG > arguments parsed "+str(args))
     
     t0 = time.time()
-
-    primitives = "primitives.tif"
-    segmentation = "segmentation.shp"
     
     image = args.im
     result = args.file_classif
@@ -364,7 +292,67 @@ def main():
     
     ds_phr.close()
     
-    segmentation_task(args, startx, starty, im_ndvi, im_ndwi)
+    if args.mask_slic_bool =="True":
+        ds_mask = rasterio.open(args.mask_slic_file)
+        print_dataset_infos(ds_mask, "SLIC MASK")
+        mask_slic = ds_mask.read(1).astype(bool)
+    else:
+        mask_slic = None
+        
+    ## Parallelisation avec concurrent (to remplace with eoscale)
+    cptx = 0
+    cpty = 0
+    future_seg = []
+    list_res = []
+    
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=args.nb_workers) as executor:
+        while (startx + cptx * buffer_dimension < stopx):
+            beginx = startx + cptx * buffer_dimension
+            endx = min(beginx + buffer_dimension, stopx)
+            print("Segmentation de "+str(args.im)+ " entre "+str(beginx)+" et "+str(endx))
+            while (starty + cpty * buffer_dimension < stopy):
+                beginy = starty + cpty * buffer_dimension
+                endy = min(beginy + buffer_dimension, stopy)
+                mask = mask_slic[beginx:endx, beginy:endy] if args.mask_slic_bool =="True" else None
+                future_seg.append(executor.submit(
+                    segmentation_task, 
+                    args, 
+                    im_phr[:, beginx:endx, beginy:endy],  
+                    im_ndvi[beginx:endx, beginy:endy], 
+                    im_ndwi[beginx:endx, beginy:endy], 
+                    mask,
+                    get_transform(args.transform, beginx, beginy)
+                ))
+                cpty += 1
+            cptx += 1
+            cpty = 0
+        
+        
+        for seg in concurrent.futures.as_completed(future_seg):
+            try:
+                df_res = seg.result()
+                list_res.append(df_res)
+                    
+            except Exception as e:
+                print("Exception ---> "+str(e))
+            """
+            else:
+                time_segmentation += t_seg
+                time_primitives += t_prim
+            """
+
+    df = pd.concat(list_res, ignore_index=True)
+    
+    cols = df.columns.tolist()
+    df["polygon_id"] = np.arange(1, len(df.index) + 1)
+    df = df[["polygon_id"] + cols]      
+
+    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=args.crs)
+    if args.save_mode == "debug":
+        gdf.to_file("segmentation.shp")
+
+    print(gdf)
     
     
 if __name__ == "__main__":
