@@ -53,6 +53,21 @@ def get_transform(transform, beginx, beginy):
     return new_transform
 
 
+def apply_map(pred, map_centroids):
+    return np.array(list(map(lambda n: map_centroids[n], pred)))
+
+
+def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_group, filename):
+    serie1 = pdf.sort_values(by=first_field)[first_field]
+    serie2 = pdf.sort_values(by=first_field)[second_field]
+    plt.plot(serie1[0:nb_first_group], serie2[0:nb_first_group], '*')
+    plt.plot(serie1[nb_first_group:nb_second_group], serie2[nb_first_group:nb_second_group], 'o')
+    plt.plot(serie1[nb_second_group:9], serie2[nb_second_group:9], '+')
+    plt.title("Clusters in three groups ("+str(second_field)+" "+str(first_field)+")")
+    plt.savefig(filename)
+    plt.close()
+
+
 def compute_ndxi(im_b1, im_b2):
     """Compute Normalize Difference X Index.
     Rescale to [-1000, 1000] int16 with nodata value = 32767
@@ -162,9 +177,138 @@ def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
     ## Save res_seg in tif in debug mode ??
     
     # Stats calculation    
-    df = accumulate(res_seg, ndvi, ndwi, texture, transform)
+    df_stats = accumulate(res_seg, ndvi, ndwi, texture, transform)
+
+    return df_stats
+
+
+def apply_clustering(args, gdf):
+    t0 = time.time()
+    # Extract NDVI and NDWI2 mean values of each segment
+    radiometric_indices = np.stack((gdf.mean_ndvi.values, gdf.mean_ndwi.values), axis=1) 
+
+    # Note : the seed for random generator is fixed to obtain reproductible results
+    print("K-Means on radiometric indices : "+str(len(radiometric_indices))+" elements")
+    kmeans_rad_indices = KMeans(n_clusters=9,
+                                 init="k-means++",
+                                 n_init=5,
+                                 verbose=0,
+                                 random_state=712)
+    pred_veg = kmeans_rad_indices.fit_predict(radiometric_indices)
+    print(kmeans_rad_indices.cluster_centers_)
+
+    list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
+    list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
+
+    map_centroid = []
     
-    return df
+    nb_clusters_no_veg = 0
+    nb_clusters_veg = 0
+    if args.min_ndvi_veg:
+        # Attribute veg class by threshold
+        for t in range(kmeans_rad_indices.n_clusters):
+            if list_clusters.iloc[t]['ndvi'] > float(args.min_ndvi_veg):
+                map_centroid.append(VEG_CODE)
+                nb_clusters_veg += 1
+            elif list_clusters.iloc[t]['ndvi'] < float(args.max_ndvi_noveg):
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
+                nb_clusters_no_veg += 1
+            else:
+                map_centroid.append(UNDEFINED_VEG)
+
+    else:
+        # Attribute class by thirds 
+        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
+        if args.nb_clusters_veg >= 7:
+            nb_clusters_no_veg = 9 - args.nb_clusters_veg
+            nb_clusters_veg = args.nb_clusters_veg
+
+        for t in range(kmeans_rad_indices.n_clusters):
+            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
+            elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
+                # 10
+                map_centroid.append(UNDEFINED_VEG)
+            else:
+                # 20
+                map_centroid.append(VEG_CODE)
+                
+
+    gdf["pred_veg"] = apply_map(pred_veg, map_centroid)
+
+    figure_name = os.path.splitext(args.file_classif)[0] + "_centroids_veg.png"
+    display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
+
+    # data_textures = np.stack((gdf[gdf.pred_veg==VEG_CODE].min_2.values, gdf[gdf.pred_veg==VEG_CODE].max_2.values), axis=1)
+    data_textures = np.transpose(np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values]))
+
+    print("K-Means on texture : "+str(len(data_textures))+" elements")
+    nb_clusters_texture = 9
+    kmeans_texture = KMeans(n_clusters=nb_clusters_texture, init="k-means++", verbose=0, random_state=712)
+    pred_texture = kmeans_texture.fit_predict(data_textures)
+    print(kmeans_texture.cluster_centers_)
+
+    list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
+    list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=False).index
+
+    map_centroid = []
+    nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
+    for t in range(kmeans_texture.n_clusters):
+        if t in list_clusters_by_texture[:nb_clusters_high_veg]:
+            map_centroid.append(HIGH_VEG_CODE)
+        elif t in list_clusters_by_texture[nb_clusters_high_veg:2*nb_clusters_high_veg]:
+            map_centroid.append(UNDEFINED_TEXTURE)
+        else:
+            map_centroid.append(LOW_VEG_CODE)
+
+    figure_name = os.path.splitext(args.file_classif)[0] + "_centroids_texture.png"
+    display_clusters(list_clusters, "mean_texture", "mean_texture", nb_clusters_high_veg,
+                     2*nb_clusters_high_veg, figure_name)
+
+    gdf["Texture"] = 0
+    gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture"] = apply_map(pred_texture, map_centroid)
+
+    # Ex : 10 (undefined) + 3 (textured) -> 13
+    gdf["ClasseN"] = gdf["pred_veg"] + gdf["Texture"]
+    
+    t1 = time.time()
+    extension = os.path.splitext(args.file_classif)[1]
+    if extension == ".tif":
+        print("DBG > Rasterize output -> "+str(args.file_classif))
+        # Compressed .tif ouptut
+        im = rasterio.open(args.im)
+        meta = im.meta.copy()
+        meta.update(compress='lzw', driver='GTiff')
+        with rasterio.open(args.file_classif, 'w+', **meta) as out:
+            out_arr = out.read(1)
+            shapes = ((geom, value) for geom, value in zip(gdf.geometry, gdf.ClasseN))
+            burned = features.rasterize(shapes=shapes, fill=0, out=out_arr, transform=out.transform)
+            out.write_band(1, burned)
+    else:
+        # supposed to be a vector ouput
+        fiona_driver ='ESRI Shapefile'        
+        if extension == ".gpkg":
+            fiona_driver = "GPKG"
+        elif extension == ".geojson":
+            fiona_driver = "GeoJSON"
+        
+        print("DBG > driver used "+str(fiona_driver)+ " extension = ["+str(extension)+"]")
+        gdf.to_file(args.file_classif, driver=fiona_driver)
+    t2 = time.time()
+
+    return (t1-t0), (t2-t1)
     
 
 def segmentation_task(args, im_phr, im_ndvi, im_ndwi, mask_slic, transform):                
@@ -196,11 +340,11 @@ def main():
     #parser.add_argument("-ref", "--reference_data", nargs="?",
     #                    help="Compute a confusion matrix with this reference data")
     parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
-    #parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
-    #parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=float, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
-    #parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=float, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
-    #parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
-    #                    help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
+    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
+    parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
+    parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
+    parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
+                        help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     ##parser.add_argument("-input_veg_centroids", "--input_veg_centroids", help="Input vegetation centroids file")
     parser.add_argument("-startx", "--startx", type=int, default=0, help="Start x coordinates (crop ROI)")
     parser.add_argument("-starty", "--starty", type=int, default=0, help="Start y coordinates (crop ROI)")
@@ -211,7 +355,6 @@ def main():
     parser.add_argument("-mask_slic_bool", "--mask_slic_bool", default=False,
                         help="Boolean value wether to use a mask during slic calculation or not")
     parser.add_argument("-mask_slic_file", "--mask_slic_file", help="Raster mask file to use if mask_slic_bool==True")
-    parser.add_argument("-no_clean", "--no_clean", default=False, help="Keep temporary files")
     args = parser.parse_args()
     print("DBG > arguments parsed "+str(args))
     
@@ -279,16 +422,16 @@ def main():
 
     # Segmentation
     startx = 0
-    stopx = ds_phr.width
+    stopx = ds_phr.height
     starty = 0
-    stopy = ds_phr.height
+    stopy = ds_phr.width
 
     if args.sizex:
         startx = max(args.startx, 0)
-        stopx = min(startx + args.sizex, ds_phr.width)
+        stopx = min(startx + args.sizex, ds_phr.height)
     if args.sizey:
         starty = max(args.starty, 0)
-        stopy = min(starty + args.sizey, ds_phr.height)
+        stopy = min(starty + args.sizey, ds_phr.width)
     
     ds_phr.close()
     
@@ -304,7 +447,6 @@ def main():
     cpty = 0
     future_seg = []
     list_res = []
-    
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.nb_workers) as executor:
         while (startx + cptx * buffer_dimension < stopx):
@@ -342,17 +484,27 @@ def main():
                 time_primitives += t_prim
             """
 
-    df = pd.concat(list_res, ignore_index=True)
+    df_total = pd.concat(list_res, ignore_index=True)
     
-    cols = df.columns.tolist()
-    df["polygon_id"] = np.arange(1, len(df.index) + 1)
-    df = df[["polygon_id"] + cols]      
+    cols = df_total.columns.tolist()
+    df_total["polygon_id"] = np.arange(1, len(df_total.index) + 1)
+    df_total = df_total[["polygon_id"] + cols]      
 
-    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=args.crs)
+    gdf_total = gpd.GeoDataFrame(df_total, geometry='geometry', crs=args.crs)
     if args.save_mode == "debug":
-        gdf.to_file("segmentation.shp")
-
-    print(gdf)
+        gdf_total.to_file("segmentation.shp")
+    
+    time_clustering, time_io = apply_clustering(args, gdf_total)
+    
+    # A aligner sur les autres masques
+    print("**** Vegetation mask for "+str(args.im)+" (saved as "+str(args.file_classif)+") ****")
+    print("Total time (user)       :\t"+str(time.time()-t0))
+    #print("Delay for primitives + segmentation : "+str(delay_prim_seg))
+    print("Max workers used for parallel tasks "+str(args.nb_workers))
+    #print("Primitives (parallel)   :\t"+str(time_primitives))
+    #print("Segmentation (parallel) :\t"+str(time_segmentation))
+    print("Clustering              :\t"+str(time_clustering))    
+    print("Writing output file     :\t"+str(time_io))
     
     
 if __name__ == "__main__":
