@@ -1,29 +1,20 @@
 #!/usr/bin/python
 import sys
-import glob
-import os
-from os.path import dirname, join
-import logging
+from os.path import dirname, join, splitext
 import argparse
-import subprocess
 import geopandas as gpd
 import fiona
 import pandas as pd
 import numpy as np
-import numpy.ma as ma
 from sklearn.cluster import KMeans
 import rasterio
 from rasterio import features
-from rasterio.windows import Window
 import matplotlib.pyplot as plt
 import time
-import otbApplication as otb
 from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
 import concurrent.futures
 from shapely.geometry import shape
-from tqdm import tqdm
-
 import scipy
 from slum.tools import io_utils
 
@@ -37,11 +28,9 @@ HIGH_VEG_CODE = 3
 UNDEFINED_VEG = 10
 VEG_CODE = 20
 
-# Max width/height we open at once to compute spectral threlshold
-MAX_BUFFER_SIZE = 5000 
-
 
 def get_transform(transform, beginx, beginy):
+    """Get transform of a part of an image knowing the transform of the full image."""
     new_transform = rasterio.Affine(
         transform[0],
         transform[1],
@@ -88,6 +77,7 @@ def compute_ndxi(im_b1, im_b2):
 
     return im_ndxi
 
+
 def print_dataset_infos(dataset, prefix=""):
     """Print information about rasterio dataset."""
     print()
@@ -102,6 +92,10 @@ def print_dataset_infos(dataset, prefix=""):
 
 
 def std_convoluted(im, N, filter_texture):
+    """Calculate the std of each pixel
+    Based on a convolution with a kernel of 1 (size of the kernel given)
+    """
+    t0 = time.time()
     im2 = im**2
     kernel = np.ones((2*N+1, 2*N+1))
     s = scipy.signal.convolve2d(im, kernel, mode="same", boundary="symm") # Local mean with convolution
@@ -109,20 +103,26 @@ def std_convoluted(im, N, filter_texture):
     ns = kernel.size * np.ones(im.shape)
     res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
-    # Filter
+    # Filter extreme values
     thresh_texture = np.percentile(res, filter_texture)
     res[res > thresh_texture] = thresh_texture
     
-    return res
+    return res, (time.time() - t0)
 
 
 def accumulate(res_seg, ndvi, ndwi, texture, transform):
+    """Stats calculation
+    Get the mean of each polygon of the segmentation for NDVI, NDWI and texture bands.
+    """
+    t0 = time.time()
+    # Init
     nb_polys = np.unique(res_seg).size
     counter = np.zeros(nb_polys)
     accumulator_ndvi = np.zeros(nb_polys)
     accumulator_ndwi = np.zeros(nb_polys)
     accumulator_texture = np.zeros(nb_polys)    
     
+    # Parse the image and set counter and sum for each polygon
     nb_rows, nb_cols = res_seg.shape
     for r in range(nb_rows):
         for c in range(nb_cols):
@@ -132,15 +132,18 @@ def accumulate(res_seg, ndvi, ndwi, texture, transform):
             accumulator_ndwi[value] += ndwi[r][c]
             accumulator_texture[value] += texture[r][c]
     
+    # Get means for each polygon
     for value in range(nb_polys):
         accumulator_ndvi[value] /= counter[value]
         accumulator_ndwi[value] /= counter[value]
         accumulator_texture[value] /= counter[value]
 
+    # Get geometry of each polygon
     geometry = nb_polys*[0]
     for geom, val in rasterio.features.shapes(res_seg.astype("int16"), transform=transform):
         geometry[int(val)-1] = shape(geom)
    
+    # Compute dataframe
     datas = {
         "geometry": geometry,
         "count": counter,
@@ -148,10 +151,12 @@ def accumulate(res_seg, ndvi, ndwi, texture, transform):
         "mean_ndwi": accumulator_ndwi,
         "mean_texture": accumulator_texture
     }
-    return pd.DataFrame(datas)
+    return pd.DataFrame(datas), (time.time() - t0)
     
 
 def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
+    """Compute segmentation with SLIC or Felzenszwalb method"""
+    t0 = time.time()
     if args.algo_seg == "slic":
         print("DBG > compute_segmentation (skimage SLIC)")
         if args.segmentation_mode == "RGB":
@@ -173,13 +178,12 @@ def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
         else:
             # Note : we read NDVI image.
             res_seg = felzenszwalb(ndvi.astype("double"), scale=float(args.felzenszwalb_scale))
-            
-    ## Save res_seg in tif in debug mode ??
+    t_seg = time.time() - t0
     
     # Stats calculation    
-    df_stats = accumulate(res_seg, ndvi, ndwi, texture, transform)
+    df_stats, t_stats = accumulate(res_seg, ndvi, ndwi, texture, transform)
 
-    return df_stats
+    return df_stats, t_seg, t_stats
 
 
 def apply_clustering(args, gdf):
@@ -248,7 +252,7 @@ def apply_clustering(args, gdf):
 
     gdf["pred_veg"] = apply_map(pred_veg, map_centroid)
 
-    figure_name = os.path.splitext(args.file_classif)[0] + "_centroids_veg.png"
+    figure_name = splitext(args.file_classif)[0] + "_centroids_veg.png"
     display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
 
     # data_textures = np.stack((gdf[gdf.pred_veg==VEG_CODE].min_2.values, gdf[gdf.pred_veg==VEG_CODE].max_2.values), axis=1)
@@ -273,7 +277,7 @@ def apply_clustering(args, gdf):
         else:
             map_centroid.append(LOW_VEG_CODE)
 
-    figure_name = os.path.splitext(args.file_classif)[0] + "_centroids_texture.png"
+    figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
     display_clusters(list_clusters, "mean_texture", "mean_texture", nb_clusters_high_veg,
                      2*nb_clusters_high_veg, figure_name)
 
@@ -284,7 +288,7 @@ def apply_clustering(args, gdf):
     gdf["ClasseN"] = gdf["pred_veg"] + gdf["Texture"]
     
     t1 = time.time()
-    extension = os.path.splitext(args.file_classif)[1]
+    extension = splitext(args.file_classif)[1]
     if extension == ".tif":
         print("DBG > Rasterize output -> "+str(args.file_classif))
         # Compressed .tif ouptut
@@ -311,12 +315,21 @@ def apply_clustering(args, gdf):
     return (t1-t0), (t2-t1)
     
 
-def segmentation_task(args, im_phr, im_ndvi, im_ndwi, mask_slic, transform):                
+def segmentation_task(args, im_phr, im_ndvi, im_ndwi, mask_slic, transform, beginx, beginy):                
     # Compute textures
-    texture = std_convoluted(im_phr[args.nir_band - 1].astype(float), 5, args.filter_texture)    
+    texture, t_texture = std_convoluted(im_phr[args.nir_band - 1].astype(float), 5, args.filter_texture)
+    if (args.save_mode != "none" and args.save_mode != "prim"):
+        io_utils.save_image(
+            texture,
+            join(dirname(args.file_classif), "texture_" + str(beginx) + "_" + str(beginy) + ".tif"),
+            args.crs,
+            transform,
+            nodata=32767,
+            rpc=args.rpc
+        )
     # Segmentation
-    df = compute_segmentation(args, im_phr, mask_slic, im_ndvi, im_ndwi, texture, transform)
-    return df
+    df, t_seg, t_stats = compute_segmentation(args, im_phr, mask_slic, im_ndvi, im_ndwi, texture, transform)
+    return df, t_texture, t_seg, t_stats
 
 
 def main():
@@ -329,6 +342,7 @@ def main():
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
+    parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
@@ -337,15 +351,13 @@ def main():
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     parser.add_argument("-felz", "--felzenszwalb", default=False, help="Use SkImage Felzenszwalb algorithm for segmentation")
     parser.add_argument("-felz_scale", "--felzenszwalb_scale", type=float, default=1.0, help="Scale parameter for Felzenszwalb algorithm")
-    #parser.add_argument("-ref", "--reference_data", nargs="?",
-    #                    help="Compute a confusion matrix with this reference data")
-    parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
+    
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
     parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
-    ##parser.add_argument("-input_veg_centroids", "--input_veg_centroids", help="Input vegetation centroids file")
+    
     parser.add_argument("-startx", "--startx", type=int, default=0, help="Start x coordinates (crop ROI)")
     parser.add_argument("-starty", "--starty", type=int, default=0, help="Start y coordinates (crop ROI)")
     parser.add_argument("-sizex", "--sizex", type=int, help="Size along x axis (crop ROI)")
@@ -361,7 +373,6 @@ def main():
     t0 = time.time()
     
     image = args.im
-    result = args.file_classif
     buffer_dimension = args.buffer_dimension
     
     ds_phr = rasterio.open(image)
@@ -369,8 +380,13 @@ def main():
     args.crs = ds_phr.crs
     args.transform = ds_phr.transform
     args.rpc = ds_phr.tags(ns="RPC")
+    im_height = ds_phr.height
+    im_width = ds_phr.width
     
     im_phr = ds_phr.read()
+    
+    ds_phr.close()
+    
     
     # Compute NDVI
     ## Remarque : ajouter la prise en compte des nodata ??
@@ -422,31 +438,35 @@ def main():
 
     # Segmentation
     startx = 0
-    stopx = ds_phr.height
+    stopx = im_height
     starty = 0
-    stopy = ds_phr.width
+    stopy = im_width
 
     if args.sizex:
         startx = max(args.startx, 0)
-        stopx = min(startx + args.sizex, ds_phr.height)
+        stopx = min(startx + args.sizex, im_height)
     if args.sizey:
         starty = max(args.starty, 0)
-        stopy = min(starty + args.sizey, ds_phr.width)
-    
-    ds_phr.close()
+        stopy = min(starty + args.sizey, im_width)
     
     if args.mask_slic_bool =="True":
         ds_mask = rasterio.open(args.mask_slic_file)
         print_dataset_infos(ds_mask, "SLIC MASK")
         mask_slic = ds_mask.read(1).astype(bool)
+        ds_mask.close()
     else:
         mask_slic = None
         
     ## Parallelisation avec concurrent (to remplace with eoscale)
+    time_texture = 0
+    time_segmentation = 0
+    time_stats = 0
     cptx = 0
     cpty = 0
     future_seg = []
     list_res = []
+    
+    t0_texture_seg_stats = time.time()
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.nb_workers) as executor:
         while (startx + cptx * buffer_dimension < stopx):
@@ -464,7 +484,9 @@ def main():
                     im_ndvi[beginx:endx, beginy:endy], 
                     im_ndwi[beginx:endx, beginy:endy], 
                     mask,
-                    get_transform(args.transform, beginx, beginy)
+                    get_transform(args.transform, beginx, beginy),
+                    beginx,
+                    beginy
                 ))
                 cpty += 1
             cptx += 1
@@ -473,36 +495,39 @@ def main():
         
         for seg in concurrent.futures.as_completed(future_seg):
             try:
-                df_res = seg.result()
+                df_res, t_texture, t_seg, t_stats = seg.result()
                 list_res.append(df_res)
                     
             except Exception as e:
                 print("Exception ---> "+str(e))
-            """
             else:
+                time_texture += t_texture
                 time_segmentation += t_seg
-                time_primitives += t_prim
-            """
+                time_stats += t_stats
 
-    df_total = pd.concat(list_res, ignore_index=True)
-    
-    cols = df_total.columns.tolist()
-    df_total["polygon_id"] = np.arange(1, len(df_total.index) + 1)
-    df_total = df_total[["polygon_id"] + cols]      
-
+    df_total = pd.concat(list_res, ignore_index=True)    
     gdf_total = gpd.GeoDataFrame(df_total, geometry='geometry', crs=args.crs)
-    if args.save_mode == "debug":
-        gdf_total.to_file("segmentation.shp")
     
+    if args.save_mode == "debug":
+        cols = df_total.columns.tolist()
+        df_total["polygon_id"] = np.arange(1, len(df_total.index) + 1)
+        df_total = df_total[["polygon_id"] + cols]
+        gdf_total = gpd.GeoDataFrame(df_total, geometry='geometry', crs=args.crs)
+        gdf_total.to_file("segmentation.shp")
+        
+    delay_texture_seg_stats = time.time() - t0_texture_seg_stats
+    
+    # Clustering
     time_clustering, time_io = apply_clustering(args, gdf_total)
     
     # A aligner sur les autres masques
     print("**** Vegetation mask for "+str(args.im)+" (saved as "+str(args.file_classif)+") ****")
     print("Total time (user)       :\t"+str(time.time()-t0))
-    #print("Delay for primitives + segmentation : "+str(delay_prim_seg))
+    print("Delay for texture + segmentation : "+str(delay_texture_seg_stats))
     print("Max workers used for parallel tasks "+str(args.nb_workers))
-    #print("Primitives (parallel)   :\t"+str(time_primitives))
-    #print("Segmentation (parallel) :\t"+str(time_segmentation))
+    print("Texture (parallel)   :\t"+str(time_texture))
+    print("Segmentation (parallel) :\t"+str(time_segmentation))
+    print("Statistics (parallel) :\t"+str(time_stats))
     print("Clustering              :\t"+str(time_clustering))    
     print("Writing output file     :\t"+str(time_io))
     
