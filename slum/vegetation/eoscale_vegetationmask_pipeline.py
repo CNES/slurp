@@ -87,13 +87,12 @@ def concat_seg(previousResult,outputAlgoComputer, tile):
 def concat_stats(previousResult,outputAlgoComputer, tile):
     #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     # Do ponderated mean for the 3 last list of values on every segment
-    print(f"DBG (concat_stats) Nb segments : {np.unique(outputAlgoComputer[0])=}")
-
+    print(f"DBG (concat_stats) Nb segments : {np.unique(outputAlgoComputer[0])= }")
     for seg in np.unique(outputAlgoComputer[0]): #range(len(outputAlgoComputer[0])) :
         # increment counter
         previousResult[1][seg] += outputAlgoComputer[1][seg]
-        for i in [2,3,4] :
-            if outputAlgoComputer[1][seg] > 0:
+        if outputAlgoComputer[1][seg] > 0:
+            for i in [2,3,4] :
                 previousResult[0][seg] = outputAlgoComputer[0][seg]
                 # Compute stats for pixels from segment seg
                 previousResult[i][seg] = (previousResult[i][seg]*previousResult[1][seg]+outputAlgoComputer[i][seg]*outputAlgoComputer[1][seg])/(previousResult[1][seg] + outputAlgoComputer[1][seg])
