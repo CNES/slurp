@@ -62,15 +62,40 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     
 def one_band_profile(input_profiles: list, map_params):
     "Change for 1 channel ouput image" 
-    mask_profile = input_profiles
+    mask_profile = input_profiles[0]
     mask_profile['count']=1
 
     return mask_profile
 
+def seg_profile(input_profiles: list, map_params):
+    profile= input_profiles[0:2]
+    profile[0]["count"]= 1
+    profile[1]["count"]= 1
+    profile[0]["dtype"]= np.int32
+    profile[1]["dtype"]= np.float32
+    
+    return profile
 
+    
+def concat_seg(previousResult,outputAlgoComputer, tile):
+    #outputAlgoComputer= [segments, texture]
+    num_seg= np.max(previousResult[0])
+    previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg+1)
+    previousResult[1][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[1][:,:,:]
+
+    
+def concat_stats(previousResult,outputAlgoComputer, tile):
+    #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
+    # Do ponderated mean for the 3 last list of values on every segment
+    for seg in range(len(outputAlgoComputer[0])) :
+        for i in [2,3,4] :
+            if (previousResult[2][seg] + outputAlgoComputer[2][seg])!= 0 :
+                previousResult[i][seg] = (previousResult[i][seg]*previousResult[2][seg]+outputAlgoComputer[i][seg]*outputAlgoComputer[2][seg])/(previousResult[2][seg] + outputAlgoComputer[2][seg])
+
+    
 def compute_ndvi(input_buffers: list, 
                   input_profiles: list, 
-                  params: dict) -> numpy.ndarray :
+                  params: dict) -> np.ndarray :
     """Compute Normalize Difference X Index.
     Rescale to [-1000, 1000] int16 with nodata value = 32767
     1000 * (im_b1 - im_b2) / (im_b1 + im_b2)
@@ -78,22 +103,19 @@ def compute_ndvi(input_buffers: list,
 
     np.seterr(divide="ignore", invalid="ignore")
 
-    print("Compute NDVI ...", end="")
-    start_time = time.time()
-    im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[params["red_band"]-1]) / (
-        np.float32([params["nir_band"]-1]) + np.float32(input_buffers[params["red_band"]-1])
-    )
+    im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.red_band-1])) / (
+        np.float32(input_buffers[0][params.nir_band-1]) + np.float32(input_buffers[0][params.red_band-1]))
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
-    print("in", time.time() - start_time, "seconds.")
+
 
     return im_ndvi
 
 
 def compute_ndwi(input_buffers: list, 
                   input_profiles: list, 
-                  params: dict) -> numpy.ndarray :
+                  params: dict) -> np.ndarray :
     """Compute Normalize Difference X Index.
     Rescale to [-1000, 1000] int16 with nodata value = 32767
     1000 * (im_b1 - im_b2) / (im_b1 + im_b2)
@@ -101,15 +123,11 @@ def compute_ndwi(input_buffers: list,
 
     np.seterr(divide="ignore", invalid="ignore")
 
-    print("Compute NDWI ...", end="")
-    start_time = time.time()
-    im_ndwi = 1000.0 - (2000.0 * np.float32(im_b2)) / (
-        np.float32(im_b1) + np.float32(im_b2)
-    )
+    im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.nir_band-1])) / (
+        np.float32(input_buffers[0][params.green_band-1]) + np.float32(input_buffers[0][params.nir_band-1]))
     im_ndwi[np.logical_or(im_ndwi < -1000.0, im_ndwi > 1000.0)] = np.nan
     np.nan_to_num(im_ndwi, copy=False, nan=32767)
     im_ndwi = np.int16(im_ndwi)
-    print("in", time.time() - start_time, "seconds.")
 
     return im_ndwi
 
@@ -146,55 +164,53 @@ def std_convoluted(im, N, filter_texture):
     return res, (time.time() - t0)
 
 
-def accumulate(res_seg, ndvi, ndwi, texture, transform):
+def accumulate(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict):
     """Stats calculation
     Get the mean of each polygon of the segmentation for NDVI, NDWI and texture bands.
     """
-    t0 = time.time()
     # Init
-    nb_polys = np.unique(res_seg).size
+    segment_index = np.unique(input_buffers[0])
+    nb_polys= args["nb_polys"]
     counter = np.zeros(nb_polys)
     accumulator_ndvi = np.zeros(nb_polys)
     accumulator_ndwi = np.zeros(nb_polys)
-    accumulator_texture = np.zeros(nb_polys)    
+    accumulator_texture = np.zeros(nb_polys) 
+    nb_channel, nb_rows, nb_cols = input_buffers[0].shape
+    datas= [[]]*5  #[segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     
     # Parse the image and set counter and sum for each polygon
-    nb_rows, nb_cols = res_seg.shape
     for r in range(nb_rows):
         for c in range(nb_cols):
-            value = res_seg[r][c] - 1
+            value = input_buffers[0][0][r][c] - 1
             counter[value] += 1
-            accumulator_ndvi[value] += ndvi[r][c]
-            accumulator_ndwi[value] += ndwi[r][c]
-            accumulator_texture[value] += texture[r][c]
+            accumulator_ndvi[value] += input_buffers[2][0][r][c]
+            accumulator_ndwi[value] += input_buffers[3][0][r][c]
+            accumulator_texture[value] += input_buffers[1][0][r][c]
     
-    # Get means for each polygon
+    # Get means for each polygon and store it in datas
     for value in range(nb_polys):
-        accumulator_ndvi[value] /= counter[value]
-        accumulator_ndwi[value] /= counter[value]
-        accumulator_texture[value] /= counter[value]
+        if counter[value]!= 0. :
+            accumulator_ndvi[value] /= counter[value]
+            accumulator_ndwi[value] /= counter[value]
+            accumulator_texture[value] /= counter[value]
+    
+    # Recombine all the datas    
+    datas[0]= segment_index
+    datas[1]= counter
+    datas[2]= accumulator_ndvi
+    datas[3]= accumulator_ndwi
+    datas[4]= accumulator_texture
 
-    # Get geometry of each polygon
-    geometry = nb_polys*[0]
-    for geom, val in rasterio.features.shapes(res_seg.astype("int16"), transform=transform):
-        geometry[int(val)-1] = shape(geom)
-   
-    # Compute dataframe
-    datas = {
-        "geometry": geometry,
-        "count": counter,
-        "mean_ndvi": accumulator_ndvi,
-        "mean_ndwi": accumulator_ndwi,
-        "mean_texture": accumulator_texture
-    }
-    return pd.DataFrame(datas), (time.time() - t0)
+    return datas
     
 
-def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
+def compute_segmentation(args, img, ndvi, ndwi, texture, mask=None):
     """Compute segmentation with SLIC or Felzenszwalb method"""
-    t0 = time.time()
+
     if args.algo_seg == "slic":
-        print("DBG > compute_segmentation (skimage SLIC)")
+        #print("DBG > compute_segmentation (skimage SLIC)")
         if args.segmentation_mode == "RGB":
             # Note : we read RGB image.
             nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
@@ -206,7 +222,7 @@ def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
             nseg = int(ndvi.shape[1] * ndvi.shape[0] / args.slic_seg_size)
             res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)        
     else:
-        print("DBG > compute_segmentation (skimage Felzenszwalb)")
+        #print("DBG > compute_segmentation (skimage Felzenszwalb)")
         if args.segmentation_mode == "RGB":
             # Note : we read RGB image.
             data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] 
@@ -214,18 +230,15 @@ def compute_segmentation(args, img, mask, ndvi, ndwi, texture, transform):
         else:
             # Note : we read NDVI image.
             res_seg = felzenszwalb(ndvi.astype("double"), scale=float(args.felzenszwalb_scale))
-    t_seg = time.time() - t0
-    
-    # Stats calculation    
-    df_stats, t_stats = accumulate(res_seg, ndvi, ndwi, texture, transform)
 
-    return df_stats, t_seg, t_stats
+    return res_seg
 
 
-def apply_clustering(args, gdf):
+def apply_clustering(args, stats):
     t0 = time.time()
+    #stats= [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     # Extract NDVI and NDWI2 mean values of each segment
-    radiometric_indices = np.stack((gdf.mean_ndvi.values, gdf.mean_ndwi.values), axis=1) 
+    radiometric_indices = np.stack((stats[2], stats[3]), axis=1) 
 
     # Note : the seed for random generator is fixed to obtain reproductible results
     print("K-Means on radiometric indices : "+str(len(radiometric_indices))+" elements")
@@ -353,16 +366,19 @@ def apply_clustering(args, gdf):
 
 def segmentation_task(input_buffers: list, 
                   input_profiles: list, 
-                  args: dict) -> numpy.ndarray :
+                  args: dict) -> np.ndarray :
     # input_buffers = [input_img,ndvi,ndwi,mask_slic]                    
     # Compute textures
     texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), 5, args.filter_texture)
 
     # Segmentation
-    df, t_seg, t_stats = compute_segmentation(args,input_buffers[0] , input_buffers[3], input_buffers[1], input_buffers[2], texture, transform)
-    return df, t_texture, t_seg, t_stats
+    segments = compute_segmentation(args,input_buffers[0], input_buffers[1], input_buffers[2], texture)
+    return [segments,texture]
 
 
+                        
+############## MAIN FUNCTION ###############                        
+                        
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
@@ -389,29 +405,24 @@ def main():
     parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     
-    parser.add_argument("-startx", "--startx", type=int, default=0, help="Start x coordinates (crop ROI)")
-    parser.add_argument("-starty", "--starty", type=int, default=0, help="Start y coordinates (crop ROI)")
-    parser.add_argument("-sizex", "--sizex", type=int, help="Size along x axis (crop ROI)")
-    parser.add_argument("-sizey", "--sizey", type=int, help="Size along y axis (crop ROI)")
-    parser.add_argument("-buffer", "--buffer_dimension", type=int, default=512, help="Buffer dimension")
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
     parser.add_argument("-mask_slic_bool", "--mask_slic_bool", default=False,
                         help="Boolean value wether to use a mask during slic calculation or not")
     parser.add_argument("-mask_slic_file", "--mask_slic_file", help="Raster mask file to use if mask_slic_bool==True")
     args = parser.parse_args()
     print("DBG > arguments parsed "+str(args))
-    
-    t0 = time.time()
+                        
 
-    with eom.EOContextManager(nb_workers = nb_workers, tile_mode = tile_mode) as eoscale_manager:
+    with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
+        input_img = eoscale_manager.open_raster(raster_path = args.im)
     
     #Compute NDVI
         if args.file_ndvi == None:
-            input_img = eoscale_manager.open_raster(raster_path = args.im)
-            ndvi = eoexe.n_images_to_m_images_filter(inputs = input_img,
+            ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndvi,
-                                                           params=args,
+                                                           filter_parameters=args,
                                                            generate_output_profiles = one_band_profile,
+                                                           stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDVI processing...")
         else:
@@ -419,90 +430,53 @@ def main():
                         
     #Compute NDWI
         if args.file_ndvi == None:
-            input_img = eoscale_manager.open_raster(raster_path = args.im)
-            ndwi = eoexe.n_images_to_m_images_filter(inputs = input_img,
+            ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndwi,
-                                                           params=args,
+                                                           filter_parameters=args,
                                                            generate_output_profiles = one_band_profile,
+                                                           stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDWI processing...")         
         
         else:
             ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
-                        
-    #ROI
-        startx = 0
-        stopx = im_height
-        starty = 0
-        stopy = im_width
-
-        if args.sizex:
-            startx = max(args.startx, 0)
-            stopx = min(startx + args.sizex, im_height)
-        if args.sizey:
-            starty = max(args.starty, 0)
-            stopy = min(starty + args.sizey, im_width)
-                        
-    #SLIC mask
-        if args.mask_slic_bool =="True":
-            mask_slic= eoscale_manager.open_raster(raster_path = args.mask_slic_file)
-        else:
-            mask_slic = None
-                        
-    #Segmentation
-        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi,ndwi,mask_slic],
-                                                           image_filter = segmentation_task,
-                                                           params=args,
-                                                           generate_output_profiles = one_band_profile, ### not sure
-                                                           context_manager = eoscale_manager,
-                                                           filter_desc= "Segmentation processing...")  
                  
-        
+    #No SLIC mask
+  
+    #Segmentation
+        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0],ndwi[0]],
+                                                           image_filter = segmentation_task,
+                                                           filter_parameters=args,
+                                                           generate_output_profiles = seg_profile, 
+                                                           stable_margin= 10,
+                                                           context_manager = eoscale_manager,
+                                                           concatenate_filter= concat_seg, 
+                                                           filter_desc= "Segmentation processing...")
+    
+    # DEBUG : Write segmentation result in file
+    #   eoscale_manager.write(key = future_seg[0], img_path = "./segment")
+    
+    
+    # Recover number total of segments
+        nb_polys=np.max(eoscale_manager.get_array(future_seg[0])[0]) + 1
+        print("Number of different segments detected : "+ str(nb_polys))
+    
+    #Stats calculation
+        stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],future_seg[1],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
+                                            image_filter = accumulate, 
+                                            filter_parameters={"nb_polys":nb_polys},
+                                            nb_output_scalars = 5,   # not used
+                                            output_scalars= np.zeros((5,nb_polys)),  
+                                            concatenate_filter = concat_stats,
+                                            context_manager = eoscale_manager,
+                                            filter_desc= "Statistics calculation processing...")
 
-
-############## OLD FUNCTIONS ###############
-    image = args.im
-    buffer_dimension = args.buffer_dimension
-    
+        print(stats.shape)
+        print(stats)
         
-        
-        for seg in concurrent.futures.as_completed(future_seg):
-            try:
-                df_res, t_texture, t_seg, t_stats = seg.result()
-                list_res.append(df_res)
-                    
-            except Exception as e:
-                print("Exception ---> "+str(e))
-            else:
-                time_texture += t_texture
-                time_segmentation += t_seg
-                time_stats += t_stats
-
-    df_total = pd.concat(list_res, ignore_index=True)    
-    gdf_total = gpd.GeoDataFrame(df_total, geometry='geometry', crs=args.crs)
+    # Clustering 
+        clusters= apply_clustering(args,stats)
     
-    if args.save_mode == "debug":
-        cols = df_total.columns.tolist()
-        df_total["polygon_id"] = np.arange(1, len(df_total.index) + 1)
-        df_total = df_total[["polygon_id"] + cols]
-        gdf_total = gpd.GeoDataFrame(df_total, geometry='geometry', crs=args.crs)
-        gdf_total.to_file("segmentation.shp")
-        
-    delay_texture_seg_stats = time.time() - t0_texture_seg_stats
-    
-    # Clustering
-    time_clustering, time_io = apply_clustering(args, gdf_total)
-    
-    # A aligner sur les autres masques
-    print("**** Vegetation mask for "+str(args.im)+" (saved as "+str(args.file_classif)+") ****")
-    print("Total time (user)       :\t"+str(time.time()-t0))
-    print("Delay for texture + segmentation : "+str(delay_texture_seg_stats))
-    print("Max workers used for parallel tasks "+str(args.nb_workers))
-    print("Texture (parallel)   :\t"+str(time_texture))
-    print("Segmentation (parallel) :\t"+str(time_segmentation))
-    print("Statistics (parallel) :\t"+str(time_stats))
-    print("Clustering              :\t"+str(time_clustering))    
-    print("Writing output file     :\t"+str(time_io))
     
     
 if __name__ == "__main__":
