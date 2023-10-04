@@ -21,6 +21,8 @@ from slum.tools import io_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
+import time
+
 NO_VEG_CODE = 0
 WATER_CODE = 3
 
@@ -60,10 +62,11 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     plt.close()
     
     
-def one_band_profile(input_profiles: list, map_params):
+def single_float_profile(input_profiles: list, map_params):
     "Change for 1 channel ouput image" 
     mask_profile = input_profiles[0]
     mask_profile['count']=1
+    mask_profile['dtype']=np.float32
 
     return mask_profile
 
@@ -76,29 +79,42 @@ def seg_profile(input_profiles: list, map_params):
     
     return profile
 
+def finalize_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.float32
     
+    return profile
+
+def finalize_task(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict):
+    """ Finalize mask : for each pixels in input segmentation, return mean NDVI
+    """
+    datas = args['data']
+    
+    final_image = np.zeros(input_buffers[0][0].shape)
+
+    nb_rows, nb_cols = input_buffers[0][0].shape
+    
+    for r in range(nb_rows):
+        for c in range(nb_cols):
+            seg = input_buffers[0][0][r][c]
+            index = seg - 1
+            final_image[r][c] = datas[2][index]
+            
+
+    return final_image
+
+
+
+
+
 def concat_seg(previousResult,outputAlgoComputer, tile):
     #outputAlgoComputer= [segments, texture]
     num_seg= np.max(previousResult[0])
     previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
     previousResult[1][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[1][:,:,:]
-
-    
-def concat_stats(previousResult,outputAlgoComputer, tile):
-    #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
-    # Do ponderated mean for the 3 last list of values on every segment
-    print(f"DBG (concat_stats) Nb segments : {np.unique(outputAlgoComputer[0])=}")
-
-    for seg in np.unique(outputAlgoComputer[0]): #range(len(outputAlgoComputer[0])) :
-        # increment counter
-        previousResult[1][seg] += outputAlgoComputer[1][seg]
-        for i in [2,3,4] :
-            if outputAlgoComputer[1][seg] > 0:
-                previousResult[0][seg] = outputAlgoComputer[0][seg]
-                # Compute stats for pixels from segment seg
-                previousResult[i][seg] = (previousResult[i][seg]*previousResult[1][seg]+outputAlgoComputer[i][seg]*outputAlgoComputer[1][seg])/(previousResult[1][seg] + outputAlgoComputer[1][seg])
-            
-             
 
 
     
@@ -189,24 +205,28 @@ def accumulate(input_buffers: list,
     nb_channel, nb_rows, nb_cols = input_buffers[0].shape
     datas= [[]]*5  #[segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     
+    #print(f"DBG > accumulate : {input_buffers[0].shape}")
+
+
     # Parse the image and set counter and sum for each polygon
     for r in range(nb_rows):
         for c in range(nb_cols):
-            value = input_buffers[0][0][r][c] - 1
-            counter[value] += 1
-            accumulator_ndvi[value] += input_buffers[2][0][r][c]
-            accumulator_ndwi[value] += input_buffers[3][0][r][c]
-            accumulator_texture[value] += input_buffers[1][0][r][c]
+            value = input_buffers[0][0][r][c] 
+            #print(f">>> {value}")
+            index = value - 1
+            counter[index] += 1
+            accumulator_ndvi[index] += input_buffers[2][0][r][c]
+            accumulator_ndwi[index] += input_buffers[3][0][r][c]
+            accumulator_texture[index] += input_buffers[1][0][r][c]
     
     # Get means for each polygon and store it in datas
-    for value in range(nb_polys):
-        if counter[value]!= 0. :
-            accumulator_ndvi[value] /= counter[value]
-            accumulator_ndwi[value] /= counter[value]
-            accumulator_texture[value] /= counter[value]
+    for index in range(nb_polys):
+        if counter[index] > 0 :
+            accumulator_ndvi[index] /= counter[index]
+            accumulator_ndwi[index] /= counter[index]
+            accumulator_texture[index] /= counter[index]
     
-    print(f"DBG > {counter=}")
-
+    
     # Recombine all the datas    
     datas[0]= segment_index
     datas[1]= counter
@@ -214,14 +234,75 @@ def accumulate(input_buffers: list,
     datas[3]= accumulator_ndwi
     datas[4]= accumulator_texture
 
+    '''
+    print(f"DBG > accumulate : {datas[0]=}")
+    print(f"DBG > accumulate : {datas[1]=}")
+    print(f"DBG > accumulate : {np.max(datas[1])=}")
+    print(f"DBG > accumulate : {np.mean(datas[2])=}")
+    print(f"DBG > accumulate : {np.count_nonzero(datas[1])=}")
+    print(f"DBG > accumulate : {np.count_nonzero(datas[2])=}")
+    '''
+
     return datas
     
 
-def compute_segmentation(args, img, ndvi, ndwi, texture, mask=None):
+def concat_stats(previousResult,outputAlgoComputer, tile):
+    #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
+    # Do ponderated mean for the 3 last list of values on every segment
+    #print(f"DBG > concat_stats : {outputAlgoComputer=}")
+    '''
+    print(f"DBG >>> concat_stats : {tile=}")
+    print(f"DBG >>> concat_stats : {previousResult=}")
+    print(f"DBG (concat_stats) Nb segments : {len(np.unique(outputAlgoComputer[0]))=}")
+    print(f"DBG (concat stats) {previousResult[0].shape=} and {outputAlgoComputer[0].shape=}")
+    print(f"DBG (concat stats) Min and max segments for this tile : {np.min(outputAlgoComputer[0])}, {np.max(outputAlgoComputer[0])}")
+    '''
+
+    #time.sleep(len(outputAlgoComputer[0])/5.)
+
+    for i in range(len(outputAlgoComputer[0])): #range(len(outputAlgoComputer[0])) :
+        # For all values in current result, we define two indices : 
+        # global index in the final result
+        # local index in the current result
+        seg = outputAlgoComputer[0][i]
+        global_index = seg - 1
+        
+
+        #print(f"DBG > {i=}th value : {global_index=}, {local_index=}")
+        local_counter = outputAlgoComputer[1][global_index]
+
+        # attribute the right label
+        previousResult[0][global_index] = seg
+        
+        for j in [2,3,4] :
+            #if local_counter > 0:
+            # Compute stats for pixels 
+            previous_sum = previousResult[j][global_index] * previousResult[1][global_index]
+            current_sum  = outputAlgoComputer[j][global_index] * local_counter
+            total_counter = previousResult[1][global_index] + local_counter
+            if total_counter > 0:
+                previousResult[j][global_index] = (previous_sum + current_sum)/(total_counter)
+
+        '''        
+        if seg == 12:
+            print(f"DBG - 12 > concat_stats : {outputAlgoComputer=}")
+            print(f"DBG - 12 - {local_counter=}")
+            print(f"DBG - 12 - {previousResult[0][global_index]=}")
+            print(f"DBG - 12 - {previousResult[1][global_index]=}")                
+            print(f"DBG - 12 - {previousResult[2][global_index]=}")                
+        '''
+
+
+        # increment counter (only after the previous loop)
+        previousResult[1][global_index] += local_counter
+        
+                    
+
+def compute_segmentation(args, img, ndvi, mask=None):
     """Compute segmentation with SLIC or Felzenszwalb method"""
 
     if args.algo_seg == "slic":
-        #print("DBG > compute_segmentation (skimage SLIC)")
+        #rint("DBG > compute_segmentation (skimage SLIC)")
         if args.segmentation_mode == "RGB":
             # Note : we read RGB image.
             nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
@@ -383,7 +464,8 @@ def segmentation_task(input_buffers: list,
     texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), 5, args.filter_texture)
 
     # Segmentation
-    segments = compute_segmentation(args,input_buffers[0], input_buffers[1], input_buffers[2], texture)
+    segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
+
     return [segments,texture]
 
 
@@ -432,7 +514,7 @@ def main():
             ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndvi,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = one_band_profile,
+                                                           generate_output_profiles = single_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDVI processing...")
@@ -445,7 +527,7 @@ def main():
             ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndwi,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = one_band_profile,
+                                                           generate_output_profiles = single_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDWI processing...")         
@@ -460,19 +542,21 @@ def main():
                                                            image_filter = segmentation_task,
                                                            filter_parameters=args,
                                                            generate_output_profiles = seg_profile, 
-                                                           stable_margin= 10,
+                                                           stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            concatenate_filter= concat_seg, 
                                                            filter_desc= "Segmentation processing...")
     
         # DEBUG : Write segmentation result in file
-        eoscale_manager.write(key = future_seg[0], img_path = "./segment.tif")
+        #eoscale_manager.write(key = future_seg[0], img_path = "./segment.tif")
     
     
         # Recover number total of segments
-        nb_polys=np.max(eoscale_manager.get_array(future_seg[0])[0]) + 1
+        nb_polys= np.max(eoscale_manager.get_array(future_seg[0])[0]) #len(np.unique(eoscale_manager.get_array(future_seg[0])[0]))
         print("Number of different segments detected : "+ str(nb_polys))
     
+        eoscale_manager.write(key = future_seg[0], img_path = "./segment.tif")
+
         #Stats calculation
         stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],future_seg[1],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
                                             image_filter = accumulate, 
@@ -482,18 +566,46 @@ def main():
                                             concatenate_filter = concat_stats,
                                             context_manager = eoscale_manager,
                                             filter_desc= "Statistics calculation processing...")
+        '''
+        print(f"5 x number of different segments {stats.shape=}")
+        print(f"Segment min : {np.min(stats[0])=}")
+        print(f"Segment max (should be >= {stats.shape[1]=}: {np.max(stats[0])=}")
+        print(f"Nb different segments (should be == as {stats.shape[1]=} : {np.unique(stats[0])=}")
+        print(f"{np.max(stats[1])=} pixels in a segment")
+        print(f"{np.mean(stats[1])=} pixels in a segment")
+        print(f"{np.max(stats[2])=} NDVI for a segment")
+        print(f"{np.mean(stats[2])=} NDVI for the whole scene")
 
-        print(stats.shape)
-        print(stats)
-
-        print(f"Segment min : {np.min(stats[0])}")
-        print(f"Segment max : {np.max(stats[0])}")
-        print(f"Nb seg : {np.unique(stats[0])}")
-                
+       
+        datas[0]= segment_index
+        datas[1]= counter
+        datas[2]= accumulator_ndvi
+        datas[3]= accumulator_ndwi
+        datas[4]= accumulator_texture
+        '''
+                        
         # Clustering 
-        clusters= apply_clustering(args,stats)
-    
-    
-    
+        #clusters= apply_clustering(args,stats)
+        
+        '''
+        print(f"DBG > {stats[0]=}")
+        print(f"DBG > {stats[1]=}")
+        print(f"DBG > {stats[2]=}")
+        print(f"DBG > {stats[3]=}")
+        print(f"DBG > {stats[4]=}")
+        '''
+
+        # Finalize mask
+        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
+                                                      image_filter = finalize_task,
+                                                      filter_parameters={"data":stats},
+                                                      generate_output_profiles = finalize_profile, 
+                                                      stable_margin= 0,
+                                                      context_manager = eoscale_manager,
+                                                      filter_desc= "Finalize processing...")
+
+        eoscale_manager.write(key = final_seg[0], img_path = "./classif.tif")
+        
+        
 if __name__ == "__main__":
     main()
