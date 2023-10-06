@@ -113,14 +113,11 @@ def finalize_task(input_buffers: list,
 
 
 
-
-
 def concat_seg(previousResult,outputAlgoComputer, tile):
     #outputAlgoComputer= [segments, texture]
     num_seg= np.max(previousResult[0])
     previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
     previousResult[1][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[1][:,:,:]
-
 
     
 def compute_ndvi(input_buffers: list, 
@@ -209,10 +206,7 @@ def accumulate(input_buffers: list,
     accumulator_texture = np.zeros(nb_polys) 
     nb_channel, nb_rows, nb_cols = input_buffers[0].shape
     datas= [[]]*5  #[segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
-    
-    #print(f"DBG > accumulate : {input_buffers[0].shape}")
-
-
+ 
     # Parse the image and set counter and sum for each polygon
     for r in range(nb_rows):
         for c in range(nb_cols):
