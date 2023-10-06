@@ -63,7 +63,6 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     
     
 def single_float_profile(input_profiles: list, map_params):
-    "Change for 1 channel ouput image" 
     mask_profile = input_profiles[0]
     mask_profile['count']=1
     mask_profile['dtype']=np.float32
@@ -82,7 +81,8 @@ def seg_profile(input_profiles: list, map_params):
 def finalize_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"]= 1
-    profile["dtype"]= np.float32
+    profile["dtype"]= np.uint8
+    profile["compress"] = "lzw"
     
     return profile
 
@@ -101,8 +101,13 @@ def finalize_task(input_buffers: list,
         for c in range(nb_cols):
             seg = input_buffers[0][0][r][c]
             index = seg - 1
-            final_image[r][c] = datas[2][index]
-            
+            if (datas[2][index] < 0) :
+                classe = 0
+            elif (datas[2][index] < 350) :
+                classe = 1
+            else:
+                classe = 2
+            final_image[r][c] = classe
 
     return final_image
 
@@ -234,15 +239,6 @@ def accumulate(input_buffers: list,
     datas[3]= accumulator_ndwi
     datas[4]= accumulator_texture
 
-    '''
-    print(f"DBG > accumulate : {datas[0]=}")
-    print(f"DBG > accumulate : {datas[1]=}")
-    print(f"DBG > accumulate : {np.max(datas[1])=}")
-    print(f"DBG > accumulate : {np.mean(datas[2])=}")
-    print(f"DBG > accumulate : {np.count_nonzero(datas[1])=}")
-    print(f"DBG > accumulate : {np.count_nonzero(datas[2])=}")
-    '''
-
     return datas
     
 
@@ -250,25 +246,13 @@ def concat_stats(previousResult,outputAlgoComputer, tile):
     #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     # Do ponderated mean for the 3 last list of values on every segment
     #print(f"DBG > concat_stats : {outputAlgoComputer=}")
-    '''
-    print(f"DBG >>> concat_stats : {tile=}")
-    print(f"DBG >>> concat_stats : {previousResult=}")
-    print(f"DBG (concat_stats) Nb segments : {len(np.unique(outputAlgoComputer[0]))=}")
-    print(f"DBG (concat stats) {previousResult[0].shape=} and {outputAlgoComputer[0].shape=}")
-    print(f"DBG (concat stats) Min and max segments for this tile : {np.min(outputAlgoComputer[0])}, {np.max(outputAlgoComputer[0])}")
-    '''
 
-    #time.sleep(len(outputAlgoComputer[0])/5.)
-
-    for i in range(len(outputAlgoComputer[0])): #range(len(outputAlgoComputer[0])) :
-        # For all values in current result, we define two indices : 
-        # global index in the final result
-        # local index in the current result
+    for i in range(len(outputAlgoComputer[0])): 
+        # seg is the Ith value in outputAlgoCompute[0] : it's index is "seg - 1" in the main array
         seg = outputAlgoComputer[0][i]
         global_index = seg - 1
         
-
-        #print(f"DBG > {i=}th value : {global_index=}, {local_index=}")
+        # nb of pixels covered by seg in the current tile
         local_counter = outputAlgoComputer[1][global_index]
 
         # attribute the right label
@@ -283,177 +267,33 @@ def concat_stats(previousResult,outputAlgoComputer, tile):
             if total_counter > 0:
                 previousResult[j][global_index] = (previous_sum + current_sum)/(total_counter)
 
-        '''        
-        if seg == 12:
-            print(f"DBG - 12 > concat_stats : {outputAlgoComputer=}")
-            print(f"DBG - 12 - {local_counter=}")
-            print(f"DBG - 12 - {previousResult[0][global_index]=}")
-            print(f"DBG - 12 - {previousResult[1][global_index]=}")                
-            print(f"DBG - 12 - {previousResult[2][global_index]=}")                
-        '''
-
-
         # increment counter (only after the previous loop)
         previousResult[1][global_index] += local_counter
         
                     
 
-def compute_segmentation(args, img, ndvi, mask=None):
-    """Compute segmentation with SLIC or Felzenszwalb method"""
+def compute_segmentation(args, img, ndvi):
+    """Compute segmentation with SLIC """
+    nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
 
-    if args.algo_seg == "slic":
-        #rint("DBG > compute_segmentation (skimage SLIC)")
-        if args.segmentation_mode == "RGB":
-            # Note : we read RGB image.
-            nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
-            data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3]
-            res_seg = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, convert2lab=True, channel_axis = 2).astype("int32")            
-        else:
-            # Note : we read NDVI image.
-            # Estimation of the max number of segments (ie : each segment is > 100 pixels)
-            nseg = int(ndvi.shape[2] * ndvi.shape[1] / args.slic_seg_size)
-            res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, mask=mask, sigma=1, channel_axis=None)        
+    # TODO : RGB segmentation mode is not working fine. Could be deleted (keep only NDVI mode)
+    if args.segmentation_mode == "RGB":
+        # Note : we read RGB image.
+        # data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] convert2lab=True,
+        data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3]
+        res_seg = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1,  channel_axis = 2)
+        res_seg = res_seg.reshape(1,res_seg.shape[0], res_seg.shape[1])
     else:
-        #print("DBG > compute_segmentation (skimage Felzenszwalb)")
-        if args.segmentation_mode == "RGB":
-            # Note : we read RGB image.
-            data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] 
-            res_seg = felzenszwalb(data, scale=float(args.felzenszwalb_scale),channel_axis=2)
-        else:
-            # Note : we read NDVI image.
-            res_seg = felzenszwalb(ndvi.astype("double"), scale=float(args.felzenszwalb_scale))
-
+        # Note : we read NDVI image.
+        # Estimation of the max number of segments (ie : each segment is > 100 pixels)
+        res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)        
+    
     return res_seg
 
 
 def apply_clustering(args, stats):
-    t0 = time.time()
-    #stats= [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
-    # Extract NDVI and NDWI2 mean values of each segment
-    radiometric_indices = np.stack((stats[2], stats[3]), axis=1) 
-
-    # Note : the seed for random generator is fixed to obtain reproductible results
-    print("K-Means on radiometric indices : "+str(len(radiometric_indices))+" elements")
-    kmeans_rad_indices = KMeans(n_clusters=9,
-                                 init="k-means++",
-                                 n_init=5,
-                                 verbose=0,
-                                 random_state=712)
-    pred_veg = kmeans_rad_indices.fit_predict(radiometric_indices)
-    print(kmeans_rad_indices.cluster_centers_)
-
-    list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
-    list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
-
-    map_centroid = []
-    
-    nb_clusters_no_veg = 0
-    nb_clusters_veg = 0
-    if args.min_ndvi_veg:
-        # Attribute veg class by threshold
-        for t in range(kmeans_rad_indices.n_clusters):
-            if list_clusters.iloc[t]['ndvi'] > float(args.min_ndvi_veg):
-                map_centroid.append(VEG_CODE)
-                nb_clusters_veg += 1
-            elif list_clusters.iloc[t]['ndvi'] < float(args.max_ndvi_noveg):
-                if args.non_veg_clusters:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v) 
-                else:
-                    # 0
-                    map_centroid.append(NO_VEG_CODE)
-                nb_clusters_no_veg += 1
-            else:
-                map_centroid.append(UNDEFINED_VEG)
-
-    else:
-        # Attribute class by thirds 
-        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
-        if args.nb_clusters_veg >= 7:
-            nb_clusters_no_veg = 9 - args.nb_clusters_veg
-            nb_clusters_veg = args.nb_clusters_veg
-
-        for t in range(kmeans_rad_indices.n_clusters):
-            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
-                if args.non_veg_clusters:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v) 
-                else:
-                    # 0
-                    map_centroid.append(NO_VEG_CODE)
-            elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
-                # 10
-                map_centroid.append(UNDEFINED_VEG)
-            else:
-                # 20
-                map_centroid.append(VEG_CODE)
-                
-
-    gdf["pred_veg"] = apply_map(pred_veg, map_centroid)
-
-    figure_name = splitext(args.file_classif)[0] + "_centroids_veg.png"
-    display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
-
-    # data_textures = np.stack((gdf[gdf.pred_veg==VEG_CODE].min_2.values, gdf[gdf.pred_veg==VEG_CODE].max_2.values), axis=1)
-    data_textures = np.transpose(np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values]))
-
-    print("K-Means on texture : "+str(len(data_textures))+" elements")
-    nb_clusters_texture = 9
-    kmeans_texture = KMeans(n_clusters=nb_clusters_texture, init="k-means++", verbose=0, random_state=712)
-    pred_texture = kmeans_texture.fit_predict(data_textures)
-    print(kmeans_texture.cluster_centers_)
-
-    list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
-    list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=False).index
-
-    map_centroid = []
-    nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-    for t in range(kmeans_texture.n_clusters):
-        if t in list_clusters_by_texture[:nb_clusters_high_veg]:
-            map_centroid.append(HIGH_VEG_CODE)
-        elif t in list_clusters_by_texture[nb_clusters_high_veg:2*nb_clusters_high_veg]:
-            map_centroid.append(UNDEFINED_TEXTURE)
-        else:
-            map_centroid.append(LOW_VEG_CODE)
-
-    figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
-    display_clusters(list_clusters, "mean_texture", "mean_texture", nb_clusters_high_veg,
-                     2*nb_clusters_high_veg, figure_name)
-
-    gdf["Texture"] = 0
-    gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture"] = apply_map(pred_texture, map_centroid)
-
-    # Ex : 10 (undefined) + 3 (textured) -> 13
-    gdf["ClasseN"] = gdf["pred_veg"] + gdf["Texture"]
-    
-    t1 = time.time()
-    extension = splitext(args.file_classif)[1]
-    if extension == ".tif":
-        print("DBG > Rasterize output -> "+str(args.file_classif))
-        # Compressed .tif ouptut
-        im = rasterio.open(args.im)
-        meta = im.meta.copy()
-        meta.update(compress='lzw', driver='GTiff')
-        with rasterio.open(args.file_classif, 'w+', **meta) as out:
-            out_arr = out.read(1)
-            shapes = ((geom, value) for geom, value in zip(gdf.geometry, gdf.ClasseN))
-            burned = features.rasterize(shapes=shapes, fill=0, out=out_arr, transform=out.transform)
-            out.write_band(1, burned)
-    else:
-        # supposed to be a vector ouput
-        fiona_driver ='ESRI Shapefile'        
-        if extension == ".gpkg":
-            fiona_driver = "GPKG"
-        elif extension == ".geojson":
-            fiona_driver = "GeoJSON"
-        
-        print("DBG > driver used "+str(fiona_driver)+ " extension = ["+str(extension)+"]")
-        gdf.to_file(args.file_classif, driver=fiona_driver)
-    t2 = time.time()
-
-    return (t1-t0), (t2-t1)
+   
+    return None
     
 
 def segmentation_task(input_buffers: list, 
@@ -486,11 +326,8 @@ def main():
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
-    parser.add_argument("-algo_seg", "--algo_seg", choices=["slic", "felz"], default="slic", required=False, action="store", help="Use SkImage SLIC algorithm (slic) or SkImage Felzenszwalb algorithm (felz) for segmentation")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
-    parser.add_argument("-felz", "--felzenszwalb", default=False, help="Use SkImage Felzenszwalb algorithm for segmentation")
-    parser.add_argument("-felz_scale", "--felzenszwalb_scale", type=float, default=1.0, help="Scale parameter for Felzenszwalb algorithm")
     
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
@@ -499,9 +336,7 @@ def main():
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
-    parser.add_argument("-mask_slic_bool", "--mask_slic_bool", default=False,
-                        help="Boolean value wether to use a mask during slic calculation or not")
-    parser.add_argument("-mask_slic_file", "--mask_slic_file", help="Raster mask file to use if mask_slic_bool==True")
+
     args = parser.parse_args()
     print("DBG > arguments parsed "+str(args))
                         
@@ -518,11 +353,12 @@ def main():
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDVI processing...")
-            eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
+            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+                eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
         else:
             ndvi=eoscale_manager.open_raster(raster_path =args.ndvi)
                         
-    #Compute NDWI
+        #Compute NDWI
         if args.file_ndvi == None:
             ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndwi,
@@ -531,7 +367,8 @@ def main():
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "NDWI processing...")         
-        
+            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+                eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
         else:
             ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
                  
@@ -547,16 +384,14 @@ def main():
                                                            concatenate_filter= concat_seg, 
                                                            filter_desc= "Segmentation processing...")
     
-        # DEBUG : Write segmentation result in file
-        #eoscale_manager.write(key = future_seg[0], img_path = "./segment.tif")
-    
-    
+        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+            eoscale_manager.write(key = future_seg[0], img_path = args.file_classif.replace(".tif","_slic.tif"))
+            eoscale_manager.write(key = future_seg[1], img_path = args.file_classif.replace(".tif","_texture.tif"))
+            
         # Recover number total of segments
         nb_polys= np.max(eoscale_manager.get_array(future_seg[0])[0]) #len(np.unique(eoscale_manager.get_array(future_seg[0])[0]))
         print("Number of different segments detected : "+ str(nb_polys))
-    
-        eoscale_manager.write(key = future_seg[0], img_path = "./segment.tif")
-
+            
         #Stats calculation
         stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],future_seg[1],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
                                             image_filter = accumulate, 
@@ -566,34 +401,9 @@ def main():
                                             concatenate_filter = concat_stats,
                                             context_manager = eoscale_manager,
                                             filter_desc= "Statistics calculation processing...")
-        '''
-        print(f"5 x number of different segments {stats.shape=}")
-        print(f"Segment min : {np.min(stats[0])=}")
-        print(f"Segment max (should be >= {stats.shape[1]=}: {np.max(stats[0])=}")
-        print(f"Nb different segments (should be == as {stats.shape[1]=} : {np.unique(stats[0])=}")
-        print(f"{np.max(stats[1])=} pixels in a segment")
-        print(f"{np.mean(stats[1])=} pixels in a segment")
-        print(f"{np.max(stats[2])=} NDVI for a segment")
-        print(f"{np.mean(stats[2])=} NDVI for the whole scene")
-
-       
-        datas[0]= segment_index
-        datas[1]= counter
-        datas[2]= accumulator_ndvi
-        datas[3]= accumulator_ndwi
-        datas[4]= accumulator_texture
-        '''
-                        
+      
         # Clustering 
-        #clusters= apply_clustering(args,stats)
-        
-        '''
-        print(f"DBG > {stats[0]=}")
-        print(f"DBG > {stats[1]=}")
-        print(f"DBG > {stats[2]=}")
-        print(f"DBG > {stats[3]=}")
-        print(f"DBG > {stats[4]=}")
-        '''
+        #clusters= apply_clustering(args,stats)s
 
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
@@ -604,7 +414,7 @@ def main():
                                                       context_manager = eoscale_manager,
                                                       filter_desc= "Finalize processing...")
 
-        eoscale_manager.write(key = final_seg[0], img_path = "./classif.tif")
+        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         
         
 if __name__ == "__main__":
