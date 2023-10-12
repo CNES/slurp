@@ -63,22 +63,22 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     
     
 def single_float_profile(input_profiles: list, map_params):
-    mask_profile = input_profiles[0]
-    mask_profile['count']=1
-    mask_profile['dtype']=np.float32
-
-    return mask_profile
-
-def seg_profile(input_profiles: list, map_params):
-    profile= input_profiles[0:2]
-    profile[0]["count"]= 1
-    profile[1]["count"]= 1
-    profile[0]["dtype"]= np.int32
-    profile[1]["dtype"]= np.float32
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=np.float32
+    profile["compress"] = "lzw"
     
     return profile
 
-def finalize_profile(input_profiles: list, map_params):
+def single_int32_profile(input_profiles: list, map_params):
+    profile= input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.int32
+    profile["compress"] = "lzw"
+    
+    return profile
+
+def single_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"]= 1
     profile["dtype"]= np.uint8
@@ -114,11 +114,10 @@ def finalize_task(input_buffers: list,
 
 
 def concat_seg(previousResult,outputAlgoComputer, tile):
-    #outputAlgoComputer= [segments, texture]
+    #outputAlgoComputer= [segments]
     num_seg= np.max(previousResult[0])
     previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
-    previousResult[1][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[1][:,:,:]
-
+    
     
 def compute_ndvi(input_buffers: list, 
                   input_profiles: list, 
@@ -289,18 +288,24 @@ def apply_clustering(args, stats):
    
     return None
     
-
+def texture_task(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict) -> np.ndarray :
+    # input_buffers = [input_img]
+    # Compute textures
+    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture)
+    
+    return texture
+    
 def segmentation_task(input_buffers: list, 
                   input_profiles: list, 
                   args: dict) -> np.ndarray :
-    # input_buffers = [input_img,ndvi,ndwi,mask_slic]                    
-    # Compute textures
-    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), 5, args.filter_texture)
+    # input_buffers = [input_img,ndvi]                    
 
     # Segmentation
     segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
 
-    return [segments,texture]
+    return segments
 
 
                         
@@ -316,6 +321,7 @@ def main():
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
+    parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
     parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
@@ -337,6 +343,8 @@ def main():
 
     with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
         input_img = eoscale_manager.open_raster(raster_path = args.im)
+        
+        t0 = time.time()
     
     #Compute NDVI
         if args.file_ndvi == None:
@@ -351,9 +359,11 @@ def main():
                 eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
         else:
             ndvi=eoscale_manager.open_raster(raster_path =args.ndvi)
-                        
+        
+        t1_NDVI = time.time()
+        
         #Compute NDWI
-        if args.file_ndvi == None:
+        if args.file_ndwi == None:
             ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndwi,
                                                            filter_parameters=args,
@@ -365,14 +375,26 @@ def main():
                 eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
         else:
             ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
-                 
-        #No SLIC mask
+        
+        t2_NDWI = time.time()
+        
+        texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
+                                                    image_filter = texture_task,
+                                                    filter_parameters=args,
+                                                    generate_output_profiles = single_float_profile,
+                                                    stable_margin= args.filter_texture,
+                                                    context_manager = eoscale_manager,
+                                                    filter_desc= "Texture processing...")         
+        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+            eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
   
+        t3_texture = time.time()
+
         #Segmentation
-        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0],ndwi[0]],
+        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0]],
                                                            image_filter = segmentation_task,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = seg_profile, 
+                                                           generate_output_profiles = single_int32_profile, 
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            concatenate_filter= concat_seg, 
@@ -380,14 +402,15 @@ def main():
     
         if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
             eoscale_manager.write(key = future_seg[0], img_path = args.file_classif.replace(".tif","_slic.tif"))
-            eoscale_manager.write(key = future_seg[1], img_path = args.file_classif.replace(".tif","_texture.tif"))
+          
+        t4_seg = time.time()  
             
         # Recover number total of segments
         nb_polys= np.max(eoscale_manager.get_array(future_seg[0])[0]) #len(np.unique(eoscale_manager.get_array(future_seg[0])[0]))
         print("Number of different segments detected : "+ str(nb_polys))
             
         #Stats calculation
-        stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],future_seg[1],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
+        stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],texture[0],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
                                             image_filter = accumulate, 
                                             filter_parameters={"nb_polys":nb_polys},
                                             nb_output_scalars = 5,   # not used
@@ -399,16 +422,30 @@ def main():
         # Clustering 
         #clusters= apply_clustering(args,stats)s
 
+        t5_stats = time.time()
+        
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
                                                       filter_parameters={"data":stats},
-                                                      generate_output_profiles = finalize_profile, 
+                                                      generate_output_profiles = single_uint8_profile, 
                                                       stable_margin= 0,
                                                       context_manager = eoscale_manager,
                                                       filter_desc= "Finalize processing...")
 
         eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
+        t6_final = time.time()
+        
+        print(f">>> Total time = {t6_final - t0:.2f}")
+        print(f">>> \tNDVI = {t1_NDVI - t0:.2f}")
+        print(f">>> \tNDWI = {t2_NDWI - t1_NDVI:.2f}")
+        print(f">>> \tTexture {args.texture_rad=} = {t3_texture - t2_NDWI:.2f}")
+        print(f">>> \tSegmentation = {t4_seg - t3_texture:.2f}")
+        print(f">>> \tStats = {t5_stats - t4_seg:.2f}")
+        print(f">>> \tFinalize = {t6_final - t5_stats:.2f}")
+        print(f">>> **********************************")
+        
+        
         
         
 if __name__ == "__main__":
