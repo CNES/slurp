@@ -28,12 +28,12 @@ cdef extern from "c_stats.cpp":
 # Declare the class with cdef
 cdef extern from "c_stats.h" namespace "stats":
 
-    void compute_stats(float * , unsigned int * , 
+    void compute_stats_single_band(float * , unsigned int * , 
 		     float * , unsigned int * , 
 		     unsigned int , unsigned int ,
 		     unsigned int , unsigned int )
 
-    void compute_stats_mb(float * , unsigned int * , 
+    void compute_stats(float * , unsigned int * , 
 		     float * , unsigned int * , 
 		     unsigned int , unsigned int ,
 		     unsigned int , unsigned int )
@@ -49,7 +49,7 @@ cdef class PyStats:
     def __cinit__(self):
         pass
 
-    def run_stats(self, colorImage: np.ndarray, labelImage: np.ndarray, nbLabels):
+    def run_stats_single_band(self, colorImage: np.ndarray, labelImage: np.ndarray, nbLabels):
         
         cdef float[::1] color_img_memview = colorImage.flatten().astype(np.float32)
         cdef unsigned int[::1] label_img_memview = labelImage.flatten().astype(np.uint32)
@@ -61,7 +61,7 @@ cdef class PyStats:
         nbRows = colorImage.shape[1]
         nbCols = colorImage.shape[2]
 
-        compute_stats(&color_img_memview[0],
+        compute_stats_single_band(&color_img_memview[0],
                       &label_img_memview[0], 
                       &accumulator_mem_view[0], 
                       &counter_mem_view[0],
@@ -72,7 +72,7 @@ cdef class PyStats:
 
         return np.asarray(accumulator_mem_view), np.asarray(counter_mem_view)
         
-    def run_stats_mb(self, primitives: np.ndarray, labelImage: np.ndarray, nbLabels):
+    def run_stats(self, primitives: np.ndarray, labelImage: np.ndarray, nbLabels):
         
         nbBands = primitives.shape[0]
         nbRows = primitives.shape[1]
@@ -84,7 +84,7 @@ cdef class PyStats:
         cdef float[::1] accumulator_mem_view = np.zeros(nbLabels*nbBands).astype(np.float32)
         cdef unsigned int[::1] counter_mem_view = np.zeros(nbLabels).astype(np.uint32)
         
-        compute_stats_mb(&primitives_memview[0],
+        compute_stats(&primitives_memview[0],
                       &label_img_memview[0], 
                       &accumulator_mem_view[0], 
                       &counter_mem_view[0],

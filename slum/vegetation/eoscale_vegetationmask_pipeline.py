@@ -21,6 +21,9 @@ from slum.tools import io_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
+# Cython module to compute stats
+import stats as ts
+
 import time
 
 NO_VEG_CODE = 0
@@ -78,6 +81,14 @@ def single_int32_profile(input_profiles: list, map_params):
     
     return profile
 
+def multiple_int32_profile(input_profiles: list, map_params):
+    profile= input_profiles[0]
+    profile["count"]= 3
+    profile["dtype"]= np.int32
+    profile["compress"] = "lzw"
+    
+    return profile
+
 def single_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"]= 1
@@ -111,6 +122,48 @@ def finalize_task(input_buffers: list,
 
     return final_image
 
+def finalize_task2(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict):
+    """ Finalize mask : for each pixels in input segmentation, return mean NDVI
+    """
+    datas = args["data"]
+    
+    nb_bands = 3 # input_profiles[0]["count"] 
+    nb_rows = input_buffers[0][0].shape[0]
+    nb_cols = input_buffers[0][0].shape[1]
+
+    num_pixels = nb_rows * nb_cols
+
+    final_image = np.zeros((nb_bands, nb_rows, nb_cols))
+
+    num_labels = args["nb_labels"]
+
+    for b in range(nb_bands):
+        for r in range(nb_rows):
+            for c in range(nb_cols):
+                seg = input_buffers[0][0][r][c]
+                index = seg - 1
+                final_image[b][r][c] = datas[0][b * num_labels + index] 
+
+    return final_image
+
+def compute_stats_image(inputBuffer: list, 
+                        input_profiles: list, 
+                        params: dict) -> list:
+    # inputBuffer : seg, NDVI, NDWI, texture
+    
+    ts_stats = ts.PyStats()
+    nb_primitives =  len(inputBuffer)-1
+    primitives = np.zeros((nb_primitives,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
+
+    for i in range(nb_primitives):
+        primitives[i,:,:] = inputBuffer[i+1][:,:]
+
+    accumulator, counter = ts_stats.run_stats_mb(primitives, inputBuffer[0], params["nb_lab"])
+        
+    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
+    return [accumulator, counter]
 
 
 def concat_seg(previousResult,outputAlgoComputer, tile):
@@ -233,13 +286,20 @@ def accumulate(input_buffers: list,
     datas[4]= accumulator_texture
 
     return datas
-    
+
+
+def stats_concatenate(output_scalars, chunk_output_scalars, tile):
+    # single band version
+    output_scalars[0] += chunk_output_scalars[0]
+    output_scalars[1] += chunk_output_scalars[1]
+       
+   
 
 def concat_stats(previousResult,outputAlgoComputer, tile):
     #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
     # Do ponderated mean for the 3 last list of values on every segment
     #print(f"DBG > concat_stats : {outputAlgoComputer=}")
-
+    
     for i in range(len(outputAlgoComputer[0])): 
         # seg is the Ith value in outputAlgoCompute[0] : it's index is "seg - 1" in the main array
         seg = outputAlgoComputer[0][i]
@@ -424,6 +484,30 @@ def main():
 
         t5_stats = time.time()
         
+        params_stats = {"nb_lab": nb_polys }
+        stats2 = eoexe.n_images_to_m_scalars(inputs = [future_seg[0], ndvi[0], ndwi[0], texture[0]],
+                                            image_filter = compute_stats_image,
+                                            filter_parameters = params_stats,
+                                            nb_output_scalars = nb_polys,
+                                            context_manager = eoscale_manager,
+                                            concatenate_filter = stats_concatenate,
+                                            filter_desc = "Stats ")
+        
+        print(f"Accumulator : {stats2[0]=}")
+        print(f"Counter : {stats2[1]=}")
+
+        print(f"Accumulator : {len(stats2[0])=}")
+        print(f"Counter : {len(stats2[1])=}")
+        '''
+        print(f"Accumulator : {stats[0]=}")
+        print(f"Counter : {stats[1]=}")
+
+        print(f"Accumulator : {len(stats[0])=}")
+        print(f"Counter : {len(stats[1])=}")
+        '''
+ 
+        t5_bis = time.time()
+
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
@@ -434,6 +518,17 @@ def main():
                                                       filter_desc= "Finalize processing...")
 
         eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
+
+        final_seg2 = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
+                                                       image_filter = finalize_task2,
+                                                       filter_parameters={"data":stats2, "nb_labels":nb_polys},
+                                                       generate_output_profiles = multiple_int32_profile,
+                                                       stable_margin= 0,
+                                                       context_manager = eoscale_manager,
+                                                       filter_desc= "Finalize processing...")
+
+        eoscale_manager.write(key = final_seg2[0], img_path = args.file_classif.replace(".tif", "_v2.tif"))
+
         t6_final = time.time()
         
         print(f">>> Total time = {t6_final - t0:.2f}")
@@ -441,8 +536,9 @@ def main():
         print(f">>> \tNDWI = {t2_NDWI - t1_NDVI:.2f}")
         print(f">>> \tTexture {args.texture_rad=} = {t3_texture - t2_NDWI:.2f}")
         print(f">>> \tSegmentation = {t4_seg - t3_texture:.2f}")
-        print(f">>> \tStats = {t5_stats - t4_seg:.2f}")
-        print(f">>> \tFinalize = {t6_final - t5_stats:.2f}")
+        print(f">>> \tStats Python = {t5_stats - t4_seg:.2f}")
+        print(f">>> \tStats Cython = {t5_bis - t5_stats:.2f}")
+        print(f">>> \tFinalize = {t6_final - t5_bis:.2f}")
         print(f">>> **********************************")
         
         

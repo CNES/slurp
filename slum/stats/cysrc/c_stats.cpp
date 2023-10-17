@@ -4,7 +4,7 @@ using namespace std;
  
 namespace stats {
 
-  void compute_stats(float * color_img, unsigned int * label_img, 
+  void compute_stats_single_band(float * color_img, unsigned int * label_img, 
 		     float * accumulator, unsigned int * counter, 
 		     unsigned int num_labels, unsigned int nb_bands,
 		     unsigned int nb_rows, unsigned int nb_cols) 
@@ -54,7 +54,7 @@ namespace stats {
     // accumulator should contain the mean value for each band for each label ;)
   }
 
-  void compute_stats_mb(float * color_img, unsigned int * label_img, 
+  void compute_stats(float * color_img, unsigned int * label_img, 
 		     float * accumulator, unsigned int * counter, 
 		     unsigned int num_labels, unsigned int nb_bands,
 		     unsigned int nb_rows, unsigned int nb_cols) 
@@ -73,30 +73,26 @@ namespace stats {
     for(unsigned int r = 0; r < nb_rows; r++){
       for(unsigned int c = 0; c < nb_cols; c++){
         label_coords = r * nb_cols + c;
-	seg = label_img[label_coords];
-	index_seg = seg - 1;
+            seg = label_img[label_coords];
+            index_seg = seg - 1;
          /*
          Pixel Image[r][c] -> color_img[label_coords] --> included in segment label_img[label_coords]
          Accumulator[label_img[label_coords]] += value
          Counter[label_img[label_coords]] += 1
          */
-        //counter[label_coords]++;
         counter[index_seg]++;
         for(unsigned int b = 0; b < nb_bands; b++){
           accumulator[ b * num_labels + index_seg ] += color_img[ num_pixels * b + label_coords ];
         }
-        
-        // single band version
-        //accumulator[index_seg] += color_img[label_coords];
-      }
+        }
     }
     
     for(unsigned int b = 0; b < nb_bands; b++){
       for(unsigned int l = 0; l < num_labels; l++){
-      	if (counter[l] > 0) {
-	  accumulator[ b * num_labels + l ] /= counter[l];
-	}
-      }  
+          if (counter[l] > 0) {
+              accumulator[ b * num_labels + l ] /= counter[l];
+            }
+          }  
     }
 
     // accumulator should contain the mean value for each band for each label ;)
