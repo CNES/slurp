@@ -99,4 +99,19 @@ namespace stats {
   }
 
 
+  void finalize_seg(unsigned int * segmentation, unsigned int * clustering, 
+                    unsigned int * final_image, unsigned int nb_rows, unsigned int nb_cols) 
+  {
+    unsigned int label_coords, seg, seg_class;
+      
+    for (unsigned r = 0; r < nb_rows; r++) {
+         for(unsigned int c = 0; c < nb_cols; c++){
+             label_coords = r * nb_cols + c;
+             seg = segmentation[label_coords];
+             seg_class = clustering[seg - 1];
+             final_image[label_coords] = seg_class;
+        }
+    }
+    
+  }
 }

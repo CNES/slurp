@@ -37,6 +37,8 @@ cdef extern from "c_stats.h" namespace "stats":
 		     float * , unsigned int * , 
 		     unsigned int , unsigned int ,
 		     unsigned int , unsigned int )
+    
+    void finalize_seg(unsigned int * , unsigned int * , unsigned int * , unsigned int , unsigned int)
 
 
 # End PXD
@@ -94,3 +96,21 @@ cdef class PyStats:
                       nbCols)
 
         return np.asarray(accumulator_mem_view), np.asarray(counter_mem_view)
+
+    
+    
+    def finalize(self, segmentation: np.ndarray, clustering: np.ndarray):
+        
+        nbRows = segmentation.shape[1]
+        nbCols = segmentation.shape[2]
+        
+        cdef unsigned int[::1] seg_memview = segmentation.flatten().astype(np.uint32)
+        cdef unsigned int[::1] cluster_memview = clustering.flatten().astype(np.uint32)
+        
+        cdef unsigned int[::1] final_image_memview = np.zeros(nbRows*nbCols).astype(np.uint32)
+        
+        finalize_seg(&seg_memview[0], &cluster_memview[0], &final_image_memview[0], nbRows, nbCols)
+        
+        return np.asarray(final_image_memview).reshape((nbRows, nbCols))
+        
+    

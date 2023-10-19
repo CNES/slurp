@@ -36,6 +36,8 @@ HIGH_VEG_CODE = 3
 UNDEFINED_VEG = 10
 VEG_CODE = 20
 
+########### MISCELLANEOUS FUNCTIONS ##############
+
 
 def get_transform(transform, beginx, beginy):
     """Get transform of a part of an image knowing the transform of the full image."""
@@ -97,81 +99,27 @@ def single_uint8_profile(input_profiles: list, map_params):
     
     return profile
 
-def finalize_task(input_buffers: list, 
-                  input_profiles: list, 
-                  args: dict):
-    """ Finalize mask : for each pixels in input segmentation, return mean NDVI
-    """
-    datas = args['data']
-    
-    final_image = np.zeros(input_buffers[0][0].shape)
 
-    nb_rows, nb_cols = input_buffers[0][0].shape
-    
-    for r in range(nb_rows):
-        for c in range(nb_cols):
-            seg = input_buffers[0][0][r][c]
-            index = seg - 1
-            if (datas[2][index] < 0) :
-                classe = 0
-            elif (datas[2][index] < 350) :
-                classe = 1
-            else:
-                classe = 2
-            final_image[r][c] = classe
 
-    return final_image
 
-def finalize_task2(input_buffers: list, 
-                  input_profiles: list, 
-                  args: dict):
-    """ Finalize mask : for each pixels in input segmentation, return mean NDVI
-    """
-    datas = args["data"]
-    
-    nb_bands = 3 # input_profiles[0]["count"] 
-    nb_rows = input_buffers[0][0].shape[0]
-    nb_cols = input_buffers[0][0].shape[1]
+def print_dataset_infos(dataset, prefix=""):
+    """Print information about rasterio dataset."""
+    print()
+    print(prefix, "Image name :", dataset.name)
+    print(prefix, "Image size :", dataset.width, "x", dataset.height)
+    print(prefix, "Image bands :", dataset.count)
+    print(prefix, "Image types :", dataset.dtypes)
+    print(prefix, "Image nodata :", dataset.nodatavals, dataset.nodata)
+    print(prefix, "Image crs :", dataset.crs)
+    print(prefix, "Image bounds :", dataset.bounds)
+    print()
 
-    num_pixels = nb_rows * nb_cols
 
-    final_image = np.zeros((nb_bands, nb_rows, nb_cols))
 
-    num_labels = args["nb_labels"]
-
-    for b in range(nb_bands):
-        for r in range(nb_rows):
-            for c in range(nb_cols):
-                seg = input_buffers[0][0][r][c]
-                index = seg - 1
-                final_image[b][r][c] = datas[0][b * num_labels + index] 
-
-    return final_image
-
-def compute_stats_image(inputBuffer: list, 
-                        input_profiles: list, 
-                        params: dict) -> list:
-    # inputBuffer : seg, NDVI, NDWI, texture
-    
-    ts_stats = ts.PyStats()
-    nb_primitives =  len(inputBuffer)-1
-    primitives = np.zeros((nb_primitives,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
-
-    for i in range(nb_primitives):
-        primitives[i,:,:] = inputBuffer[i+1][:,:]
-
-    accumulator, counter = ts_stats.run_stats_mb(primitives, inputBuffer[0], params["nb_lab"])
         
-    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
-    return [accumulator, counter]
 
+########### Radiometric indices ##############
 
-def concat_seg(previousResult,outputAlgoComputer, tile):
-    #outputAlgoComputer= [segments]
-    num_seg= np.max(previousResult[0])
-    previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
-    
-    
 def compute_ndvi(input_buffers: list, 
                   input_profiles: list, 
                   params: dict) -> np.ndarray :
@@ -210,19 +158,17 @@ def compute_ndwi(input_buffers: list,
 
     return im_ndwi
 
+########### Texture indices ##############
 
-def print_dataset_infos(dataset, prefix=""):
-    """Print information about rasterio dataset."""
-    print()
-    print(prefix, "Image name :", dataset.name)
-    print(prefix, "Image size :", dataset.width, "x", dataset.height)
-    print(prefix, "Image bands :", dataset.count)
-    print(prefix, "Image types :", dataset.dtypes)
-    print(prefix, "Image nodata :", dataset.nodatavals, dataset.nodata)
-    print(prefix, "Image crs :", dataset.crs)
-    print(prefix, "Image bounds :", dataset.bounds)
-    print()
-
+def texture_task(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict) -> np.ndarray :
+    # input_buffers = [input_img]
+    # Compute textures
+    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture)
+    
+    return texture
+    
 
 def std_convoluted(im, N, filter_texture):
     """Calculate the std of each pixel
@@ -243,88 +189,8 @@ def std_convoluted(im, N, filter_texture):
     return res, (time.time() - t0)
 
 
-def accumulate(input_buffers: list, 
-                  input_profiles: list, 
-                  args: dict):
-    """Stats calculation
-    Get the mean of each polygon of the segmentation for NDVI, NDWI and texture bands.
-    """
-    # Init
-    segment_index = np.unique(input_buffers[0])
-    nb_polys= args["nb_polys"]
-    counter = np.zeros(nb_polys)
-    accumulator_ndvi = np.zeros(nb_polys)
-    accumulator_ndwi = np.zeros(nb_polys)
-    accumulator_texture = np.zeros(nb_polys) 
-    nb_channel, nb_rows, nb_cols = input_buffers[0].shape
-    datas= [[]]*5  #[segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
- 
-    # Parse the image and set counter and sum for each polygon
-    for r in range(nb_rows):
-        for c in range(nb_cols):
-            value = input_buffers[0][0][r][c] 
-            #print(f">>> {value}")
-            index = value - 1
-            counter[index] += 1
-            accumulator_ndvi[index] += input_buffers[2][0][r][c]
-            accumulator_ndwi[index] += input_buffers[3][0][r][c]
-            accumulator_texture[index] += input_buffers[1][0][r][c]
-    
-    # Get means for each polygon and store it in datas
-    for index in range(nb_polys):
-        if counter[index] > 0 :
-            accumulator_ndvi[index] /= counter[index]
-            accumulator_ndwi[index] /= counter[index]
-            accumulator_texture[index] /= counter[index]
-    
-    
-    # Recombine all the datas    
-    datas[0]= segment_index
-    datas[1]= counter
-    datas[2]= accumulator_ndvi
-    datas[3]= accumulator_ndwi
-    datas[4]= accumulator_texture
-
-    return datas
-
-
-def stats_concatenate(output_scalars, chunk_output_scalars, tile):
-    # single band version
-    output_scalars[0] += chunk_output_scalars[0]
-    output_scalars[1] += chunk_output_scalars[1]
-       
-   
-
-def concat_stats(previousResult,outputAlgoComputer, tile):
-    #list order : [segment_index, counter, ndvi_mean, ndwi_mean, texture_mean]
-    # Do ponderated mean for the 3 last list of values on every segment
-    #print(f"DBG > concat_stats : {outputAlgoComputer=}")
-    
-    for i in range(len(outputAlgoComputer[0])): 
-        # seg is the Ith value in outputAlgoCompute[0] : it's index is "seg - 1" in the main array
-        seg = outputAlgoComputer[0][i]
-        global_index = seg - 1
-        
-        # nb of pixels covered by seg in the current tile
-        local_counter = outputAlgoComputer[1][global_index]
-
-        # attribute the right label
-        previousResult[0][global_index] = seg
-        
-        for j in [2,3,4] :
-            #if local_counter > 0:
-            # Compute stats for pixels 
-            previous_sum = previousResult[j][global_index] * previousResult[1][global_index]
-            current_sum  = outputAlgoComputer[j][global_index] * local_counter
-            total_counter = previousResult[1][global_index] + local_counter
-            if total_counter > 0:
-                previousResult[j][global_index] = (previous_sum + current_sum)/(total_counter)
-
-        # increment counter (only after the previous loop)
-        previousResult[1][global_index] += local_counter
-        
-                    
-
+########### Segmentation ##############
+                   
 def compute_segmentation(args, img, ndvi):
     """Compute segmentation with SLIC """
     nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
@@ -344,19 +210,6 @@ def compute_segmentation(args, img, ndvi):
     return res_seg
 
 
-def apply_clustering(args, stats):
-   
-    return None
-    
-def texture_task(input_buffers: list, 
-                  input_profiles: list, 
-                  args: dict) -> np.ndarray :
-    # input_buffers = [input_img]
-    # Compute textures
-    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture)
-    
-    return texture
-    
 def segmentation_task(input_buffers: list, 
                   input_profiles: list, 
                   args: dict) -> np.ndarray :
@@ -368,6 +221,214 @@ def segmentation_task(input_buffers: list,
     return segments
 
 
+
+def concat_seg(previousResult,outputAlgoComputer, tile):
+    #outputAlgoComputer= [segments]
+    num_seg= np.max(previousResult[0])
+    previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
+    
+    
+
+
+
+########### Stats ##############
+
+def compute_stats_image(inputBuffer: list, 
+                        input_profiles: list, 
+                        params: dict) -> list:
+    # inputBuffer : seg, NDVI, NDWI, texture
+    
+    ts_stats = ts.PyStats()
+    nb_primitives =  len(inputBuffer)-1
+    primitives = np.zeros((nb_primitives,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
+
+    for i in range(nb_primitives):
+        primitives[i,:,:] = inputBuffer[i+1][:,:]
+
+    accumulator, counter = ts_stats.run_stats(primitives, inputBuffer[0], params["nb_lab"])
+        
+    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
+    return [accumulator, counter]
+
+
+
+def stats_concatenate(output_scalars, chunk_output_scalars, tile):
+    # single band version
+    output_scalars[0] += chunk_output_scalars[0]
+    output_scalars[1] += chunk_output_scalars[1]
+
+########### Clustering ##############
+
+def apply_clustering(args, stats, nb_polys):
+    '''
+    stats[0:nb_polys] -> mean NDVI
+    stats[nb_polys:2*nb_polys] -> mean NDWI
+    stats[2*nb_polys:] -> mean Texture
+    '''
+    clustering = np.zeros(nb_polys)
+    
+    # Note : the seed for random generator is fixed to obtain reproductible results
+    print(f"K-Means on radiometric indices ({nb_polys} elements")
+    kmeans_rad_indices = KMeans(n_clusters=9,
+                                 init="k-means++",
+                                 n_init=5,
+                                 verbose=0,
+                                 random_state=712)
+    pred_veg = kmeans_rad_indices.fit_predict(np.stack((stats[0:nb_polys],stats[nb_polys:2*nb_polys]),axis=1))
+    print(f"{kmeans_rad_indices.cluster_centers_=}")
+    
+    list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
+    list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
+
+    map_centroid = []
+    
+    nb_clusters_no_veg = 0
+    nb_clusters_veg = 0
+    if args.min_ndvi_veg:
+        # Attribute veg class by threshold
+        for t in range(kmeans_rad_indices.n_clusters):
+            if list_clusters.iloc[t]['ndvi'] > float(args.min_ndvi_veg):
+                map_centroid.append(VEG_CODE)
+                nb_clusters_veg += 1
+            elif list_clusters.iloc[t]['ndvi'] < float(args.max_ndvi_noveg):
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
+                nb_clusters_no_veg += 1
+            else:
+                map_centroid.append(UNDEFINED_VEG)
+
+    else:
+        # Attribute class by thirds 
+        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
+        if args.nb_clusters_veg >= 7:
+            nb_clusters_no_veg = 9 - args.nb_clusters_veg
+            nb_clusters_veg = args.nb_clusters_veg
+
+        for t in range(kmeans_rad_indices.n_clusters):
+            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
+                if args.non_veg_clusters:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v) 
+                else:
+                    # 0
+                    map_centroid.append(NO_VEG_CODE)
+            elif t in list_clusters_by_ndvi[nb_clusters_no_veg:9-args.nb_clusters_veg]:
+                # 10
+                map_centroid.append(UNDEFINED_VEG)
+            else:
+                # 20
+                map_centroid.append(VEG_CODE)
+                
+    clustering = apply_map(pred_veg, map_centroid)
+
+    figure_name = splitext(args.file_classif)[0] + "_centroids_veg.png"
+    display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
+    
+    ## Analysis texture
+    if not args.no_texture:
+        mean_texture = stats[2*nb_polys:]
+        texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
+        #texture_values = np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values])
+        threshold_max = np.percentile(texture_values, args.filter_texture)
+        print("threshold_texture_max", threshold_max)
+
+        # Save histograms
+        if args.debug:
+            values, bins, _ = plt.hist(texture_values[0], bins=75)
+            plt.clf()
+            bins_center = (bins[:-1] + bins[1:]) / 2
+            plt.plot(bins_center, values, color="blue")
+            plt.savefig(splitext(args.file_classif)[0] + "_histogram_texture.png")   
+            plt.close()    
+            index_max = np.argmax(bins_center>threshold_max) + 1
+            plt.plot(bins_center[:index_max], values[:index_max], color="blue")
+            plt.savefig(splitext(args.file_classif)[0] + "_histogram_texture_cut" + str(args.filter_texture) + ".png")   
+            plt.close()
+
+        # Clustering
+        data_textures = np.transpose(texture_values)
+        data_textures[data_textures > threshold_max] = threshold_max
+        
+        #texture_values[texture_values > threshold_max] = threshold_max
+        #data_texture = np.reshape(len(texture_values),1)
+        print("K-Means on texture : "+str(len(data_textures))+" elements")
+        kmeans_texture = KMeans(n_clusters=9,
+                                init="k-means++",
+                                n_init=5,
+                                verbose=0,
+                                random_state=712)
+        pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1,1))
+        print(kmeans_texture.cluster_centers_)
+
+        list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
+        list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=True).index
+
+        # Attribute class
+        map_centroid = []
+        nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)    
+        if args.nb_clusters_low_veg >= 7:
+            nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
+        for t in range(kmeans_texture.n_clusters):
+            if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
+                map_centroid.append(LOW_VEG_CODE)
+            elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
+                map_centroid.append(HIGH_VEG_CODE)
+            else:
+                map_centroid.append(UNDEFINED_TEXTURE)
+        '''
+        if args.debug:
+            # Get all clusters
+            map_centroid_debug = []
+            list_clusters_by_texture = list_clusters_by_texture.tolist()
+            for t in range(kmeans_texture.n_clusters):
+                map_centroid_debug.append(list_clusters_by_texture.index(t)) 
+            gdf["Texture_debug"] = 0
+            gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture_debug"] = apply_map(pred_texture, map_centroid_debug)
+            gdf.loc[gdf.pred_veg == UNDEFINED_VEG, "Texture_debug"] = 0
+            gdf["ClasseN_debug"] = gdf["pred_veg"] + gdf["Texture_debug"]
+
+        '''
+
+        figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
+        display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
+                         (9-nb_clusters_high_veg), figure_name)
+        
+        
+        textures = np.zeros(nb_polys)
+        textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
+        #gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture"] = apply_map(pred_texture, map_centroid)
+    
+        # Ex : 10 (undefined) + 3 (textured) -> 13
+        clustering = clustering + textures
+    
+    return clustering
+        
+
+########### Finalize ##############
+
+def finalize_task(input_buffers: list, 
+                  input_profiles: list, 
+                  args: dict):
+    """ Finalize mask : for each pixels in input segmentation, return mean NDVI
+    """
+    clustering = args["data"]
+
+    ts_stats = ts.PyStats()
+    
+    final_image = ts_stats.finalize(input_buffers[0], clustering)
+        
+    return final_image
+
+
+
+
+
                         
 ############## MAIN FUNCTION ###############                        
                         
@@ -375,6 +436,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
     parser.add_argument("file_classif", help="Output classification filename")
+    parser.add_argument("-debug", default=False, required=False, action="store_true", 
+                        help="Debug mode")
 
     parser.add_argument("-red", "--red_band", type=int, nargs="?", default=1, help="Red band index")
     parser.add_argument("-green", "--green_band", type=int, nargs="?", default=2, help="Green band index")
@@ -383,18 +446,22 @@ def main():
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
     parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
+                        help="Labelize vegetation without distinction low/high")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     
-    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetaiton (1-9), default : 3")
+    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetation (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
     parser.add_argument("-non_veg_clusters","--non_veg_clusters", default=False, required=False, action="store_true", 
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
-    
+    parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, default=3,
+                        help="Nb of clusters considered as low vegetation (1-9), default : 3")
+
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
     args = parser.parse_args()
@@ -406,7 +473,7 @@ def main():
         
         t0 = time.time()
     
-    #Compute NDVI
+        #Compute NDVI
         if args.file_ndvi == None:
             ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                            image_filter = compute_ndvi,
@@ -420,7 +487,7 @@ def main():
         else:
             ndvi=eoscale_manager.open_raster(raster_path =args.ndvi)
         
-        t1_NDVI = time.time()
+        t_NDVI = time.time()
         
         #Compute NDWI
         if args.file_ndwi == None:
@@ -436,7 +503,7 @@ def main():
         else:
             ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
         
-        t2_NDWI = time.time()
+        t_NDWI = time.time()
         
         texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                     image_filter = texture_task,
@@ -448,7 +515,7 @@ def main():
         if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
             eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
   
-        t3_texture = time.time()
+        t_texture = time.time()
 
         #Segmentation
         future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0]],
@@ -463,82 +530,50 @@ def main():
         if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
             eoscale_manager.write(key = future_seg[0], img_path = args.file_classif.replace(".tif","_slic.tif"))
           
-        t4_seg = time.time()  
+        t_seg = time.time()  
             
         # Recover number total of segments
         nb_polys= np.max(eoscale_manager.get_array(future_seg[0])[0]) #len(np.unique(eoscale_manager.get_array(future_seg[0])[0]))
         print("Number of different segments detected : "+ str(nb_polys))
             
         #Stats calculation
-        stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0],texture[0],ndvi[0],ndwi[0]],    # future_seg[0]=segmentation / future_seg[1]=texture
-                                            image_filter = accumulate, 
-                                            filter_parameters={"nb_polys":nb_polys},
-                                            nb_output_scalars = 5,   # not used
-                                            output_scalars= np.zeros((5,nb_polys)),  
-                                            concatenate_filter = concat_stats,
-                                            context_manager = eoscale_manager,
-                                            filter_desc= "Statistics calculation processing...")
-      
-        # Clustering 
-        #clusters= apply_clustering(args,stats)s
-
         t5_stats = time.time()
         
         params_stats = {"nb_lab": nb_polys }
-        stats2 = eoexe.n_images_to_m_scalars(inputs = [future_seg[0], ndvi[0], ndwi[0], texture[0]],
+        stats = eoexe.n_images_to_m_scalars(inputs = [future_seg[0], ndvi[0], ndwi[0], texture[0]],
                                             image_filter = compute_stats_image,
                                             filter_parameters = params_stats,
                                             nb_output_scalars = nb_polys,
                                             context_manager = eoscale_manager,
                                             concatenate_filter = stats_concatenate,
                                             filter_desc = "Stats ")
-        
-        print(f"Accumulator : {stats2[0]=}")
-        print(f"Counter : {stats2[1]=}")
 
-        print(f"Accumulator : {len(stats2[0])=}")
-        print(f"Counter : {len(stats2[1])=}")
-        '''
-        print(f"Accumulator : {stats[0]=}")
-        print(f"Counter : {stats[1]=}")
+        t_stats = time.time()
 
-        print(f"Accumulator : {len(stats[0])=}")
-        print(f"Counter : {len(stats[1])=}")
-        '''
- 
-        t5_bis = time.time()
-
+        # Clustering 
+        clusters = apply_clustering(args, stats[0], nb_polys)
+        t_cluster = time.time()
+    
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
-                                                      filter_parameters={"data":stats},
+                                                      filter_parameters={"data":clusters},
                                                       generate_output_profiles = single_uint8_profile, 
                                                       stable_margin= 0,
                                                       context_manager = eoscale_manager,
-                                                      filter_desc= "Finalize processing...")
+                                                      filter_desc= "Finalize processing (Cython)...")
 
         eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
-
-        final_seg2 = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
-                                                       image_filter = finalize_task2,
-                                                       filter_parameters={"data":stats2, "nb_labels":nb_polys},
-                                                       generate_output_profiles = multiple_int32_profile,
-                                                       stable_margin= 0,
-                                                       context_manager = eoscale_manager,
-                                                       filter_desc= "Finalize processing...")
-
-        eoscale_manager.write(key = final_seg2[0], img_path = args.file_classif.replace(".tif", "_v2.tif"))
-
-        t6_final = time.time()
+        t_final = time.time()
         
-        print(f">>> Total time = {t6_final - t0:.2f}")
-        print(f">>> \tNDVI = {t1_NDVI - t0:.2f}")
-        print(f">>> \tNDWI = {t2_NDWI - t1_NDVI:.2f}")
-        print(f">>> \tTexture {args.texture_rad=} = {t3_texture - t2_NDWI:.2f}")
-        print(f">>> \tSegmentation = {t4_seg - t3_texture:.2f}")
-        print(f">>> \tStats Python = {t5_stats - t4_seg:.2f}")
-        print(f">>> \tStats Cython = {t5_bis - t5_stats:.2f}")
-        print(f">>> \tFinalize = {t6_final - t5_bis:.2f}")
+        print(f">>> Total time = {t_final - t0:.2f}")
+        print(f">>> \tNDVI = {t_NDVI - t0:.2f}")
+        print(f">>> \tNDWI = {t_NDWI - t_NDVI:.2f}")
+        print(f">>> \tTexture = {t_texture - t_NDWI:.2f}")
+        print(f">>> \tSegmentation = {t_seg - t_texture:.2f}")
+        print(f">>> \tStats = {t_stats - t_texture:.2f}")
+        print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
+        print(f">>> \tFinalize Cython= {t_final - t_cluster:.2f}")
         print(f">>> **********************************")
         
         
