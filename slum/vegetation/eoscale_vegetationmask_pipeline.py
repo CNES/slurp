@@ -240,12 +240,10 @@ def compute_stats_image(inputBuffer: list,
     
     ts_stats = ts.PyStats()
     nb_primitives =  len(inputBuffer)-1
-    primitives = np.zeros((nb_primitives,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
-
-    for i in range(nb_primitives):
-        primitives[i,:,:] = inputBuffer[i+1][:,:]
-
-    accumulator, counter = ts_stats.run_stats(primitives, inputBuffer[0], params["nb_lab"])
+    
+    # inputBuffer : list of (one band, rows, cols) images
+    # [:,0,:,:] -> transform in an array (3bands, rows, cols)
+    accumulator, counter = ts_stats.run_stats(np.array(inputBuffer[1:nb_primitives+1])[:,0,:,:], inputBuffer[0], params["nb_lab"])
         
     # output : [ mean of each primitive ; counter (nb pixels / seg) ]
     return [accumulator, counter]
@@ -563,6 +561,7 @@ def main():
                                                       context_manager = eoscale_manager,
                                                       filter_desc= "Finalize processing (Cython)...")
 
+        t_before_write = time.time()
         eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         t_final = time.time()
         
@@ -574,6 +573,7 @@ def main():
         print(f">>> \tStats = {t_stats - t_texture:.2f}")
         print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
         print(f">>> \tFinalize Cython= {t_final - t_cluster:.2f}")
+        print(f">>> \tWrite final image= {t_final - t_before_write:.2f}")
         print(f">>> **********************************")
         
         
