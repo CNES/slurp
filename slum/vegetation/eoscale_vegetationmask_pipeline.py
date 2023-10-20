@@ -165,12 +165,12 @@ def texture_task(input_buffers: list,
                   args: dict) -> np.ndarray :
     # input_buffers = [input_img]
     # Compute textures
-    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture)
+    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture, args.min_value, args.max_value)
     
     return texture
     
 
-def std_convoluted(im, N, filter_texture):
+def std_convoluted(im, N, filter_texture, min_value, max_value):
     """Calculate the std of each pixel
     Based on a convolution with a kernel of 1 (size of the kernel given)
     """
@@ -182,9 +182,8 @@ def std_convoluted(im, N, filter_texture):
     ns = kernel.size * np.ones(im.shape)
     res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
-    # Filter extreme values
-    thresh_texture = np.percentile(res, filter_texture)
-    res[res > thresh_texture] = thresh_texture
+    # Normalization
+    res = res / (max_value - min_value)
     
     return res, (time.time() - t0)
 
@@ -443,7 +442,7 @@ def main():
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
-    parser.add_argument("-texture", "--filter_texture", type=int, default=98, help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
                         help="Labelize vegetation without distinction low/high")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
@@ -468,7 +467,6 @@ def main():
 
     with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
         input_img = eoscale_manager.open_raster(raster_path = args.im)
-        
         t0 = time.time()
     
         #Compute NDVI
@@ -502,6 +500,9 @@ def main():
             ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
         
         t_NDWI = time.time()
+        
+        args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
+        args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
         
         texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                     image_filter = texture_task,
