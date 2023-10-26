@@ -337,7 +337,7 @@ def apply_clustering(args, stats, nb_polys):
 
         # Save histograms
         if args.debug:
-            values, bins, _ = plt.hist(texture_values[0], bins=75)
+            values, bins, _ = plt.hist(texture_values, bins=75)
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
             plt.plot(bins_center, values, color="blue")
