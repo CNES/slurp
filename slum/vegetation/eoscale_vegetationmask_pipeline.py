@@ -329,7 +329,7 @@ def apply_clustering(args, stats, nb_polys):
     
     ## Analysis texture
     if not args.no_texture:
-        mean_texture = stats[2*nb_polys:]
+        mean_texture = 1000 * stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
         #texture_values = np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values])
         threshold_max = np.percentile(texture_values, args.filter_texture)
@@ -368,7 +368,10 @@ def apply_clustering(args, stats, nb_polys):
 
         # Attribute class
         map_centroid = []
-        nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)    
+        nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
+        if args.max_low_veg:
+            # Distinction veg class by threshold
+            args.nb_clusters_low_veg = int(list_clusters[list_clusters['mean_texture'] < args.max_low_veg].count())
         if args.nb_clusters_low_veg >= 7:
             nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
         for t in range(kmeans_texture.n_clusters):
@@ -458,6 +461,7 @@ def main():
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, default=3,
                         help="Nb of clusters considered as low vegetation (1-9), default : 3")
+    parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
 
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
