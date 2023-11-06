@@ -481,6 +481,7 @@ def main():
                                                            generate_output_profiles = single_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
                                                            filter_desc= "NDVI processing...")
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
@@ -497,6 +498,7 @@ def main():
                                                            generate_output_profiles = single_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
                                                            filter_desc= "NDWI processing...")         
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
@@ -514,6 +516,7 @@ def main():
                                                     generate_output_profiles = single_float_profile,
                                                     stable_margin= args.filter_texture,
                                                     context_manager = eoscale_manager,
+                                                    multiproc_context= "fork",
                                                     filter_desc= "Texture processing...")         
         if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
             eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
@@ -528,6 +531,7 @@ def main():
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            concatenate_filter= concat_seg, 
+                                                           multiproc_context= "fork",
                                                            filter_desc= "Segmentation processing...")
     
         if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
@@ -549,6 +553,7 @@ def main():
                                             nb_output_scalars = nb_polys,
                                             context_manager = eoscale_manager,
                                             concatenate_filter = stats_concatenate,
+                                            multiproc_context= "fork",
                                             filter_desc = "Stats ")
 
         t_stats = time.time()
@@ -564,6 +569,7 @@ def main():
                                                       generate_output_profiles = single_uint8_profile, 
                                                       stable_margin= 0,
                                                       context_manager = eoscale_manager,
+                                                      multiproc_context= "fork",
                                                       filter_desc= "Finalize processing (Cython)...")
 
         t_before_write = time.time()
