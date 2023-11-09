@@ -486,7 +486,7 @@ def main():
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
         else:
-            ndvi=eoscale_manager.open_raster(raster_path =args.ndvi)
+            ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
         
         t_NDVI = time.time()
         
@@ -503,13 +503,12 @@ def main():
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
         else:
-            ndwi= eoscale_manager.open_raster(raster_path =args.ndwi)      
+            ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
         
         t_NDWI = time.time()
         
         args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
-        
         texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                     image_filter = texture_task,
                                                     filter_parameters=args,
