@@ -727,7 +727,16 @@ def build_stack(args):
         show_histograms(im_ndvi, "NDVI", im_ndwi, "NDWI")
 
     # Global mask construction
-    valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
+
+    # Get cloud mask if any
+    if args.file_cloud_gml:
+        mask_nocloud = np.logical_not(
+            cloud_from_gml(args.file_cloud_gml, args.file_phr)
+        )
+        valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi, mask_nocloud))
+    else:
+        valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
+
     del valid_ndvi, valid_ndwi
     
     # Show PHR and stack validity masks
@@ -900,7 +909,7 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
     shm = shared_memory.SharedMemory(name=shm_key)
     shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
     valid_stack = shmNpArray_stack[-1, :, :]
-                
+    '''            
     if args.display:
         show_images(
             mask_nocloud,
@@ -910,9 +919,29 @@ def build_samples(shm_key, shm_shape, shm_dtype, args):
             vmin=0,
             vmax=1,
         )
-    
+    '''
     # Prepare samples
     valid_samples = np.logical_and(valid_stack, mask_nocloud)
+    
+    if args.check_samples == True:
+        # Pre-compute NDWI mask with very conservative threshold (ie : 0.1) to exclude ground pixels
+        # from the samples list for water. 
+        shm = shared_memory.SharedMemory(name=shm_key)
+        shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
+        index_ndwi = shm_shape[0] - 2 - len(args.files_layers) if args.use_rgb_layers else 2
+        im_ndwi = np.copy(shmNpArray_stack[index_ndwi])
+        mask_ndwi = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
+        valid_samples = np.logical_and(valid_samples, mask_ndwi)
+        if args.display:
+            show_images(
+                mask_pekel,
+                "Pekel",
+                valid_samples,
+                "Valid samples",
+                vmin=0,
+                vmax=1,
+        )
+
     shm.close()
     del shm, mask_nocloud
 
@@ -1211,8 +1240,10 @@ def classify(args):
     # Closing
     start_time = time.time()
     if args.binary_closing:
+        struct = square(int(args.binary_closing))
+        struct = np.ones((args.binary_closing, args.binary_closing)).astype(np.uint8)
         im_classif = binary_closing(
-            im_classif, square(args.binary_closing)
+            im_classif, struct
         ).astype(np.uint8)
     elif args.diameter_closing:
         # XR: TODO très long voir bloqué
@@ -1516,6 +1547,16 @@ def getarguments():
         action="store_true",
         dest="nb_samples_auto",
         help="Auto select number of samples for water and other",
+    )
+
+    group3.add_argument(
+        "-check_samples",
+        default=False,
+        required=False,
+        action="store_true",
+        dest="check_samples",
+        help="Check and select water samples that are above ndwi_threshold"+
+        " (to avoid to take into account ground pixels known as water in Pekel)",
     )
 
     group3.add_argument(
