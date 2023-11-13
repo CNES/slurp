@@ -1240,8 +1240,6 @@ def classify(args):
     # Closing
     start_time = time.time()
     if args.binary_closing:
-        print(f"Debug {args.binary_closing=}")
-        print(f"Debug {im_classif.shape=}")
         struct = square(int(args.binary_closing))
         struct = np.ones((args.binary_closing, args.binary_closing)).astype(np.uint8)
         im_classif = binary_closing(
