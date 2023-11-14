@@ -13,6 +13,16 @@ import matplotlib.pyplot as plt
 import time
 from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
+from skimage.morphology import (
+    area_closing,
+    area_opening,
+    binary_closing,
+    binary_opening,
+    diameter_closing,
+    remove_small_holes,
+    square,
+)
+
 import concurrent.futures
 from shapely.geometry import shape
 import scipy
@@ -35,6 +45,8 @@ HIGH_VEG_CODE = 3
 
 UNDEFINED_VEG = 10
 VEG_CODE = 20
+
+LOW_VEG_CLASS = VEG_CODE + LOW_VEG_CODE
 
 ########### MISCELLANEOUS FUNCTIONS ##############
 
@@ -422,11 +434,33 @@ def finalize_task(input_buffers: list,
     ts_stats = ts.PyStats()
     
     final_image = ts_stats.finalize(input_buffers[0], clustering)
-        
+    
     return final_image
 
 
-
+def clean_task(input_buffers: list,
+                         input_profiles: list,
+                         args: dict) -> np.ndarray :
+    """ Post processing : apply closing on low veg 
+    """
+    im_classif = input_buffers[0][0]
+    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, 1, 0)
+    
+    if args.binary_closing:
+        low_veg_binary = binary_closing(
+            low_veg_binary, square(args.binary_closing)
+        ).astype(np.uint8)
+    elif args.area_closing:
+        low_veg_binary = area_closing(
+            low_veg_binary, args.area_closing, connectivity=2
+        ).astype(np.uint8)
+    elif args.remove_small_holes:
+        low_veg_binary = remove_small_holes(
+            low_veg_binary.astype(bool), args.remove_small_holes, connectivity=2
+        ).astype(np.uint8)        
+    
+    im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
+    return im_classif
 
 
                         
@@ -438,7 +472,8 @@ def main():
     parser.add_argument("file_classif", help="Output classification filename")
     parser.add_argument("-debug", default=False, required=False, action="store_true", 
                         help="Debug mode")
-
+    
+    #primitives and texture arguments
     parser.add_argument("-red", "--red_band", type=int, nargs="?", default=1, help="Red band index")
     parser.add_argument("-green", "--green_band", type=int, nargs="?", default=2, help="Green band index")
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
@@ -450,10 +485,12 @@ def main():
                         help="Labelize vegetation without distinction low/high")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
     
+    #segmentation arguments
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     
+    #clustering arguments
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetation (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
@@ -462,7 +499,16 @@ def main():
     parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, default=3,
                         help="Nb of clusters considered as low vegetation (1-9), default : 3")
     parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
-
+    
+    #post-processing arguments
+    parser.add_argument("-binary_closing","--binary_closing", type=int, required=False, action="store",
+                        help="Size of square structuring element")
+    parser.add_argument("-area_closing","--area_closing", type=int, required=False, action="store",
+                        help="Area closing removes all dark structures")
+    parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, action="store",
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
+    
+    #multiprocessing arguments
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
     args = parser.parse_args()
@@ -559,8 +605,8 @@ def main():
 
         # Clustering 
         clusters = apply_clustering(args, stats[0], nb_polys)
-        t_cluster = time.time()
-    
+        t_cluster = time.time()       
+        
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
@@ -570,10 +616,21 @@ def main():
                                                       context_manager = eoscale_manager,
                                                       multiproc_context= "fork",
                                                       filter_desc= "Finalize processing (Cython)...")
-
-        t_before_write = time.time()
-        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         t_final = time.time()
+
+        # Closing
+        clean_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
+                                                      image_filter = clean_task,
+                                                      filter_parameters=args,
+                                                      generate_output_profiles = single_uint8_profile, 
+                                                      stable_margin= 20,
+                                                      context_manager = eoscale_manager,
+                                                      multiproc_context= "fork",
+                                                      filter_desc= "Post-processing...")
+        t_closing = time.time()
+        
+        eoscale_manager.write(key = clean_seg[0], img_path = args.file_classif)
+        t_write = time.time()
         
         print(f">>> Total time = {t_final - t0:.2f}")
         print(f">>> \tNDVI = {t_NDVI - t0:.2f}")
@@ -583,7 +640,8 @@ def main():
         print(f">>> \tStats = {t_stats - t_texture:.2f}")
         print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
         print(f">>> \tFinalize Cython= {t_final - t_cluster:.2f}")
-        print(f">>> \tWrite final image= {t_final - t_before_write:.2f}")
+        print(f">>> \tPost-processing (clean)= {t_closing - t_final:.2f}")
+        print(f">>> \tWrite final image= {t_write - t_closing:.2f}")
         print(f">>> **********************************")
         
         
