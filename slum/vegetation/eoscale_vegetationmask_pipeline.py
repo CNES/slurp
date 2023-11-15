@@ -297,7 +297,7 @@ def apply_clustering(args, stats, nb_polys):
         print("threshold_texture_max", threshold_max)
 
         # Save histograms
-        if args.debug or args.save_mode == "debug":
+        if args.debug_texture or args.save_mode == "debug":
             values, bins, _ = plt.hist(texture_values, bins=75)
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
@@ -326,37 +326,33 @@ def apply_clustering(args, stats, nb_polys):
 
         # Attribute class
         map_centroid = []
-        nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-        if args.max_low_veg:
-            # Distinction veg class by threshold
-            args.nb_clusters_low_veg = int(list_clusters[list_clusters['mean_texture'] < args.max_low_veg].count())
-        if args.nb_clusters_low_veg >= 7:
-            nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
-        for t in range(kmeans_texture.n_clusters):
-            if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
-                map_centroid.append(LOW_VEG_CODE)
-            elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
-                map_centroid.append(HIGH_VEG_CODE)
-            else:
-                map_centroid.append(UNDEFINED_TEXTURE)
-        '''
-        if args.debug:
+        if args.debug_texture:
             # Get all clusters
-            map_centroid_debug = []
             list_clusters_by_texture = list_clusters_by_texture.tolist()
             for t in range(kmeans_texture.n_clusters):
-                map_centroid_debug.append(list_clusters_by_texture.index(t)) 
-            gdf["Texture_debug"] = 0
-            gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture_debug"] = apply_map(pred_texture, map_centroid_debug)
-            gdf.loc[gdf.pred_veg == UNDEFINED_VEG, "Texture_debug"] = 0
-            gdf["ClasseN_debug"] = gdf["pred_veg"] + gdf["Texture_debug"]
-
-        '''
-
+                map_centroid.append(list_clusters_by_texture.index(t))
+        else:
+            # Distinction veg class
+            nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
+            if args.max_low_veg:
+                # Distinction veg class by threshold
+                args.nb_clusters_low_veg = int(list_clusters[list_clusters['mean_texture'] < args.max_low_veg].count())
+            if args.nb_clusters_low_veg >= 7:
+                nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
+            for t in range(kmeans_texture.n_clusters):
+                if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
+                    map_centroid.append(LOW_VEG_CODE)
+                elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
+                    map_centroid.append(HIGH_VEG_CODE)
+                else:
+                    map_centroid.append(UNDEFINED_TEXTURE)
+                    
         figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
-        display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
-                         (9-nb_clusters_high_veg), figure_name)
-        
+        if args.debug_texture:
+            display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
+        else:
+            display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
+                         (9-nb_clusters_high_veg), figure_name)       
         
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
@@ -415,8 +411,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
     parser.add_argument("file_classif", help="Output classification filename")
-    parser.add_argument("-debug", default=False, required=False, action="store_true", 
-                        help="Debug mode")
     
     #primitives and texture arguments
     parser.add_argument("-red", "--red_band", type=int, nargs="?", default=1, help="Red band index")
@@ -429,6 +423,8 @@ def main():
     parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
                         help="Labelize vegetation without distinction low/high")
+    parser.add_argument("-debug_texture", default=False, required=False, action="store_true", 
+                        help="Get all 9 vegetation clusters without distinction low/high")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
     #segmentation arguments
@@ -575,7 +571,7 @@ def main():
         t_final = time.time()
 
         # Closing
-        if args.binary_closing or args.area_closing or args.remove_small_holes: 
+        if not args.debug_texture and (args.binary_closing or args.area_closing or args.remove_small_holes): 
             final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
                                                           image_filter = clean_task,
                                                           filter_parameters=args,
