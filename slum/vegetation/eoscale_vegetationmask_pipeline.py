@@ -447,11 +447,11 @@ def main():
     parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
     
     #post-processing arguments
-    parser.add_argument("-binary_closing","--binary_closing", type=int, required=False, action="store",
+    parser.add_argument("-binary_closing","--binary_closing", type=int, required=False, default=0, action="store",
                         help="Size of square structuring element")
-    parser.add_argument("-area_closing","--area_closing", type=int, required=False, action="store",
+    parser.add_argument("-area_closing","--area_closing", type=int, required=False, default=0, action="store",
                         help="Area closing removes all dark structures")
-    parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, action="store",
+    parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, default=0, action="store",
                         help="The maximum area, in pixels, of a contiguous hole that will be filled")
     
     #multiprocessing arguments
@@ -571,18 +571,19 @@ def main():
         t_final = time.time()
 
         # Closing
-        clean_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
-                                                      image_filter = clean_task,
-                                                      filter_parameters=args,
-                                                      generate_output_profiles = single_uint8_profile, 
-                                                      stable_margin= 20,
-                                                      context_manager = eoscale_manager,
-                                                      multiproc_context= "fork",
-                                                      filter_desc= "Post-processing...")
+        if args.binary_closing or args.area_closing or args.remove_small_holes: 
+            final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
+                                                          image_filter = clean_task,
+                                                          filter_parameters=args,
+                                                          generate_output_profiles = single_uint8_profile, 
+                                                          stable_margin= max(2*args.binary_closing, args.area_closing, args.remove_small_holes),
+                                                          context_manager = eoscale_manager,
+                                                          multiproc_context= "fork",
+                                                          filter_desc= "Post-processing...")
         t_closing = time.time()
         
         # Write output mask
-        eoscale_manager.write(key = clean_seg[0], img_path = args.file_classif)
+        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         t_write = time.time()
         
         print(f">>> Total time = {t_final - t0:.2f}")
