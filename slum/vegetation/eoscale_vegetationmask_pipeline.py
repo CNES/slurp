@@ -290,14 +290,14 @@ def apply_clustering(args, stats, nb_polys):
     display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
     
     ## Analysis texture
-    if not args.no_texture:
+    if args.texture_mode != "no":
         mean_texture = stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
         threshold_max = np.percentile(texture_values, args.filter_texture)
         print("threshold_texture_max", threshold_max)
 
         # Save histograms
-        if args.debug_texture or args.save_mode == "debug":
+        if args.texture_mode == "debug" or args.save_mode == "debug":
             values, bins, _ = plt.hist(texture_values, bins=75)
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
@@ -326,7 +326,7 @@ def apply_clustering(args, stats, nb_polys):
 
         # Attribute class
         map_centroid = []
-        if args.debug_texture:
+        if args.texture_mode == "debug":
             # Get all clusters
             list_clusters_by_texture = list_clusters_by_texture.tolist()
             for t in range(kmeans_texture.n_clusters):
@@ -348,7 +348,7 @@ def apply_clustering(args, stats, nb_polys):
                     map_centroid.append(UNDEFINED_TEXTURE)
                     
         figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
-        if args.debug_texture:
+        if args.texture_mode == "debug":
             display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
         else:
             display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
@@ -419,13 +419,12 @@ def main():
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
     parser.add_argument("-texture", default=None, required=False, action="store", dest="file_texture", help="Texture filename (computed if missing option)")
+    parser.add_argument("-texture_mode", "--texture_mode", choices=["yes", "no", "debug"], default="yes", required=False, action="store", 
+                        help="Labelize vegetation with (yes) or without (no) distinction low/high, or get all 9 vegetation clusters without distinction low/high (debug)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
     parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
-    parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
-                        help="Labelize vegetation without distinction low/high")
-    parser.add_argument("-debug_texture", default=False, required=False, action="store_true", 
-                        help="Get all 9 vegetation clusters without distinction low/high")
-    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
+    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode",
+                        help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
     #segmentation arguments
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
@@ -571,7 +570,7 @@ def main():
         t_final = time.time()
 
         # Closing
-        if not args.debug_texture and (args.binary_closing or args.area_closing or args.remove_small_holes): 
+        if args.texture_mode == "yes" and (args.binary_closing or args.area_closing or args.remove_small_holes): 
             final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
                                                           image_filter = clean_task,
                                                           filter_parameters=args,
