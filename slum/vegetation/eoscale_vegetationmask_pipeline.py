@@ -1,20 +1,15 @@
 #!/usr/bin/python
-import sys
-from os.path import dirname, join, splitext
+from os.path import splitext
 import argparse
-import geopandas as gpd
-import fiona
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 import rasterio
-from rasterio import features
 import matplotlib.pyplot as plt
 import time
 from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
-import concurrent.futures
-from shapely.geometry import shape
+from skimage.morphology import area_closing, binary_closing, remove_small_holes, square
 import scipy
 from slum.tools import io_utils
 
@@ -23,8 +18,6 @@ import eoscale.eo_executors as eoexe
 
 # Cython module to compute stats
 import stats as ts
-
-import time
 
 NO_VEG_CODE = 0
 WATER_CODE = 3
@@ -36,21 +29,9 @@ HIGH_VEG_CODE = 3
 UNDEFINED_VEG = 10
 VEG_CODE = 20
 
+LOW_VEG_CLASS = VEG_CODE + LOW_VEG_CODE
+
 ########### MISCELLANEOUS FUNCTIONS ##############
-
-
-def get_transform(transform, beginx, beginy):
-    """Get transform of a part of an image knowing the transform of the full image."""
-    new_transform = rasterio.Affine(
-        transform[0],
-        transform[1],
-        transform[2] + beginy * transform[0],
-        transform[3],
-        transform[4],
-        transform[5] + beginx * transform[4]
-    )
-    return new_transform
-
 
 def apply_map(pred, map_centroids):
     return np.array(list(map(lambda n: map_centroids[n], pred)))
@@ -98,24 +79,6 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile["compress"] = "lzw"
     
     return profile
-
-
-
-
-def print_dataset_infos(dataset, prefix=""):
-    """Print information about rasterio dataset."""
-    print()
-    print(prefix, "Image name :", dataset.name)
-    print(prefix, "Image size :", dataset.width, "x", dataset.height)
-    print(prefix, "Image bands :", dataset.count)
-    print(prefix, "Image types :", dataset.dtypes)
-    print(prefix, "Image nodata :", dataset.nodatavals, dataset.nodata)
-    print(prefix, "Image crs :", dataset.crs)
-    print(prefix, "Image bounds :", dataset.bounds)
-    print()
-
-
-
         
 
 ########### Radiometric indices ##############
@@ -135,7 +98,6 @@ def compute_ndvi(input_buffers: list,
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
-
 
     return im_ndvi
 
@@ -183,7 +145,7 @@ def std_convoluted(im, N, filter_texture, min_value, max_value):
     res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
     # Normalization
-    res = res / (max_value - min_value)
+    res = 1000 * res / (max_value - min_value)
     
     return res, (time.time() - t0)
 
@@ -328,15 +290,14 @@ def apply_clustering(args, stats, nb_polys):
     display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
     
     ## Analysis texture
-    if not args.no_texture:
-        mean_texture = 1000 * stats[2*nb_polys:]
+    if args.texture_mode != "no":
+        mean_texture = stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
-        #texture_values = np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values])
         threshold_max = np.percentile(texture_values, args.filter_texture)
         print("threshold_texture_max", threshold_max)
 
         # Save histograms
-        if args.debug:
+        if args.texture_mode == "debug" or args.save_mode == "debug":
             values, bins, _ = plt.hist(texture_values, bins=75)
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
@@ -351,9 +312,6 @@ def apply_clustering(args, stats, nb_polys):
         # Clustering
         data_textures = np.transpose(texture_values)
         data_textures[data_textures > threshold_max] = threshold_max
-        
-        #texture_values[texture_values > threshold_max] = threshold_max
-        #data_texture = np.reshape(len(texture_values),1)
         print("K-Means on texture : "+str(len(data_textures))+" elements")
         kmeans_texture = KMeans(n_clusters=9,
                                 init="k-means++",
@@ -368,41 +326,36 @@ def apply_clustering(args, stats, nb_polys):
 
         # Attribute class
         map_centroid = []
-        nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-        if args.max_low_veg:
-            # Distinction veg class by threshold
-            args.nb_clusters_low_veg = int(list_clusters[list_clusters['mean_texture'] < args.max_low_veg].count())
-        if args.nb_clusters_low_veg >= 7:
-            nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
-        for t in range(kmeans_texture.n_clusters):
-            if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
-                map_centroid.append(LOW_VEG_CODE)
-            elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
-                map_centroid.append(HIGH_VEG_CODE)
-            else:
-                map_centroid.append(UNDEFINED_TEXTURE)
-        '''
-        if args.debug:
+        if args.texture_mode == "debug":
             # Get all clusters
-            map_centroid_debug = []
             list_clusters_by_texture = list_clusters_by_texture.tolist()
             for t in range(kmeans_texture.n_clusters):
-                map_centroid_debug.append(list_clusters_by_texture.index(t)) 
-            gdf["Texture_debug"] = 0
-            gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture_debug"] = apply_map(pred_texture, map_centroid_debug)
-            gdf.loc[gdf.pred_veg == UNDEFINED_VEG, "Texture_debug"] = 0
-            gdf["ClasseN_debug"] = gdf["pred_veg"] + gdf["Texture_debug"]
-
-        '''
-
+                map_centroid.append(list_clusters_by_texture.index(t))
+        else:
+            # Distinction veg class
+            nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
+            if args.max_low_veg:
+                # Distinction veg class by threshold
+                args.nb_clusters_low_veg = int(list_clusters[list_clusters['mean_texture'] < args.max_low_veg].count())
+            if args.nb_clusters_low_veg >= 7:
+                nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
+            for t in range(kmeans_texture.n_clusters):
+                if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
+                    map_centroid.append(LOW_VEG_CODE)
+                elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
+                    map_centroid.append(HIGH_VEG_CODE)
+                else:
+                    map_centroid.append(UNDEFINED_TEXTURE)
+                    
         figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
-        display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
-                         (9-nb_clusters_high_veg), figure_name)
-        
+        if args.texture_mode == "debug":
+            display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
+        else:
+            display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
+                         (9-nb_clusters_high_veg), figure_name)       
         
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
-        #gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture"] = apply_map(pred_texture, map_centroid)
     
         # Ex : 10 (undefined) + 3 (textured) -> 13
         clustering = clustering + textures
@@ -422,11 +375,33 @@ def finalize_task(input_buffers: list,
     ts_stats = ts.PyStats()
     
     final_image = ts_stats.finalize(input_buffers[0], clustering)
-        
+    
     return final_image
 
 
-
+def clean_task(input_buffers: list,
+                         input_profiles: list,
+                         args: dict) -> np.ndarray :
+    """ Post processing : apply closing on low veg 
+    """
+    im_classif = input_buffers[0][0]
+    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, 1, 0)
+    
+    if args.binary_closing:
+        low_veg_binary = binary_closing(
+            low_veg_binary, square(args.binary_closing)
+        ).astype(np.uint8)
+    elif args.area_closing:
+        low_veg_binary = area_closing(
+            low_veg_binary, args.area_closing, connectivity=2
+        ).astype(np.uint8)
+    elif args.remove_small_holes:
+        low_veg_binary = remove_small_holes(
+            low_veg_binary.astype(bool), args.remove_small_holes, connectivity=2
+        ).astype(np.uint8)        
+    
+    im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
+    return im_classif
 
 
                         
@@ -436,24 +411,27 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
     parser.add_argument("file_classif", help="Output classification filename")
-    parser.add_argument("-debug", default=False, required=False, action="store_true", 
-                        help="Debug mode")
-
+    
+    #primitives and texture arguments
     parser.add_argument("-red", "--red_band", type=int, nargs="?", default=1, help="Red band index")
     parser.add_argument("-green", "--green_band", type=int, nargs="?", default=2, help="Green band index")
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
+    parser.add_argument("-texture", default=None, required=False, action="store", dest="file_texture", help="Texture filename (computed if missing option)")
+    parser.add_argument("-texture_mode", "--texture_mode", choices=["yes", "no", "debug"], default="yes", required=False, action="store", 
+                        help="Labelize vegetation with (yes) or without (no) distinction low/high, or get all 9 vegetation clusters without distinction low/high (debug)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
-    parser.add_argument("-texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
-    parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
-                        help="Labelize vegetation without distinction low/high")
-    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
+    parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode",
+                        help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
+    #segmentation arguments
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     
+    #clustering arguments
     parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3, help="Nb of clusters considered as vegetation (1-9), default : 3")
     parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
@@ -462,7 +440,16 @@ def main():
     parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, default=3,
                         help="Nb of clusters considered as low vegetation (1-9), default : 3")
     parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
-
+    
+    #post-processing arguments
+    parser.add_argument("-binary_closing","--binary_closing", type=int, required=False, default=0, action="store",
+                        help="Size of square structuring element")
+    parser.add_argument("-area_closing","--area_closing", type=int, required=False, default=0, action="store",
+                        help="Area closing removes all dark structures")
+    parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, default=0, action="store",
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
+    
+    #multiprocessing arguments
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
     args = parser.parse_args()
@@ -503,22 +490,28 @@ def main():
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
         else:
-            ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
+            ndwi = [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
         
         t_NDWI = time.time()
         
+        # Recover extrema of the input image
         args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
-        texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
-                                                    image_filter = texture_task,
-                                                    filter_parameters=args,
-                                                    generate_output_profiles = single_float_profile,
-                                                    stable_margin= args.filter_texture,
-                                                    context_manager = eoscale_manager,
-                                                    multiproc_context= "fork",
-                                                    filter_desc= "Texture processing...")         
-        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-            eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
+        
+        #Compute texture
+        if args.file_texture == None:
+            texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
+                                                        image_filter = texture_task,
+                                                        filter_parameters=args,
+                                                        generate_output_profiles = single_float_profile,
+                                                        stable_margin= args.texture_rad,
+                                                        context_manager = eoscale_manager,
+                                                        multiproc_context= "fork",
+                                                        filter_desc= "Texture processing...")         
+            if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
+                eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
+        else:
+            texture = [ eoscale_manager.open_raster(raster_path =args.file_texture) ]
   
         t_texture = time.time()
 
@@ -533,7 +526,7 @@ def main():
                                                            multiproc_context= "fork",
                                                            filter_desc= "Segmentation processing...")
     
-        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+        if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
             eoscale_manager.write(key = future_seg[0], img_path = args.file_classif.replace(".tif","_slic.tif"))
           
         t_seg = time.time()  
@@ -559,8 +552,8 @@ def main():
 
         # Clustering 
         clusters = apply_clustering(args, stats[0], nb_polys)
-        t_cluster = time.time()
-    
+        t_cluster = time.time()       
+        
         # Finalize mask
         final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
@@ -570,10 +563,27 @@ def main():
                                                       context_manager = eoscale_manager,
                                                       multiproc_context= "fork",
                                                       filter_desc= "Finalize processing (Cython)...")
-
-        t_before_write = time.time()
-        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
+        
+        if args.save_mode == "debug":
+            eoscale_manager.write(key = final_seg[0], img_path = args.file_classif.replace(".tif","_before_clean.tif"))
+        
         t_final = time.time()
+
+        # Closing
+        if args.texture_mode == "yes" and (args.binary_closing or args.area_closing or args.remove_small_holes): 
+            final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
+                                                          image_filter = clean_task,
+                                                          filter_parameters=args,
+                                                          generate_output_profiles = single_uint8_profile, 
+                                                          stable_margin= max(2*args.binary_closing, args.area_closing, args.remove_small_holes),
+                                                          context_manager = eoscale_manager,
+                                                          multiproc_context= "fork",
+                                                          filter_desc= "Post-processing...")
+        t_closing = time.time()
+        
+        # Write output mask
+        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
+        t_write = time.time()
         
         print(f">>> Total time = {t_final - t0:.2f}")
         print(f">>> \tNDVI = {t_NDVI - t0:.2f}")
@@ -582,8 +592,9 @@ def main():
         print(f">>> \tSegmentation = {t_seg - t_texture:.2f}")
         print(f">>> \tStats = {t_stats - t_texture:.2f}")
         print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
-        print(f">>> \tFinalize Cython= {t_final - t_cluster:.2f}")
-        print(f">>> \tWrite final image= {t_final - t_before_write:.2f}")
+        print(f">>> \tFinalize Cython = {t_final - t_cluster:.2f}")
+        print(f">>> \tPost-processing (clean) = {t_closing - t_final:.2f}")
+        print(f">>> \tWrite final image = {t_write - t_closing:.2f}")
         print(f">>> **********************************")
         
         
