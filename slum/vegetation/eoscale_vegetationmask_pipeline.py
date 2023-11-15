@@ -297,7 +297,7 @@ def apply_clustering(args, stats, nb_polys):
         print("threshold_texture_max", threshold_max)
 
         # Save histograms
-        if args.debug:
+        if args.debug or args.save_mode == "debug":
             values, bins, _ = plt.hist(texture_values, bins=75)
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
@@ -429,7 +429,7 @@ def main():
     parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
                         help="Labelize vegetation without distinction low/high")
-    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
+    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
     #segmentation arguments
     parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
@@ -513,7 +513,7 @@ def main():
                                                         context_manager = eoscale_manager,
                                                         multiproc_context= "fork",
                                                         filter_desc= "Texture processing...")         
-            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+            if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
                 eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
         else:
             texture = [ eoscale_manager.open_raster(raster_path =args.file_texture) ]
@@ -531,7 +531,7 @@ def main():
                                                            multiproc_context= "fork",
                                                            filter_desc= "Segmentation processing...")
     
-        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+        if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
             eoscale_manager.write(key = future_seg[0], img_path = args.file_classif.replace(".tif","_slic.tif"))
           
         t_seg = time.time()  
@@ -568,6 +568,10 @@ def main():
                                                       context_manager = eoscale_manager,
                                                       multiproc_context= "fork",
                                                       filter_desc= "Finalize processing (Cython)...")
+        
+        if args.save_mode == "debug":
+            eoscale_manager.write(key = final_seg[0], img_path = args.file_classif.replace(".tif","_before_clean.tif"))
+        
         t_final = time.time()
 
         # Closing
@@ -593,9 +597,9 @@ def main():
         print(f">>> \tSegmentation = {t_seg - t_texture:.2f}")
         print(f">>> \tStats = {t_stats - t_texture:.2f}")
         print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
-        print(f">>> \tFinalize Cython= {t_final - t_cluster:.2f}")
-        print(f">>> \tPost-processing (clean)= {t_closing - t_final:.2f}")
-        print(f">>> \tWrite final image= {t_write - t_closing:.2f}")
+        print(f">>> \tFinalize Cython = {t_final - t_cluster:.2f}")
+        print(f">>> \tPost-processing (clean) = {t_closing - t_final:.2f}")
+        print(f">>> \tWrite final image = {t_write - t_closing:.2f}")
         print(f">>> **********************************")
         
         
