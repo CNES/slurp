@@ -1,30 +1,15 @@
 #!/usr/bin/python
-import sys
-from os.path import dirname, join, splitext
+from os.path import splitext
 import argparse
-import geopandas as gpd
-import fiona
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 import rasterio
-from rasterio import features
 import matplotlib.pyplot as plt
 import time
 from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
-from skimage.morphology import (
-    area_closing,
-    area_opening,
-    binary_closing,
-    binary_opening,
-    diameter_closing,
-    remove_small_holes,
-    square,
-)
-
-import concurrent.futures
-from shapely.geometry import shape
+from skimage.morphology import area_closing, binary_closing, remove_small_holes, square
 import scipy
 from slum.tools import io_utils
 
@@ -33,8 +18,6 @@ import eoscale.eo_executors as eoexe
 
 # Cython module to compute stats
 import stats as ts
-
-import time
 
 NO_VEG_CODE = 0
 WATER_CODE = 3
@@ -49,20 +32,6 @@ VEG_CODE = 20
 LOW_VEG_CLASS = VEG_CODE + LOW_VEG_CODE
 
 ########### MISCELLANEOUS FUNCTIONS ##############
-
-
-def get_transform(transform, beginx, beginy):
-    """Get transform of a part of an image knowing the transform of the full image."""
-    new_transform = rasterio.Affine(
-        transform[0],
-        transform[1],
-        transform[2] + beginy * transform[0],
-        transform[3],
-        transform[4],
-        transform[5] + beginx * transform[4]
-    )
-    return new_transform
-
 
 def apply_map(pred, map_centroids):
     return np.array(list(map(lambda n: map_centroids[n], pred)))
@@ -110,24 +79,6 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile["compress"] = "lzw"
     
     return profile
-
-
-
-
-def print_dataset_infos(dataset, prefix=""):
-    """Print information about rasterio dataset."""
-    print()
-    print(prefix, "Image name :", dataset.name)
-    print(prefix, "Image size :", dataset.width, "x", dataset.height)
-    print(prefix, "Image bands :", dataset.count)
-    print(prefix, "Image types :", dataset.dtypes)
-    print(prefix, "Image nodata :", dataset.nodatavals, dataset.nodata)
-    print(prefix, "Image crs :", dataset.crs)
-    print(prefix, "Image bounds :", dataset.bounds)
-    print()
-
-
-
         
 
 ########### Radiometric indices ##############
@@ -147,7 +98,6 @@ def compute_ndvi(input_buffers: list,
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
-
 
     return im_ndvi
 
@@ -343,7 +293,6 @@ def apply_clustering(args, stats, nb_polys):
     if not args.no_texture:
         mean_texture = 1000 * stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
-        #texture_values = np.nan_to_num([gdf[gdf.pred_veg >= UNDEFINED_VEG].mean_texture.values])
         threshold_max = np.percentile(texture_values, args.filter_texture)
         print("threshold_texture_max", threshold_max)
 
@@ -363,9 +312,6 @@ def apply_clustering(args, stats, nb_polys):
         # Clustering
         data_textures = np.transpose(texture_values)
         data_textures[data_textures > threshold_max] = threshold_max
-        
-        #texture_values[texture_values > threshold_max] = threshold_max
-        #data_texture = np.reshape(len(texture_values),1)
         print("K-Means on texture : "+str(len(data_textures))+" elements")
         kmeans_texture = KMeans(n_clusters=9,
                                 init="k-means++",
@@ -414,7 +360,6 @@ def apply_clustering(args, stats, nb_polys):
         
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
-        #gdf.loc[gdf.pred_veg >= UNDEFINED_VEG, "Texture"] = apply_map(pred_texture, map_centroid)
     
         # Ex : 10 (undefined) + 3 (textured) -> 13
         clustering = clustering + textures
@@ -553,8 +498,11 @@ def main():
         
         t_NDWI = time.time()
         
+        # Recover extrema of the input image
         args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
+        
+        #Compute texture
         texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
                                                     image_filter = texture_task,
                                                     filter_parameters=args,
@@ -629,6 +577,7 @@ def main():
                                                       filter_desc= "Post-processing...")
         t_closing = time.time()
         
+        # Write output mask
         eoscale_manager.write(key = clean_seg[0], img_path = args.file_classif)
         t_write = time.time()
         
