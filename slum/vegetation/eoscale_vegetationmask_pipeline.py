@@ -145,7 +145,7 @@ def std_convoluted(im, N, filter_texture, min_value, max_value):
     res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
     # Normalization
-    res = res / (max_value - min_value)
+    res = 1000 * res / (max_value - min_value)
     
     return res, (time.time() - t0)
 
@@ -291,7 +291,7 @@ def apply_clustering(args, stats, nb_polys):
     
     ## Analysis texture
     if not args.no_texture:
-        mean_texture = 1000 * stats[2*nb_polys:]
+        mean_texture = stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
         threshold_max = np.percentile(texture_values, args.filter_texture)
         print("threshold_texture_max", threshold_max)
@@ -424,8 +424,9 @@ def main():
     parser.add_argument("-nir", "--nir_band", type=int, nargs="?", default=4, help="Near Infra-Red band index")
     parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
     parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
+    parser.add_argument("-texture", default=None, required=False, action="store", dest="file_texture", help="Texture filename (computed if missing option)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
-    parser.add_argument("-texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
     parser.add_argument("-no_texture", default=False, required=False, action="store_true", 
                         help="Labelize vegetation without distinction low/high")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode", help="Save all files (debug), only primitives (prim), only shp files (aux), primitives and shp files (all) or only output mask (none)")
@@ -494,7 +495,7 @@ def main():
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
                 eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
         else:
-            ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
+            ndwi = [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
         
         t_NDWI = time.time()
         
@@ -503,16 +504,19 @@ def main():
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
         
         #Compute texture
-        texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
-                                                    image_filter = texture_task,
-                                                    filter_parameters=args,
-                                                    generate_output_profiles = single_float_profile,
-                                                    stable_margin= args.filter_texture,
-                                                    context_manager = eoscale_manager,
-                                                    multiproc_context= "fork",
-                                                    filter_desc= "Texture processing...")         
-        if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-            eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
+        if args.file_texture == None:
+            texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
+                                                        image_filter = texture_task,
+                                                        filter_parameters=args,
+                                                        generate_output_profiles = single_float_profile,
+                                                        stable_margin= args.texture_rad,
+                                                        context_manager = eoscale_manager,
+                                                        multiproc_context= "fork",
+                                                        filter_desc= "Texture processing...")         
+            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+                eoscale_manager.write(key = texture[0], img_path = args.file_classif.replace(".tif","_texture.tif"))
+        else:
+            texture = [ eoscale_manager.open_raster(raster_path =args.file_texture) ]
   
         t_texture = time.time()
 
