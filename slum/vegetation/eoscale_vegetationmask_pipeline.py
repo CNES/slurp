@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 import time
 from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
-from skimage.morphology import area_closing, binary_closing, remove_small_holes, square
+from skimage.morphology import binary_dilation, remove_small_objects, square, disk, remove_small_holes
 import scipy
 from slum.tools import io_utils
+from math import sqrt, ceil
 
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
@@ -30,6 +31,7 @@ UNDEFINED_VEG = 10
 VEG_CODE = 20
 
 LOW_VEG_CLASS = VEG_CODE + LOW_VEG_CODE
+UNDEFINED_TEXTURE_CLASS = VEG_CODE + UNDEFINED_TEXTURE
 
 ########### MISCELLANEOUS FUNCTIONS ##############
 
@@ -384,23 +386,34 @@ def clean_task(input_buffers: list,
                          args: dict) -> np.ndarray :
     """ Post processing : apply closing on low veg 
     """
-    im_classif = input_buffers[0][0]
-    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, 1, 0)
+    im_classif = input_buffers[0][0]  
     
-    if args.binary_closing:
-        low_veg_binary = binary_closing(
-            low_veg_binary, square(args.binary_closing)
+    if args.remove_small_objects:
+        high_veg_binary = np.where(im_classif > LOW_VEG_CLASS, True, False)
+        high_veg_binary = remove_small_holes(
+            high_veg_binary.astype(bool), args.remove_small_objects, connectivity=2
+        ).astype(np.uint8) 
+        im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, high_veg_binary == 1)] = UNDEFINED_TEXTURE_CLASS
+        """
+        low_veg_binary = remove_small_objects(
+            low_veg_binary, args.remove_small_objects, connectivity=2
+        ).astype(np.uint8) 
+        im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, low_veg_binary == 0)] = UNDEFINED_TEXTURE_CLASS
+        """
+    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, True, False)  
+        
+    if args.binary_dilation:
+        low_veg_binary = binary_dilation(
+            low_veg_binary, disk(args.binary_dilation)
         ).astype(np.uint8)
-    elif args.area_closing:
-        low_veg_binary = area_closing(
-            low_veg_binary, args.area_closing, connectivity=2
-        ).astype(np.uint8)
-    elif args.remove_small_holes:
+        im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
+        
+    if args.remove_small_holes:
         low_veg_binary = remove_small_holes(
             low_veg_binary.astype(bool), args.remove_small_holes, connectivity=2
-        ).astype(np.uint8)        
+        ).astype(np.uint8) 
+        im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
     
-    im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
     return im_classif
 
 
@@ -442,10 +455,10 @@ def main():
     parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
     
     #post-processing arguments
-    parser.add_argument("-binary_closing","--binary_closing", type=int, required=False, default=0, action="store",
+    parser.add_argument("-binary_dilation","--binary_dilation", type=int, required=False, default=0, action="store",
                         help="Size of square structuring element")
-    parser.add_argument("-area_closing","--area_closing", type=int, required=False, default=0, action="store",
-                        help="Area closing removes all dark structures")
+    parser.add_argument("-remove_small_objects","--remove_small_objects", type=int, required=False, default=0, action="store",
+                        help="The maximum area, in pixels, of a contiguous object that will be removed")
     parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, default=0, action="store",
                         help="The maximum area, in pixels, of a contiguous hole that will be filled")
     
@@ -570,12 +583,12 @@ def main():
         t_final = time.time()
 
         # Closing
-        if args.texture_mode == "yes" and (args.binary_closing or args.area_closing or args.remove_small_holes): 
+        if args.texture_mode == "yes" and (args.binary_dilation or args.remove_small_objects): 
             final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
                                                           image_filter = clean_task,
                                                           filter_parameters=args,
                                                           generate_output_profiles = single_uint8_profile, 
-                                                          stable_margin= max(2*args.binary_closing, args.area_closing, args.remove_small_holes),
+                                                          stable_margin= max(2*args.binary_dilation, ceil(sqrt(args.remove_small_objects))),
                                                           context_manager = eoscale_manager,
                                                           multiproc_context= "fork",
                                                           filter_desc= "Post-processing...")
