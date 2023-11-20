@@ -124,7 +124,15 @@ def single_float_profile(input_profiles: list, map_params):
     profile["compress"] = "lzw"
     
     return profile
-     
+    
+def multiple2_float_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=2
+    profile['dtype']=np.float32
+    profile["compress"] = "lzw"
+    
+    return profile    
+
     
 def print_dataset_infos(dataset, prefix=""):
     """Print information about rasterio dataset."""
@@ -418,13 +426,12 @@ def compute_ndwi(input_buffers: list,
 
     np.seterr(divide="ignore", invalid="ignore")
 
-    im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.nir_band-1])) / (
-        np.float32(input_buffers[0][params.green_band-1]) + np.float32(input_buffers[0][params.nir_band-1]))
+    im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.nir-1])) / (
+        np.float32(input_buffers[0][params.green-1]) + np.float32(input_buffers[0][params.nir-1]))
     im_ndwi[np.logical_or(im_ndwi < -1000.0, im_ndwi > 1000.0)] = np.nan
-    np.nan_to_num(im_ndwi, copy=False, nan=32767)
-    im_ndwi = np.int16(im_ndwi)
 
     return im_ndwi
+
 
 def compute_ndvi(input_buffers: list, 
                   input_profiles: list, 
@@ -436,14 +443,39 @@ def compute_ndvi(input_buffers: list,
 
     np.seterr(divide="ignore", invalid="ignore")
 
-    im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.red_band-1])) / (
-        np.float32(input_buffers[0][params.nir_band-1]) + np.float32(input_buffers[0][params.red_band-1]))
+    im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.red-1])) / (
+        np.float32(input_buffers[0][params.nir-1]) + np.float32(input_buffers[0][params.red-1]))
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
-    np.nan_to_num(im_ndvi, copy=False, nan=32767)
-    im_ndvi = np.int16(im_ndvi)
-
+    
     return im_ndvi
 
+def ndxi_valid_mask(inputBuffer: list, 
+            input_profiles: list, 
+            args: dict) -> list:
+
+    valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
+    #print(valid_phr.shape)
+    ndxi=inputBuffer[1][0].copy()
+    #print(ndxi.shape)
+    ndxi[np.logical_not(valid_phr)] = np.nan
+    valid_ndxi = np.isfinite(ndxi)
+    np.nan_to_num(ndxi, copy=False, nan=32767)
+    ndxi = np.int16(ndxi)
+
+    
+    return [ndxi, valid_ndxi]
+
+def compute_valid_stack(inputBuffer: list, 
+            input_profiles: list, 
+            args: dict) -> list:
+    #inputBuffer = [im_phr , im_ndvi[1], im_ndwi[1], mask_nocloud]
+    # Valid_phr (boolean numpy array, True = valid data, False = no data)
+    valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
+    valid_stack = np.logical_and.reduce((valid_phr, inputBuffer[1], inputBuffer[2]))
+    valid_stack_cloud = np.logical_and(valid_stack, inputBuffer[3])
+    
+    return valid_stack_cloud
+    
 
 def compute_pekel_mask (inputBuffer: list, 
             input_profiles: list, 
@@ -482,7 +514,7 @@ def compute_hand_mask(inputBuffer: list,
     else:
         np.logical_not(mask_hand, out=mask_hand)
     
-    return mask_hand, valid_ref
+    return [mask_hand, valid_ref]
 
 
 def compute_filter(file_filter, desc_filter):
@@ -504,7 +536,7 @@ def post_process(inputBuffer: list,
             input_profiles: list, 
             args: dict) -> list :
     """Compute some filters on the prediction image."""        
-    # Inputs = [im_predict,mask_hand, file filters*x]
+    # Inputs = [im_predict,mask_hand, valid_stack, + file filters*x]
     # Filter with Hand
     if args.hand_filter:
         if not args.hand_strict:
@@ -524,7 +556,32 @@ def post_process(inputBuffer: list,
     else:
         im_classif = im_predict
         
-    return im_classif
+    # Closing
+    if args.binary_closing:
+        im_classif = binary_closing(
+            im_classif, square(args.binary_closing)
+        ).astype(np.uint8)
+    elif args.diameter_closing:
+        # XR: TODO très long voir bloqué
+        im_classif = diameter_closing(
+            im_classif, args.diameter_closing, connectivity=2
+        )
+    elif args.area_closing:
+        im_classif = area_closing(im_classif, args.area_closing, connectivity=2)
+    elif args.remove_small_holes:
+        im_classif = remove_small_holes(
+            im_classif.astype(bool), args.remove_small_holes, connectivity=2
+        ).astype(np.uint8)
+        
+    # Add nodata in im_classif 
+    im_classif[np.logical_not(inputBuffer[2])] = 255
+    im_classif[im_classif == 1] = args.value_classif
+    
+    im_predict[np.logical_not(inputBuffer[2])] = 255
+    im_predict[im_predict == 1] = args.value_classif
+
+  
+    return [im_predict, im_classif]
 
 def get_crs_transform_rpc(file):
     """Get CRS, Transform and RPC of a geotiff file."""
@@ -706,7 +763,8 @@ def print_feature_importance(classifier, feature_names):
         )
 
 def concatenate_samples(output_scalars, chunk_output_scalars, tile):
-    output_scalars.append(chunk_output_scalars)
+    output_scalars[0].append(chunk_output_scalars[0])
+    output_scalars[1].append(chunk_output_scalars[1])
     
         
 def build_samples(inputBuffer: list, 
@@ -811,7 +869,7 @@ def build_samples(inputBuffer: list,
     y_samples = mask_pekel[rows, cols]
     shm.close()
 
-    return x_samples, y_samples
+    return [x_samples, y_samples]
 
 
 def train_classifier(classifier, x_samples, y_samples):
@@ -863,165 +921,6 @@ def RF_prediction(inputBuffer: list,
     return prediction
     
 
-def classify(args):
-    """Compute water mask of file_phr with help of Pekel and Hand images."""    
-    t0 = time.time()
-
-    # Build stack with all layers
-    shm_key, shm_shape, shm_dtype, names_stack = build_stack(args) 
-    
-    time_stack = time.time()
-    
-    if args.simple_ndwi_threshold == False:
-        # Default mode : watermask will be predicted thanks to samples picked up in Pekel database
-        # Build samples from stack and control layers (pekel, hand)
-        x_samples, y_samples, [mask_pekel, mask_pekel0], mask_hand = build_samples(
-            shm_key, shm_shape, shm_dtype, args
-        )
-    
-    # We check again because during sample selection, it can happen that Pekel does not know 
-    # enough waterbodies(or NDWI thresholded image)
-    # --> in such a case, we force to treshold NDWI image to compute watermask
-    if args.simple_ndwi_threshold:
-        # Compute a single mask on NDWI
-        print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
-        shm = shared_memory.SharedMemory(name=shm_key)
-        shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
-        bands_phr = 4 if args.use_rgb_layers else 1
-        index_ndwi = bands_phr + 1
-        im_ndwi = np.copy(shmNpArray_stack[index_ndwi])
-        im_predict = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
-        # Force no cleaning with Pekel
-        args.no_pekel_filter = True
-        time_random_forest = time.time()
-        time_predict_user = 0
-        time_predict = 0
-        time_samples = 0 
-    else: 
-
-       
-        time_samples = time.time()
-
-        # Create and train classifier from samples
-        classifier = RandomForestClassifier(
-            n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
-        )
-        print("RandomForest parameters:\n", classifier.get_params(), "\n")
-        train_classifier(classifier, x_samples, y_samples)
-        print("Dump classifier to model_rf.dump")
-        joblib.dump(classifier, "model_rf.dump")
-        # show_rftree(classifier.estimators_[5], names_stack)
-        # show_rftree(classifier.estimators_[10], names_stack)
-        # show_rftree(classifier.estimators_[15], names_stack)
-        print_feature_importance(classifier, names_stack)
-        gc.collect()
-
-        #Memory used
-        base = 210  # poids imports
-        suivi_mem = base + (x_samples.nbytes + y_samples.nbytes + mask_pekel.nbytes + mask_hand.nbytes) / (1024*1024)
-        if not args.no_pekel_filter:
-            suivi_mem += mask_pekel0.nbytes / (1024*1024)
-
-        # Predict and filter with Hand
-        im_predict, time_predict_user, time_predict = predict(args, classifier, shm_key, shm_shape, shm_dtype, suivi_mem)
-
-        time_random_forest = time.time()
-    
-    # Filter with Hand
-    if args.hand_filter:
-        if not args.hand_strict:
-            im_predict[np.logical_not(mask_hand)] = 0
-        else:
-            print("\nWARNING: hand_filter and hand_strict are incompatible.")
-    
-    # Filter for final classification
-    if len(args.file_filters) > 0 or not args.no_pekel_filter:
-        mask = np.zeros(shm_shape[1:], dtype=bool)
-        if not args.no_pekel_filter:  # filter with pekel0
-            mask = np.logical_or(mask, mask_pekel0)
-        for i in range(len(args.file_filters)):  # Other classification files
-            filter_mask = compute_filter(args.file_filters[i], "FILTER " + str(i))[0]
-            mask = np.logical_or(mask, filter_mask)                       
-        im_classif = mask_filter(im_predict, mask)
-    else:
-        im_classif = im_predict
-
-    # Closing
-    start_time = time.time()
-    if args.binary_closing:
-        im_classif = binary_closing(
-            im_classif, square(args.binary_closing)
-        ).astype(np.uint8)
-    elif args.diameter_closing:
-        # XR: TODO très long voir bloqué
-        im_classif = diameter_closing(
-            im_classif, args.diameter_closing, connectivity=2
-        )
-    elif args.area_closing:
-        im_classif = area_closing(im_classif, args.area_closing, connectivity=2)
-    elif args.remove_small_holes:
-        im_classif = remove_small_holes(
-            im_classif.astype(bool), args.remove_small_holes, connectivity=2
-        ).astype(np.uint8)
-    print("Closing time :", time.time() - start_time)
-    
-    # Add nodata to predict and classif and save (must be done after mask_filter)
-    shm = shared_memory.SharedMemory(name=shm_key)
-    shmNpArray_stack = np.ndarray(shm_shape, dtype=shm_dtype,buffer=shm.buf)
-    valid_stack = shmNpArray_stack[-1, :, :]
-    
-    im_predict[np.logical_not(valid_stack)] = 255
-    im_predict[im_predict == 1] = args.value_classif
-
-    im_classif[np.logical_not(valid_stack)] = 255
-    im_classif[im_classif == 1] = args.value_classif
-    
-    shm.close()
-    shm.unlink()
-
-    crs, transform, rpc = get_crs_transform_rpc(args.file_phr)
-    save_image(
-        im_predict,
-        join(dirname(args.file_classif), "predict.tif"),
-        crs,
-        transform,
-        255,
-        rpc,
-        tags=args.__dict__,
-    )
-    
-    save_image(
-        im_classif,
-        args.file_classif,
-        crs,
-        transform,
-        255,
-        rpc,
-        tags=args.__dict__,
-    )
-    
-    # Show output images
-    if args.display:
-        show_images(
-            im_predict,
-            "Predict image",
-            im_classif,
-            "Classif image",
-            vmin=0,
-            vmax=1,
-        )
-        show_images(
-            mask_pekel,
-            "Pekel mask",
-            im_classif,
-            "Classif image",
-            vmin=0,
-            vmax=1,
-        )
-
-    end_time = time.time()
-    
-
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
     return time.strftime("%H:%M:%S", full_time)
@@ -1041,7 +940,7 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
 
     # Input files
-    group1.add_argument("file_phr", help="PHR filename")
+    group1.add_argument("-file_phr", help="PHR filename")
 
     group1.add_argument(
         "-pekel",
@@ -1140,6 +1039,8 @@ def getarguments():
 
     # Options
     group2.add_argument("-red", default=1, help="Red band index")
+    group2.add_argument("-nir", default=4, help="NIR band index")
+    group2.add_argument("-green", default=2, help="green band index")
 
     group2.add_argument(
         "-use_rgb_layers",
@@ -1371,7 +1272,7 @@ def getarguments():
     )
 
     # Output
-    group5.add_argument("file_classif", help="Output classification filename")
+    group5.add_argument("-file_classif", help="Output classification filename")
 
     group5.add_argument(
         "-value_classif",
@@ -1430,7 +1331,7 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             ds_phr = rio.open(args.file_phr)
             print_dataset_infos(ds_phr, "PHR")
-            nodata_phr = ds_phr.nodata
+            args.nodata_phr = ds_phr.nodata
            
             # Save crs, transform and rpc in args
             args.shape = ds_phr.shape
@@ -1458,6 +1359,16 @@ def main():
                     eoscale_manager.write(key = im_ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
             else:
                 im_ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
+                
+            #compute validity mask for ndvi
+            valid_ndvi= eoexe.n_images_to_m_images_filter(inputs = [im_phr, im_ndvi[0]],
+                                                               image_filter = ndxi_valid_mask,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = multiple2_float_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDVI valid mask processing...")
 
                 
             ### Compute NDWI        
@@ -1476,15 +1387,47 @@ def main():
                 im_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
             
 
+            #Compute validity mask for ndwi
+            valid_ndwi= eoexe.n_images_to_m_images_filter(inputs = [im_phr, im_ndwi[0]],
+                                                               image_filter = ndxi_valid_mask,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = multiple2_float_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDWI valid mask processing...")
+            
+            
+            # Get cloud mask if any
+            if args.file_cloud_gml:
+                mask_nocloud = np.logical_not(
+                    cloud_from_gml(args.file_cloud_gml, args.file_phr)   #cloud mask impossible à scaled sauf  ??? si dans fonction build _samples ???
+                )
+            else:
+                mask_nocloud = np.ones(args.shape[:], dtype=np.uint8)  # args.shape= ds_phr.shape
 
-            # Global mask construction
+            #save cloud mask, to open it in eoscale manager
+            save_image(mask_nocloud,
+            join(dirname(args.file_classif.replace(".tif", "_nocloud.tif"))),
+            args.crs,
+            args.transform,
+            None,
+            args.rpc,
+            tags=args.__dict__,
+            )
+            
+            mask_nocloud = eoscale_manager.open_raster(raster_path = join(dirname(args.file_classif.replace(".tif", "_nocloud.tif"))))
+            
 
-            valid_ndvi=eoscale_manager.get_array(im_ndvi[1])
-            valid_ndwi= eoscale_manager.get_array(im_ndwi[1])
-            # Valid_phr (boolean numpy array, True = valid data, False = no data)
-            valid_phr = np.logical_and.reduce(im_phr != nodata_phr, axis=0)
-            valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
-            del valid_ndvi, valid_ndwi
+            # Global validity mask construction
+            valid_stack = eoexe.n_images_to_m_images_filter(inputs = [im_phr , valid_ndwi[1], valid_ndwi[1], mask_nocloud],
+                                                           image_filter = compute_valid_stack,   
+                                                           filter_parameters=args,
+                                                           generate_output_profiles = single_float_profile,
+                                                           stable_margin= 0,
+                                                           context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
+                                                           filter_desc= " Valid stack processing...")            
             
             time_stack = time.time()
             
@@ -1578,31 +1521,7 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Hand valid mask processing...")   
-                
-                
-            # Get cloud mask if any
             
-            mask_nocloud = eoexe.n_images_to_m_images_filter(inputs = [im_phr , args.file_cloud_gml] ,
-                                                           image_filter = compute_cloud_mask,            # à écrire
-                                                           filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
-                                                           stable_margin= 0,
-                                                           context_manager = eoscale_manager,
-                                                           multiproc_context= "fork",
-                                                           filter_desc= "Hand valid mask processing...")   
-            
-            
-            ###
-            
-            if args.file_cloud_gml:
-                mask_nocloud = np.logical_not(
-                    cloud_from_gml(args.file_cloud_gml, args.file_phr)   #cloud mask impossible to scaled sauf  ??? si dans fonction build _samples ???
-                )
-            else:
-                mask_nocloud = np.ones(args.shape[1:], dtype=np.uint8)  # args.shape= ds_phr.shape
-
-            valid_samples = np.logical_and(valid_stack, mask_nocloud)    # Have to compute this logical localy 
-            ####
             
             
             ### Prepare samples   
@@ -1611,22 +1530,23 @@ def main():
                 # --> we force NDWI threshold
                 args.simple_ndwi_threshold = True 
                 print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
-                im_predict = compute_mask(eoscale_manager.get_array(im_ndwi[0]), 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
+                im_predict = compute_mask(eoscale_manager.get_array(valid_ndwi[0]), 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
                 # Force no cleaning with Pekel
                 args.no_pekel_filter = True
                 time_random_forest = time.time() 
                            
             else:
+                valid_samples= eoscale_manager.get_array(valid_stack[0])
                 nb_valid_pixels = np.count_nonzero(valid_samples)
                 args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_samples))
                 args.nb_valid_other_pixels = nb_valid_pixels - nb_valid_water_pixels
                 
-                samples = eoexe.n_images_to_m_scalar(inputs = [mask_pekel[0],valid_samples, mask_hand, im_phr[0], im_ndvi[0], im_ndwi[0]],   # !!! /!\ valid_samples
+                samples = eoexe.n_images_to_m_scalar(inputs = [mask_pekel[0],valid_stack[0], mask_hand, im_phr[0], valid_ndvi[0], valid_ndwi[0]],   
                                                            image_filter = build_samples,   
                                                            filter_parameters = params_stats,
                                                            nb_output_scalars = nb_polys,
                                                            context_manager = eoscale_manager,
-                                                           concatenate_filter = concatenate_samples,              # A écrire
+                                                           concatenate_filter = concatenate_samples, 
                                                            multiproc_context= "fork",
                                                            filter_desc= "Samples building processing...")       # samples=[x_samples, y_samples]
             
@@ -1643,14 +1563,13 @@ def main():
             train_classifier(classifier, eoscale_manager.get_array(raster_path=samples[0]),eoscale_manager.get_array(raster_path=samples[1]))
             print("Dump classifier to model_rf.dump")
             joblib.dump(classifier, "model_rf.dump")
-            # show_rftree(classifier.estimators_[5], names_stack)
             print_feature_importance(classifier, names_stack)
             gc.collect()
             
      
             
             ######### Predict  ################
-            im_predict= eoexe.n_images_to_m_images_filter(inputs = [im_phr[0], im_ndvi[0], im_ndwi[0]],       # input = PHR image + ndvi + ndwi (+ file layers ?)
+            im_predict= eoexe.n_images_to_m_images_filter(inputs = [im_phr[0], valid_ndvi[0], valid_ndwi[0]],       # input = PHR image + ndvi + ndwi (+ file layers ?)
                                                            image_filter = RF_prediction,
                                                            filter_parameters= {"classifier": classifier},
                                                            generate_output_profiles = single_float_profile,
@@ -1664,16 +1583,43 @@ def main():
             
             file_filters= [eoscale_manager.open_raster(raster_path =args.file_filters[i]) for i in range(len(args.file_filters))]
             
-            im_classif = eoexe.n_images_to_m_images_filter(inputs = [im_predict[0],mask_hand[0]] + file_filters,     
+            im_classif = eoexe.n_images_to_m_images_filter(inputs = [im_predict[0],mask_hand[0],valid_stack[0]] + file_filters,     
                                                            image_filter = post_process,
                                                            filter_parameters= args,
                                                            generate_output_profiles = single_float_profile,
-                                                           stable_margin= 0,
+                                                           stable_margin= 3,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Post processing...")    
 
+
+            # Save predict and classif image
+            final_predict = eoscale_manager.get_array(raster_path=im_classif[0])
+            final_classif = eoscale_manager.get_array(raster_path=im_classif[1])
+            
+            save_image(
+                final_predict,
+                join(dirname(args.file_classif), "_predict.tif"),
+                args.crs,
+                args.transform,
+                255,
+                args.rpc,
+                tags=args.__dict__,
+            )
+
+            save_image(
+                final_classif,
+                args.file_classif,
+                args.crs,
+                args.transform,
+                255,
+                args.rpc,
+                tags=args.__dict__,
+            )
+
+        
             end_time = time.time()
+            
         
             print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
             print("Total time (user)       :\t"+convert_time(end_time-t0))
