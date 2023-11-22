@@ -146,8 +146,10 @@ def getarguments():
                        help='Prediction image')
     parser.add_argument('-out', required=True, action='store', dest='out',
                        help='Output filename')
-    parser.add_argument('-value_classif', required=False, action='store', dest='value_classif', type=int, default=1,
-                       help='Ground truth classification value (default is 1)')
+    parser.add_argument('-vcr', required=False, action='store', dest='value_classif_ref', type=int, nargs='+', default=[1],
+                       help='Ground truth classification values (default is 1)')
+    parser.add_argument('-vcp', required=False, action='store', dest='value_classif', type=int, nargs='+', default=[1],
+                       help='Image to validate classification values (default is 1)')
     parser.add_argument('-startx', required=False, action='store', dest='startx', type=int,
                        help='ROI start x position')
     parser.add_argument('-starty', required=False, action='store', dest='starty', type=int,
@@ -185,10 +187,17 @@ def main():
         im_ref = ds_ref.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_ref.read(1)
         ds_ref.close()
         del ds_ref
-
-        if args.value_classif != 1:
-            im_ref[im_ref != args.value_classif] = 0
-            im_ref[im_ref == args.value_classif] = 1
+        
+        classif_ref = args.value_classif_ref[0]
+        if classif_ref == 0:
+            im_ref = im_ref + 1
+            classif_ref += 1
+            args.value_classif_ref = np.array(args.value_classif_ref) + 1
+        if len(args.value_classif_ref) > 1:
+            for value_ref in args.value_classif_ref[1:]:
+                im_ref[im_ref == value_ref] =  classif_ref
+        im_ref[im_ref != classif_ref] =  0
+        im_ref[im_ref == classif_ref] = 1            
 
         # Get predicted mask
         ds_predict = rio.open(args.im)
@@ -197,9 +206,18 @@ def main():
         rpc = ds_predict.tags(ns="RPC")
         im_predict = ds_predict.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_predict.read(1)
         ds_predict.close()
-        del ds_predict 
-
-        im_predict[im_predict > 1] = 0  # for urbanmask_seg
+        del ds_predict
+        
+        classif_predict = args.value_classif[0]
+        if classif_predict == 0:
+            im_predict = im_predict + 1
+            classif_predict += 1
+            args.value_classif = np.array(args.value_classif) + 1
+        if len(args.value_classif) > 1:
+            for value_predict in args.value_classif[1:]:
+                im_predict[im_predict == value_predict] =  classif_predict
+        im_predict[im_predict != classif_predict] =  0
+        im_predict[im_predict == classif_predict] = 1 
         
         # Count buildings
         if args.polygonize:
