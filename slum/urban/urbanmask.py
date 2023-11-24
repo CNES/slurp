@@ -1068,7 +1068,7 @@ def classify(args):
     
     end_time = time.time()
         
-    print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+    print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
     print("Total time (user)       :\t"+convert_time(end_time-t0))
     print("- Build_stack           :\t"+convert_time(time_stack-t0))
     print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
