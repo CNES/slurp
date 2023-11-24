@@ -244,7 +244,7 @@ def wsf_recovery(file_ref, file_out, write=False):
     else:
         print("Recover WSF file")        
     wsf_image = superimpose(
-        "/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
+        "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
         file_ref,
         file_out,
         otb.ImagePixelType_uint16,
