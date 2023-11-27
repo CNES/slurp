@@ -105,6 +105,7 @@ import concurrent.futures
 from multiprocessing import shared_memory, get_context
 from pylab import *
 import uuid
+import copy
 
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
@@ -126,12 +127,18 @@ def single_float_profile(input_profiles: list, map_params):
     return profile
     
 def multiple2_float_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count']=2
-    profile['dtype']=np.float32
-    profile["compress"] = "lzw"
+    profile1 = input_profiles[0]
+    profile1['count']=1
+    profile1['dtype']=np.float32
+    profile1["compress"] = "lzw"
     
-    return profile    
+    # avoid to modify profile1
+    profile2 = copy.deepcopy(profile1)
+    profile2['count']=1
+    profile2['dtype']=np.int16
+    profile2["compress"] = "lzw"
+    
+    return [profile1, profile2]
 
     
 def print_dataset_infos(dataset, prefix=""):
@@ -1403,9 +1410,18 @@ def main():
                 mask_nocloud = np.logical_not(
                     cloud_from_gml(args.file_cloud_gml, args.file_phr)   #cloud mask impossible à scaled sauf  ??? si dans fonction build _samples ???
                 )
+                
             else:
-                mask_nocloud = np.ones(args.shape[:], dtype=np.uint8)  # args.shape= ds_phr.shape
-
+                #mask_nocloud = np.ones(args.shape[:], dtype=np.uint8)  # args.shape= ds_phr.shape
+                # Get profile from im_phr
+                profile = eoscale_manager.get_profile(im_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                mask_nocloud_key = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
+                
+                
+            ''' 
             #save cloud mask, to open it in eoscale manager
             save_image(mask_nocloud,
             join(dirname(args.file_classif.replace(".tif", "_nocloud.tif"))),
@@ -1415,12 +1431,13 @@ def main():
             args.rpc,
             tags=args.__dict__,
             )
+            '''
             
-            mask_nocloud = eoscale_manager.open_raster(raster_path = join(dirname(args.file_classif.replace(".tif", "_nocloud.tif"))))
+            #mask_nocloud = eoscale_manager.open_raster(raster_path = join(dirname(args.file_classif.replace(".tif", "_nocloud.tif"))))
             
 
             # Global validity mask construction
-            valid_stack = eoexe.n_images_to_m_images_filter(inputs = [im_phr , valid_ndwi[1], valid_ndwi[1], mask_nocloud],
+            valid_stack = eoexe.n_images_to_m_images_filter(inputs = [im_phr , valid_ndwi[1], valid_ndwi[1], mask_nocloud_key],
                                                            image_filter = compute_valid_stack,   
                                                            filter_parameters=args,
                                                            generate_output_profiles = single_float_profile,
