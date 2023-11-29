@@ -116,7 +116,13 @@ try:
 except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
-
+def bands_float_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=2
+    profile['dtype']=np.float32
+    profile["compress"] = "lzw"
+    
+    return profile
     
 def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
@@ -125,7 +131,15 @@ def single_float_profile(input_profiles: list, map_params):
     profile["compress"] = "lzw"
     
     return profile
+
+def single_bool_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=bool
+    profile["compress"] = "lzw"
     
+    return profile
+
 def multiple2_float_profile(input_profiles: list, map_params):
     profile1 = input_profiles[0]
     profile1['count']=1
@@ -547,7 +561,7 @@ def post_process(inputBuffer: list,
             input_profiles: list, 
             args: dict) -> list :
     """Compute some filters on the prediction image."""        
-    # Inputs = [im_predict,mask_hand, valid_stack, + file filters*x]
+    # Inputs = [im_predict,mask_hand, mask_pekel,valid_stack + file filters*x]
     # Filter with Hand
     if args.hand_filter:
         if not args.hand_strict:
@@ -559,13 +573,13 @@ def post_process(inputBuffer: list,
     if len(inputBuffer) > 2 or not args.no_pekel_filter:
         mask = np.zeros(args.shape[1:], dtype=bool)
         if not args.no_pekel_filter:  # filter with pekel0
-            mask = np.logical_or(mask, mask_pekel0)
-        for i in range(len(inputBuffer)-2):  # Other classification files
-            filter_mask = compute_filter(inputBuffer[i+2], "FILTER " + str(i))[0]
+            mask = np.logical_or(mask, inputBuffer[2])
+        for i in range(len(inputBuffer)-4):  # Other classification files
+            filter_mask = compute_filter(inputBuffer[i+4], "FILTER " + str(i))[0]
             mask = np.logical_or(mask, filter_mask)                       
-        im_classif = mask_filter(im_predict, mask)
+        im_classif = mask_filter(inputBuffer[0], mask)
     else:
-        im_classif = im_predict
+        im_classif = inputBuffer[0]
         
     # Closing
     if args.binary_closing:
@@ -585,10 +599,10 @@ def post_process(inputBuffer: list,
         ).astype(np.uint8)
         
     # Add nodata in im_classif 
-    im_classif[np.logical_not(inputBuffer[2])] = 255
+    im_classif[np.logical_not(inputBuffer[3])] = 255
     im_classif[im_classif == 1] = args.value_classif
     
-    im_predict[np.logical_not(inputBuffer[2])] = 255
+    im_predict[np.logical_not(inputBuffer[3])] = 255
     im_predict[im_predict == 1] = args.value_classif
 
   
@@ -783,7 +797,7 @@ def build_samples(inputBuffer: list,
                     input_profiles: list, 
                     args: dict) -> list:
     """Build samples."""
-    # inputBuffer :[ mask_pekel,valid_samples, mask_hand, im_phr, im_ndvi, im_ndwi]
+    # inputBuffer :[ mask_pekel,valid_stack, mask_hand, im_phr, im_ndvi, im_ndwi]
     # Retrieve number of pixels for each class
     nb_valid_subset = np.count_nonzero(inputBuffer[1])
     nb_water_subset = np.count_nonzero(np.logical_and(inputBuffer[0], inputBuffer[1]))
@@ -922,10 +936,15 @@ def get_step(args, current_mem, shm_shape, lines):
 
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
-            args: dict) -> list:
+            params: dict) -> list:
+    
+    #inputBuffer = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]]
+    im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0)
+    buffer_to_predict=np.transpose(im_stack[:,inputBuffer[3][0]])
 
-    classifier=args.classifier
-    prediction = classifier.predict(inputBuffer[0],inputBuffer[1])  # PHR image + ndvi + ndwi + file layers
+    classifier =params["classifier"]
+    prediction = np.zeros(inputBuffer[3][0].shape, dtype=np.uint8)
+    prediction[inputBuffer[3][0]] = classifier.predict(buffer_to_predict)  
     
     return prediction
     
@@ -1418,7 +1437,7 @@ def main():
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key],
                                                            image_filter = compute_valid_stack,   
                                                            filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = single_bool_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
@@ -1531,9 +1550,9 @@ def main():
                 time_random_forest = time.time() 
                            
             else:
-                valid_samples= eoscale_manager.get_array(valid_stack_key[0])
-                nb_valid_pixels = np.count_nonzero(valid_samples)
-                args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_samples))
+                valid_stack= eoscale_manager.get_array(valid_stack_key[0])
+                nb_valid_pixels = np.count_nonzero(valid_stack)
+                args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
                 args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
                 
                 samples = eoexe.n_images_to_m_scalars(inputs=[mask_pekel[0],valid_stack_key[0], mask_hand[0], key_phr, key_ndvi[0], key_ndwi[0]],   
@@ -1566,21 +1585,21 @@ def main():
      
             
             ######### Predict  ################
-            key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr[0], key_ndvi[0], key_ndwi[0]],       
+            key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]],       
                                                            image_filter = RF_prediction,
                                                            filter_parameters= {"classifier": classifier},
                                                            generate_output_profiles = single_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
-                                                           multiproc_context= "spawn",
+                                                           multiproc_context= "fork",
                                                            filter_desc= "RF prediction processing...")             
             time_random_forest = time.time()
             
-            ######### Post_processing  ################
+            """           ######### Post_processing  ################
             
             file_filters= [eoscale_manager.open_raster(raster_path =args.file_filters[i]) for i in range(len(args.file_filters))]
             
-            im_classif = eoexe.n_images_to_m_images_filter(inputs = [key_predict[0],mask_hand[0],valid_stack_key[0]] + file_filters,     
+            im_classif = eoexe.n_images_to_m_images_filter(inputs = [key_predict[0],mask_hand[0],mask_pekel[0],valid_stack_key[0]] + file_filters,     
                                                            image_filter = post_process,
                                                            filter_parameters= args,
                                                            generate_output_profiles = single_float_profile,
@@ -1589,10 +1608,11 @@ def main():
                                                            multiproc_context= "fork",
                                                            filter_desc= "Post processing...")    
 
-
+            """
             # Save predict and classif image
-            final_predict = eoscale_manager.get_array(im_classif[0])
-            final_classif = eoscale_manager.get_array(im_classif[1])
+            final_predict = eoscale_manager.get_array(key_predict[0])[0]
+            #final_predict = eoscale_manager.get_array(im_classif[0])
+            #final_classif = eoscale_manager.get_array(im_classif[1])
             
             save_image(
                 final_predict,
@@ -1604,7 +1624,7 @@ def main():
                 tags=args.__dict__,
             )
 
-            save_image(
+            """           save_image(
                 final_classif,
                 args.file_classif,
                 args.crs,
@@ -1614,7 +1634,7 @@ def main():
                 tags=args.__dict__,
             )
 
-        
+            """       
             end_time = time.time()
             
         
