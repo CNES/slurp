@@ -6,6 +6,7 @@
 #SBATCH --mem=30G # memory pool for all cores
 #SBATCH --time=01:00:00
 #SBATCH --account=cnes_level2
+#SBATCH --export=none
 
 # MASK_TAR path to the tar folder
 # OSM path to the OSM file
