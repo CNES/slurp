@@ -6,6 +6,7 @@
 #SBATCH --mem=30G # memory pool for all cores
 #SBATCH --time=01:30:00
 #SBATCH --account=cnes_level2
+#SBATCH --export=none
 
 # PHR_IM path to the input image
 # OUTPUT_DIR folder containing the outputs
