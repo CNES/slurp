@@ -97,6 +97,7 @@ from skimage.morphology import (
     remove_small_holes,
     square,
 )
+from copy import deepcopy
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
@@ -140,16 +141,16 @@ def single_bool_profile(input_profiles: list, map_params):
     
     return profile
 
-def multiple2_float_profile(input_profiles: list, map_params):
+def multiple_float_profile(input_profiles: list, map_params):
     profile1 = input_profiles[0]
     profile1['count']=1
     profile1['dtype']=np.float32
     profile1["compress"] = "lzw"
     
     # avoid to modify profile1
-    profile2 = copy.deepcopy(profile1)
+    profile2 = deepcopy(profile1)
     profile2['count']=1
-    profile2['dtype']=np.int16
+    profile2['dtype']=np.float32
     profile2["compress"] = "lzw"
     
     return [profile1, profile2]   
@@ -520,7 +521,7 @@ def compute_pekel_mask (inputBuffer: list,
         mask_pekel = compute_mask(inputBuffer[0], args.pekel_nodata, args.thresh_pekel)[0]
         mask_pekel0 = "not defined"
     
-    return mask_pekel
+    return [mask_pekel, mask_pekel0]
 
 
 def compute_hand_mask(inputBuffer: list, 
@@ -560,8 +561,10 @@ def compute_filter(file_filter, desc_filter):
 def post_process(inputBuffer: list, 
             input_profiles: list, 
             args: dict) -> list :
-    """Compute some filters on the prediction image."""        
-    # Inputs = [im_predict,mask_hand, mask_pekel,valid_stack + file filters*x]
+    """Compute some filters on the prediction image."""
+    # Inputs = [im_predict,mask_hand, mask_pekel0,valid_stack + file filters*x]
+    buffer_shape=inputBuffer[0].shape
+    
     # Filter with Hand
     if args.hand_filter:
         if not args.hand_strict:
@@ -570,13 +573,15 @@ def post_process(inputBuffer: list,
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
                               
     # Filter for final classification
-    if len(inputBuffer) > 2 or not args.no_pekel_filter:
-        mask = np.zeros(args.shape[1:], dtype=bool)
+    if len(inputBuffer) > 4 or not args.no_pekel_filter:
+        mask = np.zeros(buffer_shape, dtype=bool)
         if not args.no_pekel_filter:  # filter with pekel0
-            mask = np.logical_or(mask, inputBuffer[2])
+            mask = np.zeros(buffer_shape, dtype=bool)
+            mask = np.logical_or(mask, inputBuffer[2][0])  # problème de mask_pekel0 if "not defined"
         for i in range(len(inputBuffer)-4):  # Other classification files
             filter_mask = compute_filter(inputBuffer[i+4], "FILTER " + str(i))[0]
-            mask = np.logical_or(mask, filter_mask)                       
+            mask = np.logical_or(mask, filter_mask) 
+ 
         im_classif = mask_filter(inputBuffer[0], mask)
     else:
         im_classif = inputBuffer[0]
@@ -602,9 +607,9 @@ def post_process(inputBuffer: list,
     im_classif[np.logical_not(inputBuffer[3])] = 255
     im_classif[im_classif == 1] = args.value_classif
     
+    im_predict= inputBuffer[0]
     im_predict[np.logical_not(inputBuffer[3])] = 255
     im_predict[im_predict == 1] = args.value_classif
-
   
     return [im_predict, im_classif]
 
@@ -730,11 +735,9 @@ def mask_filter(im_in, mask_ref):
     with water areas in mask_ref.
     """
 
-    print("Post process : compute label image...", end="")
     im_label, nb_label = label(im_in, connectivity=2, return_num=True)
     print("found", nb_label, "regions.")
 
-    print("Post process : compute filtered image...", end="")
     start_time = time.time()
     im_label_thresh = np.copy(im_label)
     im_label_thresh[np.logical_not(mask_ref)] = 0
@@ -742,9 +745,6 @@ def mask_filter(im_in, mask_ref):
 
     im_filtered = np.zeros(np.shape(mask_ref), dtype=np.uint8)
     im_filtered[np.isin(im_label, valid_labels)] = 1
-
-    print("in", time.time() - start_time, "seconds.")
-    print("Post process : keep", np.size(valid_labels), "regions.")
 
     return im_filtered
 
@@ -1487,7 +1487,7 @@ def main():
             mask_pekel = eoexe.n_images_to_m_images_filter(inputs = [key_pekel] ,
                                                            image_filter = compute_pekel_mask,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = multiple_float_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
@@ -1595,28 +1595,27 @@ def main():
                                                            filter_desc= "RF prediction processing...")             
             time_random_forest = time.time()
             
-            """           ######### Post_processing  ################
+            ######### Post_processing  ################
             
             file_filters= [eoscale_manager.open_raster(raster_path =args.file_filters[i]) for i in range(len(args.file_filters))]
             
-            im_classif = eoexe.n_images_to_m_images_filter(inputs = [key_predict[0],mask_hand[0],mask_pekel[0],valid_stack_key[0]] + file_filters,     
+            im_classif = eoexe.n_images_to_m_images_filter(inputs = [key_predict[0],mask_hand[0],mask_pekel[1],valid_stack_key[0]] + file_filters,     
                                                            image_filter = post_process,
                                                            filter_parameters= args,
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = multiple_float_profile,
                                                            stable_margin= 3,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
-                                                           filter_desc= "Post processing...")    
+                                                           filter_desc= "Post processing...")
 
-            """
+
             # Save predict and classif image
-            final_predict = eoscale_manager.get_array(key_predict[0])[0]
-            #final_predict = eoscale_manager.get_array(im_classif[0])
-            #final_classif = eoscale_manager.get_array(im_classif[1])
+            final_predict = eoscale_manager.get_array(im_classif[0])[0]
+            final_classif = eoscale_manager.get_array(im_classif[1])[0]
             
             save_image(
                 final_predict,
-                join(dirname(args.file_classif), "_predict.tif"),
+                join(dirname(args.file_classif), "predict.tif"),
                 args.crs,
                 args.transform,
                 255,
@@ -1624,7 +1623,7 @@ def main():
                 tags=args.__dict__,
             )
 
-            """           save_image(
+            save_image(
                 final_classif,
                 args.file_classif,
                 args.crs,
@@ -1634,10 +1633,8 @@ def main():
                 tags=args.__dict__,
             )
 
-            """       
             end_time = time.time()
-            
-        
+
             print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
             print("Total time (user)       :\t"+convert_time(end_time-t0))
             print("- Build_stack           :\t"+convert_time(time_stack-t0))
@@ -1645,11 +1642,8 @@ def main():
             print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
             print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
             print("***")
-            print("Max workers used for parallel tasks "+str(args.nb_workers))
-            print("Prediction (user)       :\t"+convert_time(time_predict_user))
-            print("Prediction (parallel)   :\t"+convert_time(time_predict))        
-        
-            
+            print("Max workers used for parallel tasks "+str(args.nb_workers))        
+              
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
@@ -1665,7 +1659,6 @@ def main():
         except Exception as exception:  # pylint: disable=broad-except
             print("oups...", exception)
             traceback.print_exc()
-
 
 if __name__ == "__main__":
     main()
