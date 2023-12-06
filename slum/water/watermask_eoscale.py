@@ -512,14 +512,14 @@ def compute_pekel_mask (inputBuffer: list,
             [mask_pekel, mask_pekelxx, mask_pekel0] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, args.strict_thresh, 0])[0]
         else:
             [mask_pekel, mask_pekelxx] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, args.strict_thresh])[0]
-            mask_pekel0 = "not defined"
+            mask_pekel0 = np.zeros(inputBuffer[0].shape)
         return mask_pekel, mask_pekelxx
     
     elif not args.no_pekel_filter:
         [mask_pekel, mask_pekel0] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, 0])[0]
     else:
         mask_pekel = compute_mask(inputBuffer[0], args.pekel_nodata, args.thresh_pekel)[0]
-        mask_pekel0 = "not defined"
+        mask_pekel0 = np.zeros(inputBuffer[0].shape)
     
     return [mask_pekel, mask_pekel0]
 
