@@ -58,6 +58,14 @@ def single_float_profile(input_profiles: list, map_params):
     
     return profile
 
+def single_bool_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=bool
+    profile["compress"] = "lzw"
+    
+    return profile
+
 def single_int32_profile(input_profiles: list, map_params):
     profile= input_profiles[0]
     profile["count"]= 1
@@ -82,6 +90,15 @@ def single_uint8_profile(input_profiles: list, map_params):
     
     return profile
         
+def compute_valid_stack(inputBuffer: list, 
+            input_profiles: list, 
+            args: dict) -> list:
+    #inputBuffer = [im_phr, mask_nocloud]
+    # Valid_phr (boolean numpy array, True = valid data, False = no data)
+    valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
+    valid_stack_cloud = np.logical_and(valid_phr, inputBuffer[1])
+    
+    return valid_stack_cloud
 
 ########### Radiometric indices ##############
 
@@ -176,8 +193,7 @@ def compute_segmentation(args, img, ndvi):
 def segmentation_task(input_buffers: list, 
                   input_profiles: list, 
                   args: dict) -> np.ndarray :
-    # input_buffers = [input_img,ndvi]                    
-
+    # input_buffers = [input_img,ndvi,valid_stack]                    
     # Segmentation
     segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
 
@@ -414,6 +430,9 @@ def clean_task(input_buffers: list,
         ).astype(np.uint8) 
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
     
+    # Add nodata in im_classif 
+    im_classif[np.logical_not(inputBuffer[1])] = 255
+    
     return im_classif
 
 
@@ -436,6 +455,7 @@ def main():
                         help="Labelize vegetation with (yes) or without (no) distinction low/high, or get all 9 vegetation clusters without distinction low/high (debug)")
     parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5, help="Radius for texture (std convolution) computation")
     parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90, help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-file_cloud_gml" ,"--file_cloud_gml", type=str, required=False, action="store", help="Cloud file in .GML format")
     parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False, action="store", dest="save_mode",
                         help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
@@ -468,7 +488,9 @@ def main():
     args = parser.parse_args()
     print("DBG > arguments parsed "+str(args))
                         
-
+    ds_phr = rasterio.open(args.im)
+    args.nodata_phr = ds_phr.nodata
+        
     with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
         input_img = eoscale_manager.open_raster(raster_path = args.im)
         t0 = time.time()
@@ -507,6 +529,40 @@ def main():
         
         t_NDWI = time.time()
         
+        # Get cloud mask if any
+        if args.file_cloud_gml:
+            cloud_mask_array = np.logical_not(
+                cloud_from_gml(args.file_cloud_gml, args.file_phr)   
+            )
+            #save cloud mask
+            save_image(cloud_mask_array,
+                    join(dirname(args.file_classif), "nocloud.tif"),
+                    args.crs,
+                    args.transform,
+                    None,
+                    args.rpc,
+                    tags=args.__dict__,
+            )
+            mask_nocloud_key = eoscale_manager.open_raster(raster_path = join(dirname(args.file_classif), "nocloud.tif"))   
+                
+        else:
+            # Get profile from im_phr
+            profile = eoscale_manager.get_profile(input_img)
+            profile["count"] = 1
+            profile["dtype"] = np.uint8
+            mask_nocloud_key = eoscale_manager.create_image(profile)
+            eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
+        
+        # Global validity mask construction
+        valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [input_img, mask_nocloud_key],
+                                                           image_filter = compute_valid_stack,   
+                                                           filter_parameters=args,
+                                                           generate_output_profiles = single_bool_profile,
+                                                           stable_margin= 0,
+                                                           context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
+                                                           filter_desc= "Valid stack processing...")
+        
         # Recover extrema of the input image
         args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
@@ -529,7 +585,7 @@ def main():
         t_texture = time.time()
 
         #Segmentation
-        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0]],
+        future_seg = eoexe.n_images_to_m_images_filter(inputs = [input_img,ndvi[0],valid_stack_key[0]],
                                                            image_filter = segmentation_task,
                                                            filter_parameters=args,
                                                            generate_output_profiles = single_int32_profile, 
@@ -584,7 +640,7 @@ def main():
 
         # Closing
         if args.texture_mode == "yes" and (args.binary_dilation or args.remove_small_objects or args.remove_small_holes):
-            final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0]],
+            final_seg = eoexe.n_images_to_m_images_filter(inputs = [final_seg[0],valid_stack_key[0]],
                                                           image_filter = clean_task,
                                                           filter_parameters=args,
                                                           generate_output_profiles = single_uint8_profile, 
