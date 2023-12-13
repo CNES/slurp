@@ -196,7 +196,8 @@ def segmentation_task(input_buffers: list,
                   args: dict) -> np.ndarray :
     # input_buffers = [input_img,ndvi,valid_stack]                    
     # Segmentation
-    segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
+    # Note : input_buffers[x][input_buffers[2][0]] applies the valid mask on input_buffers[x]
+    segments = compute_segmentation(args,input_buffers[0][input_buffers[2][0]], input_buffers[1][input_buffers[2][0]])
 
     return segments
 
@@ -431,8 +432,8 @@ def clean_task(input_buffers: list,
         ).astype(np.uint8) 
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
     
-    # Add nodata in im_classif 
-    im_classif[np.logical_not(inputBuffer[1])] = 255
+    # Add nodata in im_classif (input_buffers[1] : valid mask)
+    im_classif[np.logical_not(input_buffers[1][0])] = 255
     
     return im_classif
 
