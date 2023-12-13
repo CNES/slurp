@@ -79,6 +79,7 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile["count"]= 1
     profile["dtype"]= np.uint8
     profile["compress"] = "lzw"
+    profile["nodata"] = 255
     
     return profile
         
