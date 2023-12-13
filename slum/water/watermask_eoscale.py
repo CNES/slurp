@@ -814,7 +814,6 @@ def build_samples(inputBuffer: list,
                 args.rpc,
                 colormap,
             )
-    buffer_shape=inputBuffer[0].shape
 
     # Prepare samples for learning
     im_stack = np.concatenate((inputBuffer[3],inputBuffer[4],inputBuffer[5],inputBuffer[0]),axis=0)
@@ -1315,7 +1314,6 @@ def main():
                     eoscale_manager.write(key = key_ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
             else:
                 key_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
-  
 
             
             # Get cloud mask if any
@@ -1341,8 +1339,6 @@ def main():
                 profile["dtype"] = np.uint8
                 mask_nocloud_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
-
-
 
             # Global validity mask construction
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key],
