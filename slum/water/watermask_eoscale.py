@@ -116,14 +116,6 @@ try:
     patch_sklearn()
 except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
-
-def bands_float_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count']=2
-    profile['dtype']=np.float32
-    profile["compress"] = "lzw"
-    
-    return profile
     
 def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
@@ -475,21 +467,6 @@ def compute_ndvi(input_buffers: list,
     
     return im_ndvi
 
-def ndxi_valid_mask(inputBuffer: list, 
-            input_profiles: list, 
-            args: dict) -> list:
-
-    valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
-    #print(valid_phr.shape)
-    ndxi=inputBuffer[1][0].copy()
-    #print(ndxi.shape)
-    ndxi[np.logical_not(valid_phr)] = np.nan
-    valid_ndxi = np.isfinite(ndxi)
-    np.nan_to_num(ndxi, copy=False, nan=32767)
-    ndxi = np.int16(ndxi)
-
-    
-    return [ndxi, valid_ndxi]
 
 def compute_valid_stack(inputBuffer: list, 
             input_profiles: list, 
@@ -512,14 +489,14 @@ def compute_pekel_mask (inputBuffer: list,
             [mask_pekel, mask_pekelxx, mask_pekel0] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, args.strict_thresh, 0])[0]
         else:
             [mask_pekel, mask_pekelxx] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, args.strict_thresh])[0]
-            mask_pekel0 = "not defined"
+            mask_pekel0 = np.zeros(inputBuffer[0].shape)
         return mask_pekel, mask_pekelxx
     
     elif not args.no_pekel_filter:
         [mask_pekel, mask_pekel0] = compute_mask(inputBuffer[0], args.pekel_nodata, [args.thresh_pekel, 0])[0]
     else:
         mask_pekel = compute_mask(inputBuffer[0], args.pekel_nodata, args.thresh_pekel)[0]
-        mask_pekel0 = "not defined"
+        mask_pekel0 = np.zeros(inputBuffer[0].shape)
     
     return [mask_pekel, mask_pekel0]
 
@@ -612,34 +589,6 @@ def post_process(inputBuffer: list,
     im_predict[im_predict == 1] = args.value_classif
   
     return [im_predict, im_classif]
-
-def get_crs_transform_rpc(file):
-    """Get CRS, Transform and RPC of a geotiff file."""
-
-    dataset = rio.open(file)
-    crs = dataset.crs
-    transform = dataset.transform
-    rpc = dataset.tags(ns="RPC")
-    dataset.close()
-
-    return crs, transform, rpc
-
-
-def get_grid_indexes_from_masks(im_valid, step):
-    """Get valid indexes from masks."""
-
-    rows_idxs = []
-    cols_idxs = []
-
-    first_col = 0
-    for row in np.arange(0, im_valid.shape[0], step):
-        for col in np.arange(first_col, im_valid.shape[1], step):
-            if im_valid[row, col]:
-                rows_idxs.append(row)
-                cols_idxs.append(col)
-        first_col = int(step / 2) - first_col
-
-    return rows_idxs, cols_idxs
 
 
 def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
@@ -736,7 +685,6 @@ def mask_filter(im_in, mask_ref):
     """
 
     im_label, nb_label = label(im_in, connectivity=2, return_num=True)
-    print("found", nb_label, "regions.")
 
     start_time = time.time()
     im_label_thresh = np.copy(im_label)
@@ -747,26 +695,6 @@ def mask_filter(im_in, mask_ref):
     im_filtered[np.isin(im_label, valid_labels)] = 1
 
     return im_filtered
-
-
-def show_rftree(estimator, feature_names):
-    """Display Random Forest Estimator."""
-
-    export_graphviz(
-        estimator,
-        out_file="tree.dot",
-        feature_names=feature_names,
-        class_names=["Other", "Water"],
-        rounded=True,
-        proportion=False,
-        precision=2,
-        filled=True,
-    )
-
-    call(["dot", "-Tpng", "tree.dot", "-o", "tree.png", "-Gdpi=300"])
-    print(
-        export_text(estimator, show_weights=True, feature_names=feature_names)
-    )
 
 
 def print_feature_importance(classifier, feature_names):
@@ -886,7 +814,6 @@ def build_samples(inputBuffer: list,
                 args.rpc,
                 colormap,
             )
-    buffer_shape=inputBuffer[0].shape
 
     # Prepare samples for learning
     im_stack = np.concatenate((inputBuffer[3],inputBuffer[4],inputBuffer[5],inputBuffer[0]),axis=0)
@@ -915,23 +842,6 @@ def train_classifier(classifier, x_samples, y_samples):
         "Accuracy on test set :",
         accuracy_score(y_test, classifier.predict(x_test)),
     )
-    
-    
-def get_step(args, current_mem, shm_shape, lines):
-    base_gb = 215/1024  # Gb
-    mem_used_gb = current_mem / 1024  # Gb
-    valid_one_chunk = np.dtype(np.bool_).itemsize * shm_shape[1] / (1024*1024*1024)
-    weight_one_chunk = (shm_shape[0] - 1) * np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
-    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk)  # float
-    
-    if max_step_predict < 1:
-        raise Exception("Insufficient memory, you need to increase the max memory")
-
-    step = min(int(max_step_predict), lines // args.nb_workers + 1)
-    
-    #print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (3 * (args.nb_jobs + 1) * weight_one_chunk + valid_one_chunk + weight_one_chunk) * step))
-                                                                     
-    return step
 
 
 def RF_prediction(inputBuffer: list, 
@@ -1404,7 +1314,6 @@ def main():
                     eoscale_manager.write(key = key_ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
             else:
                 key_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
-  
 
             
             # Get cloud mask if any
@@ -1430,8 +1339,6 @@ def main():
                 profile["dtype"] = np.uint8
                 mask_nocloud_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
-
-
 
             # Global validity mask construction
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key],
@@ -1471,7 +1378,7 @@ def main():
                     args.file_pekel = join(dirname(args.file_classif), "pekel.tif")
                     im_pekel = pekel_recovery(args.file_phr, args.file_pekel, write=True)   
                 
-                pekel_nodata = 255.0 # ça vient d'où ??
+                pekel_nodata = 255.0 
                 
                 
             ds_ref = rio.open(args.file_pekel)
