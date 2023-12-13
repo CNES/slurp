@@ -196,8 +196,14 @@ def segmentation_task(input_buffers: list,
                   args: dict) -> np.ndarray :
     # input_buffers = [input_img,ndvi,valid_stack]                    
     # Segmentation
-    # Note : input_buffers[x][input_buffers[2][0]] applies the valid mask on input_buffers[x]
-    segments = compute_segmentation(args,input_buffers[0][input_buffers[2][0]], input_buffers[1][input_buffers[2][0]])
+    # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
+    '''
+    print(f"DBG > {input_buffers[2].shape=}")
+    print(f"DBG > {input_buffers[0].shape=}")
+    print(f"DBG > {input_buffers[1].shape=}")
+    '''
+    # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
+    segments = compute_segmentation(args,input_buffers[0], input_buffers[1][0][input_buffers[2][0]])
 
     return segments
 
