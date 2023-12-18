@@ -100,7 +100,8 @@ from multiprocessing import shared_memory, get_context
 import concurrent.futures
 import sys
 import uuid
-
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
 
 try:
     from sklearnex import patch_sklearn
@@ -109,6 +110,13 @@ try:
 except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
+def single_float_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=np.float32
+    profile["compress"] = "lzw"
+    
+    return profile
     
 def compute_ndwi(input_buffers: list, 
                   input_profiles: list, 
@@ -628,14 +636,18 @@ def build_samples(inputBuffer: list,
                     args: dict) -> list:
     """Build samples."""
     #inputBuffer=[valid_stack_key[0],key_gt, key_phr, key_ndvi[0], key_ndwi[0]]
-    mask_building = im_gt==args.value_classif
-        
-    nb_building_samples = args.nb_samples  ### A changer !!!!!!
-    nb_other_samples = args.nb_samples
+    
+    mask_building = inputBuffer[1]==args.value_classif
+    
+    # Retrieve number of pixels for each class
+    nb_valid_subset = np.count_nonzero(inputBuffer[0])
+    nb_built_subset = np.count_nonzero(np.logical_and(inputBuffer[1], inputBuffer[0]))
+    nb_other_subset = nb_valid_subset - nb_built_subset
+    
 
     # Building samples
     rows_b, cols_b = get_indexes_from_masks(
-        nb_building_samples, inputBuffer[1], args.value_classif, inputBuffer[0],args
+        nb_built_subset, inputBuffer[1], args.value_classif, inputBuffer[0],args
     )
     
     rows_road = []
@@ -643,14 +655,14 @@ def build_samples(inputBuffer: list,
 
     if args.nb_classes == 2:
         rows_road, cols_road = get_indexes_from_masks(
-            nb_building_samples, inputBuffer[1], 2, inputBuffer[0], args
+            nb_built_subset, inputBuffer[1], 2, inputBuffer[0], args
         )
     
     rows_nob = []
     cols_nob = []
 
     rows_nob, cols_nob = get_indexes_from_masks(
-        nb_other_samples, inputBuffer[1], 0, inputBuffer[0], args
+        nb_other_subset, inputBuffer[1], 0, inputBuffer[0], args
     )
 
     if args.save_mode == "debug":
@@ -1409,21 +1421,30 @@ def main():
             
             
             #Add files_layers
-            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))])
+            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
 
             time_stack = time.time()
             
-            ################ Build samples #######
+            ################ Build samples #################
             
-        if args.urban_raster:
-            gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
 
-        else:
-            args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
-            im_gt = wsf_recovery(args.file_phr, args.urban_raster, True)  
-            gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
-        
-            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0], key_phr, key_ndvi[0], key_ndwi[0]],   
+            
+            if args.urban_raster:
+                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
+
+            else:
+                args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
+                im_gt = wsf_recovery(args.file_phr, args.urban_raster, True)  
+                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
+
+            valid_stack= eoscale_manager.get_array(valid_stack_key[0])
+            local_gt= eoscale_manager.get_array(gt_key[0])
+            
+            nb_valid_pixels = np.count_nonzero(valid_stack)
+            args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
+            args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
+
+            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0],gt_key[0], key_phr, key_ndvi[0], key_ndwi[0]],   
                                                     image_filter = build_samples,   
                                                     filter_parameters = args,
                                                     nb_output_scalars = args.nb_samples_water+args.nb_samples_other,
@@ -1432,6 +1453,8 @@ def main():
                                                     output_scalars= [],
                                                     multiproc_context= "fork",
                                                     filter_desc= "Samples building processing...")       # samples=[x_samples, y_samples]
+            
+            
             time_samples = time.time()
             
             ################ Train classifier from samples #########
@@ -1461,24 +1484,26 @@ def main():
                                                            filter_desc= "RF prediction processing...")             
             time_random_forest = time.time()
             
+            ######### Post_processing  ################
+            #  ????
+
             
             
-            
-    except FileNotFoundError as fnfe_exception:
-        print("FileNotFoundError", fnfe_exception)
+        except FileNotFoundError as fnfe_exception:
+            print("FileNotFoundError", fnfe_exception)
 
-    except PermissionError as pe_exception:
-        print("PermissionError", pe_exception)
+        except PermissionError as pe_exception:
+            print("PermissionError", pe_exception)
 
-    except ArithmeticError as ae_exception:
-        print("ArithmeticError", ae_exception)
+        except ArithmeticError as ae_exception:
+            print("ArithmeticError", ae_exception)
 
-    except MemoryError as me_exception:
-        print("MemoryError", me_exception)
+        except MemoryError as me_exception:
+            print("MemoryError", me_exception)
 
-    except Exception as exception:  # pylint: disable=broad-except
-        print("oups...", exception)
-        traceback.print_exc()
+        except Exception as exception:  # pylint: disable=broad-except
+            print("oups...", exception)
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

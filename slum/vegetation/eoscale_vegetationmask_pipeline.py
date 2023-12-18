@@ -203,8 +203,12 @@ def segmentation_task(input_buffers: list,
     print(f"DBG > {input_buffers[1].shape=}")
     '''
     # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
-    segments = compute_segmentation(args,input_buffers[0], input_buffers[1][0][input_buffers[2][0]])
+    #segments = compute_segmentation(args,input_buffers[0], input_buffers[1][0][input_buffers[2][0]])
+    segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
 
+    #minimum segment is 1, attribute 0 to no_data pixel
+    segments[np.logical_not(input_buffers[2])] = 0
+    
     return segments
 
 
@@ -226,7 +230,7 @@ def compute_stats_image(inputBuffer: list,
     # inputBuffer : seg, NDVI, NDWI, texture
     
     ts_stats = ts.PyStats()
-    nb_primitives =  len(inputBuffer)-1
+    nb_primitives =  len(inputBuffer)-1  # - seg 
     
     # inputBuffer : list of (one band, rows, cols) images
     # [:,0,:,:] -> transform in an array (3bands, rows, cols)
@@ -235,7 +239,30 @@ def compute_stats_image(inputBuffer: list,
     # output : [ mean of each primitive ; counter (nb pixels / seg) ]
     return [accumulator, counter]
 
+"""
+def compute_stats_image(inputBuffer: list, 
+                        input_profiles: list, 
+                        params: dict) -> list:
+    
+    # inputBuffer : seg, NDVI, NDWI, texture, valid_stack
+    shapes=inputBuffer[0].shape
+    ts_stats = ts.PyStats()
+    nb_primitives =  len(inputBuffer)-2  # - seg and valid_stack
+    
+    #Create the valid stack to apply to primitives
+    valid_bool = np.zeros((nb_primitives,shapes[1],shapes[2]),dtype=bool)
+    for k in range(nb_primitives):
+        valid_bool[k]=inputBuffer[-1]
 
+    print(inputBuffer[0][inputBuffer[-1]].shape)
+    print(np.array(inputBuffer[1:nb_primitives+1])[:,0][valid_bool].shape)
+    # inputBuffer : list of (one band, rows, cols) images
+    # [:,0,:,:] -> transform in an array (3bands, rows, cols)
+    accumulator, counter = ts_stats.run_stats(np.array(inputBuffer[1:nb_primitives+1])[:,0][valid_bool], inputBuffer[0][inputBuffer[-1]], params["nb_lab"])
+        
+    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
+    return [accumulator, counter]
+"""
 
 def stats_concatenate(output_scalars, chunk_output_scalars, tile):
     # single band version
@@ -395,12 +422,13 @@ def finalize_task(input_buffers: list,
                   input_profiles: list, 
                   args: dict):
     """ Finalize mask : for each pixels in input segmentation, return mean NDVI
+        inputs = [future_seg[0],valid_stack_key[0]]
     """
     clustering = args["data"]
-
+    shapes=input_buffers[0].shape
     ts_stats = ts.PyStats()
     
-    final_image = ts_stats.finalize(input_buffers[0], clustering)
+    final_image = ts_stats.finalize(input_buffers[0][input_buffers[1]], clustering)
     
     return final_image
 
@@ -632,7 +660,7 @@ def main():
         t_cluster = time.time()       
         
         # Finalize mask
-        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
+        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0],valid_stack_key[0]],
                                                       image_filter = finalize_task,
                                                       filter_parameters={"data":clusters},
                                                       generate_output_profiles = single_uint8_profile, 

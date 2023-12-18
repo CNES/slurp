@@ -1442,10 +1442,10 @@ def main():
                                             context_manager = eoscale_manager,
                                             multiproc_context= "fork",
                                             filter_desc= "Hand valid mask processing...")   
+
             
+            ################ Build samples ##################
             
-            
-            ### Prepare samples   
             if select_samples == False:
                 # Not enough supposed water areas : skip sample selection
                 # --> we force NDWI threshold
