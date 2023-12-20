@@ -117,6 +117,14 @@ def single_float_profile(input_profiles: list, map_params):
     profile["compress"] = "lzw"
     
     return profile
+
+def single_bool_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=bool
+    profile["compress"] = "lzw"
+    
+    return profile
     
 def compute_ndwi(input_buffers: list, 
                   input_profiles: list, 
@@ -312,27 +320,15 @@ def compute_mask(file_ref, field_value):
     return mask_ref, valid_ref
 
 
-def compute_ndxi(im_b1, im_b2, valid):
-    """Compute Normalize Difference X Index.
-    Rescale to [-1000, 1000] int16 with nodata value = 32767
-    1000 * (im_b1 - im_b2) / (im_b1 + im_b2)
-    """
-
-    np.seterr(divide="ignore", invalid="ignore")   
-
-    print("Compute NDI ...", end="")
-    start_time = time.time()
-    im_ndxi = 1000.0 - (2000.0 * np.float32(im_b2)) / (
-        np.float32(im_b1) + np.float32(im_b2)
-    )
-    im_ndxi[np.logical_or(im_ndxi < -1000.0, im_ndxi > 1000.0)] = np.nan
-    im_ndxi[np.logical_not(valid)] = np.nan
-    valid_ndxi = np.isfinite(im_ndxi)
-    np.nan_to_num(im_ndxi, copy=False, nan=32767)
-    im_ndxi = np.int16(im_ndxi)   
-    print("in", time.time() - start_time, "seconds.")
-
-    return im_ndxi, valid_ndxi
+def compute_valid_stack(inputBuffer: list, 
+            input_profiles: list, 
+            args: dict) -> list:
+    #inputBuffer = [im_phr, mask_nocloud]
+    # Valid_phr (boolean numpy array, True = valid data, False = no data)
+    valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
+    valid_stack_cloud = np.logical_and(valid_phr, inputBuffer[1])
+    
+    return valid_stack_cloud
 
 
 def compute_esri(file_esri, desc_esri=""):
@@ -631,6 +627,11 @@ def build_stack(args):
     return shm_key, shm_shape, shm_dtype, names_stack
 
 
+def concatenate_samples(output_scalars, chunk_output_scalars, tile):
+    
+    output_scalars.append(chunk_output_scalars[0])
+
+    
 def build_samples(inputBuffer: list, 
                     input_profiles: list, 
                     args: dict) -> list:
@@ -647,7 +648,7 @@ def build_samples(inputBuffer: list,
 
     # Building samples
     rows_b, cols_b = get_indexes_from_masks(
-        nb_built_subset, inputBuffer[1], args.value_classif, inputBuffer[0],args
+        nb_built_subset, inputBuffer[1][0], args.value_classif, inputBuffer[0][0],args
     )
     
     rows_road = []
@@ -655,14 +656,14 @@ def build_samples(inputBuffer: list,
 
     if args.nb_classes == 2:
         rows_road, cols_road = get_indexes_from_masks(
-            nb_built_subset, inputBuffer[1], 2, inputBuffer[0], args
+            nb_built_subset, inputBuffer[1][0], 2, inputBuffer[0][0], args
         )
     
     rows_nob = []
     cols_nob = []
 
     rows_nob, cols_nob = get_indexes_from_masks(
-        nb_other_subset, inputBuffer[1], 0, inputBuffer[0], args
+        nb_other_subset, inputBuffer[1][0], 0, inputBuffer[0][0], args
     )
 
     if args.save_mode == "debug":
@@ -1031,6 +1032,8 @@ def getarguments():
     parser.add_argument("file_phr", help="PHR filename")
 
     parser.add_argument("-red", default=1, help="Red band index")
+    parser.add_argument("-nir", default=4, help="NIR band index")
+    parser.add_argument("-green", default=2, help="green band index")
 
     parser.add_argument(
         "-display",
@@ -1102,7 +1105,7 @@ def getarguments():
         dest="file_cloud_gml",
         help="Cloud file in .GML format",
     )
-    
+
     parser.add_argument(
         "-use_rgb_layers",
         default=False,
@@ -1190,7 +1193,7 @@ def getarguments():
     parser.add_argument(
         "-n_jobs",
         type=int,
-        default=1,
+        default=8,
         required=False,
         action="store",
         dest="nb_jobs",
@@ -1438,16 +1441,16 @@ def main():
                 gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
 
             valid_stack= eoscale_manager.get_array(valid_stack_key[0])
-            local_gt= eoscale_manager.get_array(gt_key[0])
+            local_gt= eoscale_manager.get_array(gt_key)
             
             nb_valid_pixels = np.count_nonzero(valid_stack)
             args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
             args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
 
-            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0],gt_key[0], key_phr, key_ndvi[0], key_ndwi[0]],   
+            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0],gt_key, key_phr, key_ndvi[0], key_ndwi[0]],   
                                                     image_filter = build_samples,   
                                                     filter_parameters = args,
-                                                    nb_output_scalars = args.nb_samples_water+args.nb_samples_other,
+                                                    nb_output_scalars = args.nb_valid_built_pixels+args.nb_valid_other_pixels,
                                                     context_manager = eoscale_manager,
                                                     concatenate_filter = concatenate_samples, 
                                                     output_scalars= [],

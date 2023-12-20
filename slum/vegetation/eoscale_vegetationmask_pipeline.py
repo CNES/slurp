@@ -425,10 +425,9 @@ def finalize_task(input_buffers: list,
         inputs = [future_seg[0],valid_stack_key[0]]
     """
     clustering = args["data"]
-    shapes=input_buffers[0].shape
     ts_stats = ts.PyStats()
     
-    final_image = ts_stats.finalize(input_buffers[0][input_buffers[1]], clustering)
+    final_image = ts_stats.finalize(input_buffers[0], clustering)
     
     return final_image
 

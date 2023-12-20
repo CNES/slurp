@@ -716,8 +716,6 @@ def print_feature_importance(classifier, feature_names):
 
 def concatenate_samples(output_scalars, chunk_output_scalars, tile):
     
-    #output_scalars= np.append(output_scalars,chunk_output_scalars[0])
-    #np.concatenate((output_scalars,chunk_output_scalars[0]))
     output_scalars.append(chunk_output_scalars[0])
    
         
