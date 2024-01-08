@@ -104,7 +104,7 @@ cdef class PyStats:
         nbRows = segmentation.shape[1]
         nbCols = segmentation.shape[2]
         
-        cdef unsigned int[::1] seg_memview = segmentation.flatten().astype(np.uint32)
+        cdef unsigned int[::1] seg_memview = segmentation.flatten().astype(np.uint32) 
         cdef unsigned int[::1] cluster_memview = clustering.flatten().astype(np.uint32)
         
         cdef unsigned int[::1] final_image_memview = np.zeros(nbRows*nbCols).astype(np.uint32)

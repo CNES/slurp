@@ -80,9 +80,11 @@ namespace stats {
          Accumulator[label_img[label_coords]] += value
          Counter[label_img[label_coords]] += 1
          */
+        if (index_seg != -1){
         counter[index_seg]++;
         for(unsigned int b = 0; b < nb_bands; b++){
           accumulator[ b * num_labels + index_seg ] += color_img[ num_pixels * b + label_coords ];
+        }
         }
         }
     }
@@ -108,8 +110,10 @@ namespace stats {
          for(unsigned int c = 0; c < nb_cols; c++){
              label_coords = r * nb_cols + c;
              seg = segmentation[label_coords];
+             if (seg != 0) {
              seg_class = clustering[seg - 1];
              final_image[label_coords] = seg_class;
+             }
         }
     }
     
