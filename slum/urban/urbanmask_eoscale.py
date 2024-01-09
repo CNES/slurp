@@ -176,6 +176,49 @@ def print_dataset_infos(dataset, prefix=""):
     print(prefix, "Image bounds :", dataset.bounds)
     print()
 
+def save_image(
+    image,
+    file,
+    crs=None,
+    transform=None,
+    nodata=None,
+    rpc=None,
+    colormap=None,
+    tags=None,
+    **kwargs,
+):
+    """Save 1 band numpy image to file with deflate compression.
+    Note that rio.dtype is string so convert np.dtype to string.
+    rpc must be a dictionnary.
+    """
+    
+    dataset = rio.open(
+        file,
+        "w",
+        driver="GTiff",
+        compress="deflate",
+        height=image.shape[0],
+        width=image.shape[1],
+        count=1,
+        dtype=str(image.dtype),
+        crs=crs,
+        transform=transform,
+        **kwargs,
+    )
+    dataset.write(image, 1)
+    dataset.nodata = nodata
+
+    if rpc:
+        dataset.update_tags(**rpc, ns="RPC")
+
+    if colormap:
+        dataset.write_colormap(1, colormap)
+
+    if tags:
+        dataset.update_tags(**tags)
+        
+    dataset.close()
+    del dataset
 
 def show_images(image1, title1, image2, title2, **kwargs):
     """Show 2 images with matplotlib."""
@@ -644,11 +687,16 @@ def build_samples(inputBuffer: list,
     nb_valid_subset = np.count_nonzero(inputBuffer[0])
     nb_built_subset = np.count_nonzero(np.logical_and(inputBuffer[1], inputBuffer[0]))
     nb_other_subset = nb_valid_subset - nb_built_subset
-    
+    # Ratio of pixel class compare to the full image ratio
+    urban_ratio = nb_built_subset/ args.nb_valid_built_pixels
+    other_ratio = nb_other_subset/args.nb_valid_other_pixels
+    # Retrieve number of samples to create for each class in this subset 
+    nb_urban_subsamples = round(urban_ratio*args.nb_samples_urban)
+    nb_other_subsamples = round(other_ratio*args.nb_samples_other)
 
     # Building samples
     rows_b, cols_b = get_indexes_from_masks(
-        nb_built_subset, inputBuffer[1][0], args.value_classif, inputBuffer[0][0],args
+        nb_urban_subsamples, inputBuffer[1][0], args.value_classif, inputBuffer[0][0],args
     )
     
     rows_road = []
@@ -656,14 +704,14 @@ def build_samples(inputBuffer: list,
 
     if args.nb_classes == 2:
         rows_road, cols_road = get_indexes_from_masks(
-            nb_built_subset, inputBuffer[1][0], 2, inputBuffer[0][0], args
+            nb_urban_subsamples, inputBuffer[1][0], 2, inputBuffer[0][0], args
         )
     
     rows_nob = []
     cols_nob = []
 
     rows_nob, cols_nob = get_indexes_from_masks(
-        nb_other_subset, inputBuffer[1][0], 0, inputBuffer[0][0], args
+        nb_other_subsamples, inputBuffer[1][0], 0, inputBuffer[0][0], args
     )
 
     if args.save_mode == "debug":
@@ -1161,13 +1209,23 @@ def getarguments():
     )
 
     parser.add_argument(
-        "-nb_samples",
+        "-nb_samples_urban",
         type=int,
         default=1000,
         required=False,
         action="store",
-        dest="nb_samples",
-        help="Number of samples for the class of interest",
+        dest="nb_samples_urban",
+        help="Number of samples in buildings for learning (default is 1000)",
+    )
+
+    parser.add_argument(
+        "-nb_samples_other",
+        type=int,
+        default=5000,
+        required=False,
+        action="store",
+        dest="nb_samples_other",
+        help="Number of samples in other for learning (default is 5000)",
     )
 
     parser.add_argument(
@@ -1488,10 +1546,41 @@ def main():
             time_random_forest = time.time()
             
             ######### Post_processing  ################
-            #  ????
-
+            # Save predict and classif image
+            final_predict = eoscale_manager.get_array(key_predict[0])[0]
+            #final_classif = eoscale_manager.get_array(key_post_process[1])[0]
             
+            save_image(
+                final_predict,
+                join(dirname(args.file_classif), "predict.tif"),
+                args.crs,
+                args.transform,
+                255,
+                args.rpc,
+                tags=args.__dict__,
+            )
+            '''
+            save_image(
+                final_classif,
+                args.file_classif,
+                args.crs,
+                args.transform,
+                255,
+                args.rpc,
+                tags=args.__dict__,
+            )   
+            '''
+            end_time = time.time()
             
+            print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+            print("Total time (user)       :\t"+convert_time(end_time-t0))
+            print("- Build_stack           :\t"+convert_time(time_stack-t0))
+            print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
+            print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+            print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+            print("***")    
+        
+        
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
