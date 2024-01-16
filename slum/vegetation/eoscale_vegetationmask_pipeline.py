@@ -71,7 +71,7 @@ def single_int32_profile(input_profiles: list, map_params):
     profile["count"]= 1
     profile["dtype"]= np.int32
     profile["compress"] = "lzw"
-    
+
     return profile
 
 def multiple_int32_profile(input_profiles: list, map_params):
@@ -116,6 +116,7 @@ def compute_ndvi(input_buffers: list,
     im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.red_band-1])) / (
         np.float32(input_buffers[0][params.nir_band-1]) + np.float32(input_buffers[0][params.red_band-1]))
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
+    im_ndvi[np.logical_not(input_buffers[1][0])] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
 
@@ -135,6 +136,7 @@ def compute_ndwi(input_buffers: list,
     im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.nir_band-1])) / (
         np.float32(input_buffers[0][params.green_band-1]) + np.float32(input_buffers[0][params.nir_band-1]))
     im_ndwi[np.logical_or(im_ndwi < -1000.0, im_ndwi > 1000.0)] = np.nan
+    im_ndwi[np.logical_not(input_buffers[1][0])] = np.nan
     np.nan_to_num(im_ndwi, copy=False, nan=32767)
     im_ndwi = np.int16(im_ndwi)
 
@@ -145,9 +147,10 @@ def compute_ndwi(input_buffers: list,
 def texture_task(input_buffers: list, 
                   input_profiles: list, 
                   args: dict) -> np.ndarray :
-    # input_buffers = [input_img]
+    # input_buffers = [input_img, valid_stack]
     # Compute textures
-    texture, t_texture = std_convoluted(input_buffers[0][args.nir_band - 1].astype(float), args.texture_rad, args.filter_texture, args.min_value, args.max_value)
+    masked_band= np.ma.array(input_buffers[0][args.nir_band - 1], mask = np.logical_not(input_buffers[1]))
+    texture, t_texture = std_convoluted(masked_band.astype(float), args.texture_rad, args.filter_texture, args.min_value, args.max_value)
     
     return texture
     
@@ -202,6 +205,7 @@ def segmentation_task(input_buffers: list,
     print(f"DBG > {input_buffers[0].shape=}")
     print(f"DBG > {input_buffers[1].shape=}")
     '''
+    
     # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
     #segments = compute_segmentation(args,input_buffers[0], input_buffers[1][0][input_buffers[2][0]])
     segments = compute_segmentation(args,input_buffers[0], input_buffers[1])
@@ -216,9 +220,12 @@ def segmentation_task(input_buffers: list,
 def concat_seg(previousResult,outputAlgoComputer, tile):
     #outputAlgoComputer= [segments]
     num_seg= np.max(previousResult[0])
+    
     previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
     
-    
+    previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1]= np.where(outputAlgoComputer[0][:,:,:]==0, 0 ,  
+                                                                                                outputAlgoComputer[0][:,:,:] + num_seg)
+                                                                                        
 
 
 
@@ -529,40 +536,6 @@ def main():
     with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
         input_img = eoscale_manager.open_raster(raster_path = args.im)
         t0 = time.time()
-    
-        #Compute NDVI
-        if args.file_ndvi == None:
-            ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
-                                                           image_filter = compute_ndvi,
-                                                           filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
-                                                           stable_margin= 0,
-                                                           context_manager = eoscale_manager,
-                                                           multiproc_context= "fork",
-                                                           filter_desc= "NDVI processing...")
-            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-                eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
-        else:
-            ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
-        
-        t_NDVI = time.time()
-        
-        #Compute NDWI
-        if args.file_ndwi == None:
-            ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img],
-                                                           image_filter = compute_ndwi,
-                                                           filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
-                                                           stable_margin= 0,
-                                                           context_manager = eoscale_manager,
-                                                           multiproc_context= "fork",
-                                                           filter_desc= "NDWI processing...")         
-            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-                eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
-        else:
-            ndwi = [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
-        
-        t_NDWI = time.time()
         
         # Get cloud mask if any
         if args.file_cloud_gml:
@@ -597,14 +570,49 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Valid stack processing...")
+
+        #Compute NDVI
+        if args.file_ndvi == None:
+            ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img, valid_stack_key[0]],
+                                                           image_filter = compute_ndvi,
+                                                           filter_parameters=args,
+                                                           generate_output_profiles = single_float_profile,
+                                                           stable_margin= 0,
+                                                           context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
+                                                           filter_desc= "NDVI processing...")
+            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+                eoscale_manager.write(key = ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
+        else:
+            ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
         
+        t_NDVI = time.time()
+        
+        #Compute NDWI
+        if args.file_ndwi == None:
+            ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img, valid_stack_key[0]],
+                                                           image_filter = compute_ndwi,
+                                                           filter_parameters=args,
+                                                           generate_output_profiles = single_float_profile,
+                                                           stable_margin= 0,
+                                                           context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
+                                                           filter_desc= "NDWI processing...")         
+            if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
+                eoscale_manager.write(key = ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
+        else:
+            ndwi = [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
+        
+        t_NDWI = time.time()
+        
+
         # Recover extrema of the input image
         args.min_value = np.min(eoscale_manager.get_array(input_img)[3])
         args.max_value = np.max(eoscale_manager.get_array(input_img)[3])
         
         #Compute texture
         if args.file_texture == None:
-            texture = eoexe.n_images_to_m_images_filter(inputs = [input_img],
+            texture = eoexe.n_images_to_m_images_filter(inputs = [input_img,valid_stack_key[0]],
                                                         image_filter = texture_task,
                                                         filter_parameters=args,
                                                         generate_output_profiles = single_float_profile,
@@ -659,7 +667,7 @@ def main():
         t_cluster = time.time()       
         
         # Finalize mask
-        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0],valid_stack_key[0]],
+        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
                                                       image_filter = finalize_task,
                                                       filter_parameters={"data":clusters},
                                                       generate_output_profiles = single_uint8_profile, 
