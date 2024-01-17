@@ -876,7 +876,7 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
 
     # Input files
-    group1.add_argument("-file_phr", help="PHR filename")
+    group1.add_argument("file_phr", help="PHR filename")
 
     group1.add_argument(
         "-pekel",
@@ -1208,7 +1208,7 @@ def getarguments():
     )
 
     # Output
-    group5.add_argument("-file_classif", help="Output classification filename")
+    group5.add_argument("file_classif", help="Output classification filename")
 
     group5.add_argument(
         "-value_classif",
