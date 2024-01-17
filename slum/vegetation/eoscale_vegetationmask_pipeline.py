@@ -434,9 +434,12 @@ def finalize_task(input_buffers: list,
     clustering = args["data"]
     ts_stats = ts.PyStats()
     
-    final_image = ts_stats.finalize(input_buffers[0], clustering)
-    
-    return final_image
+    final_mask = ts_stats.finalize(input_buffers[0], clustering)
+
+    # Add nodata in final_mask (input_buffers[1] : valid mask)
+    final_mask[np.logical_not(input_buffers[1][0])] = 255
+     
+    return final_mask
 
 
 def clean_task(input_buffers: list,
@@ -471,10 +474,7 @@ def clean_task(input_buffers: list,
             low_veg_binary.astype(bool), args.remove_small_holes, connectivity=2
         ).astype(np.uint8) 
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
-    
-    # Add nodata in im_classif (input_buffers[1] : valid mask)
-    im_classif[np.logical_not(input_buffers[1][0])] = 255
-    
+   
     return im_classif
 
 
@@ -667,7 +667,7 @@ def main():
         t_cluster = time.time()       
         
         # Finalize mask
-        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0]],
+        final_seg = eoexe.n_images_to_m_images_filter(inputs = [future_seg[0], valid_stack_key[0]],
                                                       image_filter = finalize_task,
                                                       filter_parameters={"data":clusters},
                                                       generate_output_profiles = single_uint8_profile, 
