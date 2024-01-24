@@ -66,6 +66,12 @@ def single_bool_profile(input_profiles: list, map_params):
     
     return profile
 
+def single_int16_profile(input_profiles: list, map_params):
+    profile= input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.int16
+    profile["compress"] = "lzw"
+
 def single_int32_profile(input_profiles: list, map_params):
     profile= input_profiles[0]
     profile["count"]= 1
@@ -576,7 +582,7 @@ def main():
             ndvi = eoexe.n_images_to_m_images_filter(inputs = [input_img, valid_stack_key[0]],
                                                            image_filter = compute_ndvi,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = single_int16_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
@@ -593,7 +599,7 @@ def main():
             ndwi = eoexe.n_images_to_m_images_filter(inputs = [input_img, valid_stack_key[0]],
                                                            image_filter = compute_ndwi,
                                                            filter_parameters=args,
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = single_int16_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",

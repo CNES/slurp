@@ -773,44 +773,6 @@ def train_classifier(classifier, x_samples, y_samples):
     )
 
 
-def predict_shared(args, classifier, key, im_shape, im_dtype, index, step, lines):
-    start_time = time.time()
-    shm = shared_memory.SharedMemory(name=key)
-    shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    im_stack_buffer = shmNpArray_stack[:-5, :, index*step:min((index+1)*step, lines)] # PHR image + ndvi + ndwi + file layers
-    valid_stack_buffer = shmNpArray_stack[-4, :, index*step:min((index+1)*step, lines)]
-    chunkBuffer =  np.transpose(im_stack_buffer[:, valid_stack_buffer.astype(np.bool_)])
-    shm.close()
-    del shm
-    
-    # Probabilities
-    proba = classifier.predict_proba(chunkBuffer)
-    del chunkBuffer
-    
-    # Prediction, inspired by sklearn code to predict class
-    res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
-    res_classif[res_classif == args.value_classif] = 1
-    
-    # Add in stack construction
-    shm = shared_memory.SharedMemory(name=key)
-    shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    valid_stack_buffer = np.copy(shmNpArray_stack[-4, :, index*step:min((index+1)*step, lines)]).astype(np.bool_)
-    
-    proba_buffer = shmNpArray_stack[-3:-1, :, index*step:min((index+1)*step, lines)]
-    proba_buffer[:, valid_stack_buffer] = 100*np.transpose(proba)
-    shmNpArray_stack[-3:-1, :, index*step:min((index+1)*step, lines)] = proba_buffer[:, :, :]
-    del proba, proba_buffer
-    
-    predict_buffer = shmNpArray_stack[-1, :, index*step:min((index+1)*step, lines)]
-    predict_buffer[valid_stack_buffer] = res_classif   
-    shmNpArray_stack[-1, :, index*step:min((index+1)*step, lines)] = predict_buffer[:, :]
-    del res_classif; predict_buffer
-    
-    shm.close()
-    
-    return index, time.time()-start_time
-
-
 def get_bornes(index, step, limit, margin):
     if index == 0: # first band
         start_with_margin = 0
@@ -831,63 +793,37 @@ def get_bornes(index, step, limit, margin):
     return start_with_margin, end_with_margin, start_extract, end_extract
 
 
-def regul_shared(args, key, im_shape, im_dtype, index, step):
-    start_time = time.time()
-    start_with_margin, end_with_margin, start_extract, end_extract = get_bornes(index, step, im_shape[2], args.margin)
-    # start_with_margin and end_with_margin : indexes to extract the tile with margin from im_predict
-    # start_extract and end_extract : indexes to extract the tile without margin from predictBuffer 
-    
-    shm = shared_memory.SharedMemory(name=key)
-    shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    predictBuffer = np.copy(shmNpArray_stack[-1, :, start_with_margin:end_with_margin]) # Extract of prediction with margin
-    shm.close()
-    del shm
-   
-    # Clean
-    im_classif = clean(args, predictBuffer)
-    
-    # Watershed regulation
-    im_seg, gradients, markers = watershed_regul(args, im_classif, key, im_shape, im_dtype, start_with_margin, end_with_margin)
-    
-    return index, im_classif[:, start_extract:end_extract], im_seg[:, start_extract:end_extract], gradients[:, start_extract:end_extract], markers[:, start_extract:end_extract], time.time()-start_time
-
-
-def watershed_regul(args, clean_predict, key, im_shape, im_dtype, start_with_margin, end_with_margin):    
-    shm = shared_memory.SharedMemory(name=key)
-    shmNpArray_stack = np.ndarray(im_shape, dtype=im_dtype,buffer=shm.buf)
-    
+def watershed_regul(args, clean_predict, inputBuffer):    
+    #inputBuffer= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters
     # Compute gradient : either on NDVI image, or on RGB image 
-    im_stack = shmNpArray_stack[:-5, :, start_with_margin:end_with_margin] # PHR image + ndvi + ndwi + file layers
+     #DEBUG im_stack = PHR image + ndvi + ndwi + file layers
     if args.use_rgb_layers:
-        im_mono = 0.29*im_stack[0] + 0.58*im_stack[1] + 0.114*im_stack[2]
+        im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
     else:
-        im_mono = im_stack[0]
+        im_mono = inputBuffer[1][0]
     
     # compute gradient
     edges = sobel(im_mono)
     del im_mono
 
     # markers map : -1, 1 and 2 : probable background, buildings or false positive
-    proba = shmNpArray_stack[-2, :, start_with_margin:end_with_margin] # proba of building class
-    markers = np.zeros_like(im_stack[0])       
-    probable_buildings = np.logical_and(proba > args.confidence_threshold, clean_predict == 1)
-    probable_background = np.logical_and(proba < 20, clean_predict == 0)
+    # inputBuffer[0] = proba of building class
+    markers = np.zeros_like(inputBuffer[0]) 
+    probable_buildings = np.logical_and(inputBuffer[0] > args.confidence_threshold, clean_predict == 1)
+    probable_background = np.logical_and(inputBuffer[0] < 20, clean_predict == 0)
     markers[probable_background] = -1
     markers[probable_buildings] = 1    
     del probable_buildings, probable_background        
 
     if args.remove_false_positive:
-        ground_truth = shmNpArray_stack[-5, :, start_with_margin:end_with_margin]
+        ground_truth = inputBuffer[4]
         # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, proba > args.confidence_threshold)
+        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0] > args.confidence_threshold)
         markers[false_positive] = 2
         del ground_truth, false_positive
-        
-    shm.close()
-    del shm
-    
+
     # watershed segmentation
-    seg = segmentation.watershed(edges, markers)
+    seg = segmentation.watershed(edges, markers[0])
     seg[seg==-1] = 0
     
     # remove small artefacts 
@@ -947,105 +883,19 @@ def RF_prediction(inputBuffer: list,
     
     return prediction  
 
-def predict(args, classifier, shm_key, shm_shape, shm_dtype, current_mem):
-    """Predict."""    
-    lines = shm_shape[2]
-    step = get_step(args, current_mem, shm_shape, lines)  # number of lines of each tile
-    nb_tiles = lines//step if (lines % step == 0) else lines//step + 1
-    print("Division in " + str(nb_tiles) + " tiles")
+def post_process(inputBuffer: list, 
+            input_profiles: list, 
+            params: dict) -> list:
+    #inputs= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters
     
-    print("DBG >> Prediction ")
-    start_time = time.time()
+    # Clean
+    im_classif = clean(params, inputBuffer[0])
     
-    context = get_context('spawn')    
-    future_seg = []
-    cpt = 0
+    # Watershed regulation
+    im_seg, gradients, markers = watershed_regul(params, im_classif, inputBuffer)
     
-    time_predict = 0
-    t0_predict = time.time()
-    
-    # Prediction
-    while (cpt < nb_tiles):
-        endSession = min(cpt + args.nb_workers, nb_tiles)
-        workers = endSession - cpt
-        with concurrent.futures.ProcessPoolExecutor(max_workers=workers, mp_context=context) as executor:
-            for index in range(cpt, endSession):
-                future_seg.append(executor.submit(predict_shared, args, classifier, shm_key, shm_shape, shm_dtype, index, step, lines))
-                
-        for seg in concurrent.futures.as_completed(future_seg):
-            try:
-                num, time_exec = seg.result()
-                time_predict += time_exec
-            except Exception as e:
-                print("Exception ---> "+str(e))
-        
-        cpt += args.nb_workers
-        future_seg = []
-    
-    time_predict_user = time.time() - t0_predict
-    
-    print("Prediction time :", time.time() - start_time)
-    
-    print("DBG >> Regularization ")
-    t0 = time.time()
-    
-    im_clean = np.zeros(shm_shape[1:], dtype=np.int16)
-    segment = np.zeros(shm_shape[1:], dtype=np.int32)
-    grad = np.zeros(shm_shape[1:], dtype=np.float64)
-    marks = np.zeros(shm_shape[1:], dtype=np.int16)
+    return im_seg
 
-    context = get_context('spawn')
-    future_seg = []
-    cpt = 0
-    
-    time_regul = 0
-    t0_regul = time.time()
-
-    # Regularization
-    while (cpt < nb_tiles):
-        endSession = min(cpt + args.nb_workers, nb_tiles)
-        workers = endSession - cpt
-        with concurrent.futures.ProcessPoolExecutor(max_workers=workers, mp_context=context) as executor:
-            for index in range(cpt, endSession):
-                future_seg.append(executor.submit(regul_shared, args, shm_key, shm_shape, shm_dtype, index, step))
-                
-        for seg in concurrent.futures.as_completed(future_seg):
-            try:
-                num, res_clean, res_seg, res_gradients, res_markers, time_exec = seg.result()
-                np.copyto(im_clean[:, num*step:min((num+1)*step, shm_shape[2])], res_clean)
-                np.copyto(segment[:, num*step:min((num+1)*step, shm_shape[2])], res_seg)
-                np.copyto(grad[:, num*step:min((num+1)*step, shm_shape[2])], res_gradients)
-                np.copyto(marks[:, num*step:min((num+1)*step, shm_shape[2])], res_markers)
-                time_regul += time_exec
-            except Exception as e:
-                print("Exception ---> "+str(e)) 
-        
-        cpt += args.nb_workers
-        future_seg = []
-        
-    time_regul_user = time.time() - t0_regul
-    
-    print(">> Regularization in %d sec " % (time.time()-t0))
-
-    return im_clean, segment, grad, marks, [time_predict_user, time_predict, time_regul_user, time_regul]
-
-    
-    end_time = time.time()
-        
-    print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
-    print("Total time (user)       :\t"+convert_time(end_time-t0))
-    print("- Build_stack           :\t"+convert_time(time_stack-t0))
-    print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
-    print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
-    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
-    print("***")
-    print("Max workers used for parallel tasks "+str(args.nb_workers))
-    print("Prediction (user)       :\t"+convert_time(all_times[0]))
-    print("Prediction (parallel)   :\t"+convert_time(all_times[1]))
-    print("Regularization (user)   :\t"+convert_time(all_times[2]))
-    print("Regularization (parallel):\t"+convert_time(all_times[3]))
-    
-    
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
     return time.strftime("%H:%M:%S", full_time)
@@ -1067,7 +917,6 @@ def clean(args, im_classif):
             im_classif.astype(bool), args.remove_small_objects, connectivity=2
         ).astype(np.uint8)
 
-    #print(">> Clean in %d sec " % (time.time()-t0))
 
     return im_classif
 
@@ -1479,10 +1328,7 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Valid stack processing...")       
-            
-            
-            #Add files_layers
-            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
+           
 
             time_stack = time.time()
             
@@ -1546,9 +1392,21 @@ def main():
             time_random_forest = time.time()
             
             ######### Post_processing  ################
+            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
+            
+            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters,   
+                                                           image_filter = post_process,
+                                                           filter_parameters= args,
+                                                           generate_output_profiles = single_float_profile,
+                                                           stable_margin= 3,
+                                                           context_manager = eoscale_manager,
+                                                           multiproc_context= "fork",
+                                                           filter_desc= "Post processing...")
+
+            
             # Save predict and classif image
             final_predict = eoscale_manager.get_array(key_predict[0])[0]
-            #final_classif = eoscale_manager.get_array(key_post_process[1])[0]
+            final_classif = eoscale_manager.get_array(key_post_process[0])[0]
             
             save_image(
                 final_predict,
