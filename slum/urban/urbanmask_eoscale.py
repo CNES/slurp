@@ -118,6 +118,14 @@ def single_float_profile(input_profiles: list, map_params):
     
     return profile
 
+def three_float_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=3
+    profile['dtype']=np.float32
+    profile["compress"] = "lzw"
+    profile["nodata"] = 32767
+    return profile
+
 def single_int16_profile(input_profiles: list, map_params):
     profile= input_profiles[0]
     profile["count"]= 1
@@ -130,6 +138,15 @@ def single_int16_profile(input_profiles: list, map_params):
 def single_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"]= 1
+    profile["dtype"]= np.uint8
+    profile["compress"] = "lzw"
+    profile["nodata"] = 255
+    
+    return profile
+
+def three_uint8_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile["count"]= 3
     profile["dtype"]= np.uint8
     profile["compress"] = "lzw"
     profile["nodata"] = 255
@@ -511,185 +528,6 @@ def print_feature_importance(classifier, feature_names):
             % (feature_names[idx], importances[idx], std[idx])
         )
 
-
-def build_stack(args):
-    """Build stack."""
-
-    # Band positions in PHR image
-    if args.red == 1:
-        names_stack = ["R", "G", "B", "NIR"]
-    else:
-        names_stack = ["B", "G", "R", "NIR"]
-
-    # Image PHR (numpy array, 4 bands, band number is first dimension),
-    ds_phr = rio.open(args.file_phr)
-    print_dataset_infos(ds_phr, "PHR")    
-    nodata_phr = ds_phr.nodata
-    
-    # Save crs, transform and rpc in args
-    args.shape = ds_phr.shape
-    args.crs = ds_phr.crs
-    args.transform = ds_phr.transform
-    args.rpc = ds_phr.tags(ns="RPC")
-    
-    # Read image
-    im_phr = ds_phr.read()
-    ds_phr.close()
-    del ds_phr
-    
-    if not np.issubdtype(im_phr.dtype, np.integer):
-        raise Exception("The input image must have an integer (signed or unsigned) type but is in " + str(im_phr.dtype))     
-
-    # Valid_phr (boolean numpy array, True = valid data, False = no data)
-    valid_phr = np.logical_and.reduce(im_phr != nodata_phr, axis=0)
-    if args.save_mode == "debug":
-        io_utils.save_image(
-            valid_phr.astype(np.uint8),
-            join(dirname(args.file_classif), "valid.tif"),
-            args.crs,
-            args.transform,
-            nodata=None,
-            rpc=args.rpc,
-        )
-
-    # Compute NDVI
-    if args.file_ndvi:
-        ds_ndvi = rio.open(args.file_ndvi)
-        print_dataset_infos(ds_ndvi, "NDVI")
-        im_ndvi = ds_ndvi.read(1)
-        ndvi_nodata = ds_ndvi.nodata
-        ds_ndvi.close()
-        del ds_ndvi
-        valid_ndvi = im_ndvi != ndvi_nodata
-    else:
-        im_ndvi, valid_ndvi = compute_ndxi(
-            im_phr[names_stack.index("NIR")],
-            im_phr[names_stack.index("R")],
-            valid_phr,
-        )
-        if (args.save_mode != "none" and args.save_mode != "aux"):
-            io_utils.save_image(
-                im_ndvi,
-                join(dirname(args.file_classif), "ndvi.tif"),
-                args.crs,
-                args.transform,
-                nodata=32767,
-                rpc=args.rpc,
-            )
-
-    valid_watermask = np.zeros(valid_phr.shape, dtype=np.uint8)
-    if args.file_watermask:
-        ds_wm = rio.open(args.file_watermask)
-        watermask = ds_wm.read(1)
-        ds_wm.close()
-        valid_watermask = watermask != 1
-        del watermask, ds_wm
-        
-    valid_vegmask = np.zeros(valid_phr.shape, dtype=np.uint8)
-    if args.file_vegetationmask:
-        ds_vegmask = rio.open(args.file_vegetationmask)
-        vegmask = ds_vegmask.read(1)
-        ds_vegmask.close()
-        valid_vegmask = vegmask < args.vegmask_max_value
-        del vegmask, ds_vegmask
-    
-    # Compute NDWI
-    if args.file_ndwi:
-        ds_ndwi = rio.open(args.file_ndwi)
-        print_dataset_infos(ds_ndwi, "NDWI")
-        im_ndwi = ds_ndwi.read(1)
-        ndwi_nodata = ds_ndwi.nodata
-        ds_ndwi.close()
-        del ds_ndwi
-        valid_ndwi = im_ndwi != ndwi_nodata
-    else:
-        im_ndwi, valid_ndwi = compute_ndxi(
-            im_phr[names_stack.index("G")],
-            im_phr[names_stack.index("NIR")],
-            valid_phr,
-        )
-        if (args.save_mode != "none" and args.save_mode != "aux"):
-            io_utils.save_image(
-                im_ndwi,
-                join(dirname(args.file_classif), "ndwi.tif"),
-                args.crs,
-                args.transform,
-                nodata=32767,
-                rpc=args.rpc,
-            )
-
-    # Show NDVI and NDVI images
-    if args.display:
-        show_images(im_ndvi, "NDVI", im_ndwi, "NDWI", vmin=-1000, vmax=1000)
-        show_histograms(im_ndvi, "NDVI", im_ndwi, "NDWI")
-
-    # Global mask construction
-    valid_stack = np.logical_and.reduce((valid_phr, valid_ndvi, valid_ndwi))
-    if args.file_watermask:
-        valid_stack = np.logical_and.reduce((valid_stack, valid_watermask))
-    if args.file_vegetationmask:
-        valid_stack = np.logical_and.reduce((valid_stack, valid_vegmask))
-    del valid_ndvi, valid_ndwi
-
-    # Show PHR and stack validity masks
-    if args.display:
-        show_images(valid_phr, "Valid PHR", valid_stack, "Valid Stack")     
-    
-    # Stack construction in a shared memory :
-    # 0 -> bands_phr : im_phr (1 or 4 bands)
-    # bands_phr : ndvi
-    # bands_phr + 1 : ndwi
-    # bands_phr + 2 -> bands_phr + 2 + len(files_layers) : files_layers (1 band for each layer)
-    # -5 : mask_building
-    # -4 : valid_stack
-    # -3 and -2 : proba (2 bands)
-    # -1 : predict -> index -1
-    start_time = time.time()
-    bands_phr = im_phr.shape[0] if args.use_rgb_layers else 1
-    shm_shape = (bands_phr + 7 + len(args.files_layers), im_phr.shape[1], im_phr.shape[2])
-    shm_dtype = np.dtype(np.int16)
-    d_size = shm_dtype.itemsize * np.prod(shm_shape)
-    shm_key = str(uuid.uuid4())
-    shmSlumIn = shared_memory.SharedMemory(create=True, size=d_size, name=shm_key)
-    shmNpArray_stack = np.ndarray(shape=shm_shape, dtype=shm_dtype, buffer=shmSlumIn.buf)
-    
-    #Add im_phr
-    if args.use_rgb_layers:
-        np.copyto(shmNpArray_stack[:bands_phr, :, :], im_phr.astype(shm_dtype))
-    else:
-        np.copyto(shmNpArray_stack[:bands_phr, :, :], im_phr[names_stack.index("NIR")].astype(shm_dtype))
-        names_stack = ["NIR"]
-    del im_phr
-    
-    #Add im_ndvi and im_ndwi
-    np.copyto(shmNpArray_stack[bands_phr, :, :], im_ndvi)
-    np.copyto(shmNpArray_stack[bands_phr+1, :, :], im_ndwi)
-    del im_ndvi, im_ndwi
-    
-    #Add files_layers
-    for i in range(len(args.files_layers)):
-        file_layer = args.files_layers[i]
-        ds_layer = rio.open(file_layer)
-        layer = ds_layer.read(1)
-        ds_layer.close()
-        del ds_layer
-        np.copyto(shmNpArray_stack[bands_phr+2+i, :, :], layer.astype(shm_dtype))
-        
-    #Add valid_stack
-    shmNpArray_stack[-4, :, :] = valid_stack[:, :]
-    del valid_stack
-          
-    shmSlumIn.close()
-    
-    names_stack.extend(["NDVI", "NDWI"])
-    names_stack.extend(args.files_layers)
-    print(names_stack)
-    print("Stack time :", time.time() - start_time)
-    print("Stack shape :", shm_shape)
-
-    return shm_key, shm_shape, shm_dtype, names_stack
-
-
 def concatenate_samples(output_scalars, chunk_output_scalars, tile):
     
     output_scalars.append(chunk_output_scalars[0])
@@ -699,9 +537,9 @@ def build_samples(inputBuffer: list,
                     input_profiles: list, 
                     args: dict) -> list:
     """Build samples."""
-    #inputBuffer=[valid_stack_key[0],key_gt, key_phr, key_ndvi[0], key_ndwi[0]]
+    #inputBuffer=[valid_stack_key[0],key_gt, key_phr, key_ndvi[0], key_ndwi[0]]+ files_layers 
     
-    mask_building = np.where(inputBuffer[1]==args.value_classif,1,0)
+    mask_building = inputBuffer[1]==args.value_classif
     
     # Retrieve number of pixels for each class
     nb_valid_subset = np.count_nonzero(inputBuffer[0])
@@ -733,7 +571,7 @@ def build_samples(inputBuffer: list,
     rows_nob, cols_nob = get_indexes_from_masks(
         nb_other_subsamples, inputBuffer[1][0], 0, inputBuffer[0][0], args
     )
-    
+
     # samples = building+non building
     rows = rows_b + rows_nob
     cols = cols_b + cols_nob
@@ -742,7 +580,8 @@ def build_samples(inputBuffer: list,
         cols = cols + cols_road
 
     # Prepare samples for learning
-    im_stack = np.concatenate((inputBuffer[2],inputBuffer[3],inputBuffer[4],mask_building),axis=0)  # TODO : gérer les files_layers optionnels
+#    im_stack = np.concatenate((np.concatenate(inputBuffer[1:-1], axis=0),mask_building),axis=0)  # TODO : gérer les files_layers optionnels
+    im_stack = np.concatenate((inputBuffer[1:]), axis=0) # TODO : gérer les files_layers optionnels
     samples = np.transpose(im_stack[:, rows, cols])
 
     return samples
@@ -793,7 +632,7 @@ def get_bornes(index, step, limit, margin):
 
 
 def watershed_regul(args, clean_predict, inputBuffer):    
-    #inputBuffer= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters
+    #inputBuffer= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_layers (TODO)
     # Compute gradient : either on NDVI image, or on RGB image 
      #DEBUG im_stack = PHR image + ndvi + ndwi + file layers
     if args.use_rgb_layers:
@@ -803,100 +642,81 @@ def watershed_regul(args, clean_predict, inputBuffer):
     
     # compute gradient
     edges = sobel(im_mono)
+
     del im_mono
 
     # markers map : -1, 1 and 2 : probable background, buildings or false positive
     # inputBuffer[0] = proba of building class
-    markers = np.zeros_like(inputBuffer[0]) 
-    probable_buildings = np.logical_and(inputBuffer[0] > args.confidence_threshold, clean_predict == 1)
-    probable_background = np.logical_and(inputBuffer[0] < 20, clean_predict == 0)
-    markers[probable_background] = -1
+    markers = np.zeros_like(inputBuffer[0][0])
+    probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
+    probable_background = np.logical_and(inputBuffer[0][2] < 20, clean_predict == 0)
+    markers[probable_background] = 3
     markers[probable_buildings] = 1    
     del probable_buildings, probable_background        
 
     if args.remove_false_positive:
-        ground_truth = inputBuffer[4]
+        ground_truth = inputBuffer[4][0]
         # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0] > args.confidence_threshold)
+        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0][2] > args.confidence_threshold)
         markers[false_positive] = 2
         del ground_truth, false_positive
 
     # watershed segmentation
-    seg = segmentation.watershed(edges, markers[0])
-    seg[seg==-1] = 0
+    seg = segmentation.watershed(edges, markers)
+    seg[seg==3] = 0
     
     # remove small artefacts 
     if args.remove_small_objects:
         res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
         # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
         seg = np.multiply(res, seg)
-    
+
     return seg, edges, markers
-
-
-def get_step(args, current_mem, shm_shape, lines):
-    base_gb = 225/1024  # Gb
-    mem_used_gb = current_mem / 1024  # Gb
-    
-    # Margin calculation
-    if not args.margin:
-        args.margin = max(1, 2*args.binary_opening, 2*args.binary_closing, ceil(sqrt(args.remove_small_objects)))
-    
-    #Max step for prediction
-    weight_one_chunk = (shm_shape[0] - 5) * np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
-    weight_one_proba = 2 * np.dtype(np.float64).itemsize * shm_shape[1] / (1024*1024*1024)  # Memory for one line in Gb    
-    max_step_predict = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb) / (7*weight_one_chunk + weight_one_proba)  # float
-    
-    if max_step_predict < 1:
-        raise Exception("Insufficient memory, you need to increase the max memory")
-    
-    #Max step for regularization
-    weight_one_clean = np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)
-    weight_one_segment = np.dtype(np.int32).itemsize * shm_shape[1] / (1024*1024*1024)
-    weight_one_grad = np.dtype(np.float64).itemsize * shm_shape[1] / (1024*1024*1024)
-    weight_one_marks = np.dtype(np.int16).itemsize * shm_shape[1] / (1024*1024*1024)  # Memory for one line in Gb
-    memory_regul = weight_one_clean + weight_one_segment + weight_one_marks + 9*weight_one_grad
-    max_step_regul = (((args.max_memory - mem_used_gb) / args.nb_workers) - base_gb - memory_regul*args.margin) / memory_regul  # float
-    
-    if max_step_regul < 1:
-        raise Exception("Insufficient memory, you need to increase the max memory")
-
-    step = min(int(max_step_predict), int(max_step_regul), lines // args.nb_workers + 1)
-    
-    #print("Prediction max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + (7*weight_one_chunk + weight_one_proba) * step))
-    #print("Regularization max memory use (in Gb)", mem_used_gb + args.nb_workers * (base_gb + memory_regul * (step + args.margin)))
-                                                                     
-    return step
 
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
             params: dict) -> list:
     
-    #inputBuffer = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]]
-    im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0)
+    #inputBuffer = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]] + file_layers
+    im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0) 
     buffer_to_predict=np.transpose(im_stack[:,inputBuffer[3][0]])
 
     classifier =params["classifier"]
-    prediction = np.zeros(inputBuffer[3][0].shape, dtype=np.uint8)
-    prediction[inputBuffer[3][0]] = classifier.predict(buffer_to_predict)  
+    proba = classifier.predict_proba(buffer_to_predict)
     
-    return prediction  
+    # Prediction, inspired by sklearn code to predict class
+    res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
+    res_classif[res_classif == 255] = 1
+    
+    prediction = np.zeros((3,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
+    # Class predicted
+    prediction[0] = res_classif.reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    # Proba for class 0 (background)
+    prediction[1] = 100*proba[:,0].reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    # Proba for class 1 (buildings)
+    prediction[2] = 100*proba[:,1].reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    
+    return prediction
 
 def post_process(inputBuffer: list, 
             input_profiles: list, 
             params: dict) -> list:
-    #inputs= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters
+    #inputs= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]]
     
     # Clean
-    im_classif = clean(params, inputBuffer[0])
-    
+    im_classif = clean(params, inputBuffer[0][0])
     # Watershed regulation
     final_mask, gradients, markers = watershed_regul(params, im_classif, inputBuffer)
     
     # Add nodata in final_mask (inputBuffer[5] : valid mask)
     final_mask[np.logical_not(inputBuffer[5][0])] = 255
+
+    res = np.zeros((3,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
+    res[0] = final_mask
+    res[1] = gradients
+    res[2] = markers
     
-    return final_mask
+    return res
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -1102,7 +922,7 @@ def getarguments():
     parser.add_argument(
         "-n_jobs",
         type=int,
-        default=1, # correctly handled by EOScale
+        default=1,
         required=False,
         action="store",
         dest="nb_jobs",
@@ -1343,15 +1163,18 @@ def main():
                 args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
                 im_gt = wsf_recovery(args.file_phr, args.urban_raster, True)  
                 gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
-
+            
+            #Recover useful features
             valid_stack= eoscale_manager.get_array(valid_stack_key[0])
             local_gt= eoscale_manager.get_array(gt_key)
+            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
             
+            #Calcul of valid pixels
             nb_valid_pixels = np.count_nonzero(valid_stack)
             args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
             args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
 
-            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0],gt_key, key_phr, key_ndvi[0], key_ndwi[0]],   
+            samples = eoexe.n_images_to_m_scalars(inputs=[valid_stack_key[0],gt_key, key_phr, key_ndvi[0], key_ndwi[0]] + file_filters,  
                                                     image_filter = build_samples,   
                                                     filter_parameters = args,
                                                     nb_output_scalars = args.nb_valid_built_pixels+args.nb_valid_other_pixels,
@@ -1359,7 +1182,7 @@ def main():
                                                     concatenate_filter = concatenate_samples, 
                                                     output_scalars= [],
                                                     multiproc_context= "fork",
-                                                    filter_desc= "Samples building processing...")       # samples=[x_samples, y_samples]
+                                                    filter_desc= "Samples building processing...")       # samples=[y_samples, x_samples]
             
             
             time_samples = time.time()
@@ -1371,9 +1194,11 @@ def main():
             random_state=0, n_jobs=args.nb_jobs
             )
             print("RandomForest parameters:\n", classifier.get_params(), "\n")
-            samples=np.concatenate(samples[:]) # A revoir si possible
-            x_samples= samples[:,:-1]
-            y_samples= samples[:,-1]
+            samples=np.concatenate(samples[:]) 
+            x_samples= samples[:,1:]
+            y_samples= samples[:,0]
+            
+            print(x_samples.shape)
             train_classifier(classifier, x_samples, y_samples)
             print("Dump classifier to model_rf.dump")
             joblib.dump(classifier, "model_rf.dump")
@@ -1383,24 +1208,22 @@ def main():
             
             ######### Predict  ################
             
-            key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]],   
+            key_predict = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]] + file_filters,   
                                                            image_filter = RF_prediction,
                                                            filter_parameters= {"classifier": classifier},
-                                                           generate_output_profiles = single_uint8_profile,
+                                                           generate_output_profiles = three_uint8_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "RF prediction processing...")             
             time_random_forest = time.time()
             
-            ######### Post_processing  ################
+            ######### Post_processing  ################  
             
-            file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
-            
-            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters,   
+            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]],   
                                                            image_filter = post_process,
                                                            filter_parameters= args,
-                                                           generate_output_profiles = single_uint8_profile,
+                                                           generate_output_profiles = three_float_profile,
                                                            stable_margin= 20,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
@@ -1408,11 +1231,11 @@ def main():
 
             
             # Save predict and classif image
-            final_predict = eoscale_manager.get_array(key_predict[0])[0]
-            final_classif = eoscale_manager.get_array(key_post_process[0])[0]
+            final_predict = eoscale_manager.get_array(key_predict[0])
+            final_classif = np.int32(eoscale_manager.get_array(key_post_process[0])[0])
             
             save_image(
-                final_predict,
+                final_predict[0],
                 join(dirname(args.file_classif), "predict.tif"),
                 args.crs,
                 args.transform,
@@ -1420,7 +1243,6 @@ def main():
                 args.rpc,
                 tags=args.__dict__,
             )
-            
             save_image(
                 final_classif,
                 args.file_classif,
