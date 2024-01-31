@@ -701,7 +701,7 @@ def build_samples(inputBuffer: list,
     """Build samples."""
     #inputBuffer=[valid_stack_key[0],key_gt, key_phr, key_ndvi[0], key_ndwi[0]]
     
-    mask_building = inputBuffer[1]==args.value_classif
+    mask_building = np.where(inputBuffer[1]==args.value_classif,1,0)
     
     # Retrieve number of pixels for each class
     nb_valid_subset = np.count_nonzero(inputBuffer[0])
@@ -742,7 +742,7 @@ def build_samples(inputBuffer: list,
         cols = cols + cols_road
 
     # Prepare samples for learning
-    im_stack = np.concatenate((inputBuffer[2],inputBuffer[3],inputBuffer[4],inputBuffer[1]),axis=0)  # A vérifier !!!!!!
+    im_stack = np.concatenate((inputBuffer[2],inputBuffer[3],inputBuffer[4],mask_building),axis=0)  # TODO : gérer les files_layers optionnels
     samples = np.transpose(im_stack[:, rows, cols])
 
     return samples
