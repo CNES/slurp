@@ -122,6 +122,7 @@ def single_int16_profile(input_profiles: list, map_params):
     profile= input_profiles[0]
     profile["count"]= 1
     profile["dtype"]= np.int16
+    profile["nodata"] = 32767
     profile["compress"] = "lzw"
     
     return profile
@@ -732,28 +733,7 @@ def build_samples(inputBuffer: list,
     rows_nob, cols_nob = get_indexes_from_masks(
         nb_other_subsamples, inputBuffer[1][0], 0, inputBuffer[0][0], args
     )
-
-    if args.save_mode == "debug":
-        save_indexes(
-            join(dirname(args.file_classif), "samples_building.tif"),
-            zip(rows_b, cols_b),
-            zip(rows_nob, cols_nob),
-            args.shape,
-            args.crs,
-            args.transform,
-            args.rpc,
-        )
-        if args.nb_classes == 2:
-            save_indexes(
-                join(dirname(args.file_classif), "samples_road.tif"),
-                zip(rows_road, cols_road),
-                zip(rows_nob, cols_nob),
-                args.shape,
-                args.crs,
-                args.transform,
-                args.rpc,
-            )
-
+    
     # samples = building+non building
     rows = rows_b + rows_nob
     cols = cols_b + cols_nob
@@ -1122,7 +1102,7 @@ def getarguments():
     parser.add_argument(
         "-n_jobs",
         type=int,
-        default=8,
+        default=1, # correctly handled by EOScale
         required=False,
         action="store",
         dest="nb_jobs",
