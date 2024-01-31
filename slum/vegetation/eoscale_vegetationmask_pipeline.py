@@ -71,6 +71,8 @@ def single_int16_profile(input_profiles: list, map_params):
     profile["count"]= 1
     profile["dtype"]= np.int16
     profile["compress"] = "lzw"
+    
+    return profile
 
 def single_int32_profile(input_profiles: list, map_params):
     profile= input_profiles[0]

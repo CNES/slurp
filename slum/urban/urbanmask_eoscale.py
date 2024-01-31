@@ -118,12 +118,29 @@ def single_float_profile(input_profiles: list, map_params):
     
     return profile
 
+def single_int16_profile(input_profiles: list, map_params):
+    profile= input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.int16
+    profile["compress"] = "lzw"
+    
+    return profile
+
+def single_uint8_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.uint8
+    profile["compress"] = "lzw"
+    profile["nodata"] = 255
+    
+    return profile
+
 def single_bool_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile['count']=1
     profile['dtype']=bool
     profile["compress"] = "lzw"
-    
+
     return profile
     
 def compute_ndwi(input_buffers: list, 
@@ -139,6 +156,7 @@ def compute_ndwi(input_buffers: list,
     im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.nir-1])) / (
         np.float32(input_buffers[0][params.green-1]) + np.float32(input_buffers[0][params.nir-1]))
     im_ndwi[np.logical_or(im_ndwi < -1000.0, im_ndwi > 1000.0)] = np.nan
+    im_ndwi[np.logical_not(input_buffers[1][0])] = np.nan
     np.nan_to_num(im_ndwi, copy=False, nan=32767)
     im_ndwi = np.int16(im_ndwi)
 
@@ -157,6 +175,7 @@ def compute_ndvi(input_buffers: list,
     im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffers[0][params.red-1])) / (
         np.float32(input_buffers[0][params.nir-1]) + np.float32(input_buffers[0][params.red-1]))
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
+    im_ndvi[np.logical_not(input_buffers[1][0])] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
     
@@ -892,9 +911,12 @@ def post_process(inputBuffer: list,
     im_classif = clean(params, inputBuffer[0])
     
     # Watershed regulation
-    im_seg, gradients, markers = watershed_regul(params, im_classif, inputBuffer)
+    final_mask, gradients, markers = watershed_regul(params, im_classif, inputBuffer)
     
-    return im_seg
+    # Add nodata in final_mask (inputBuffer[5] : valid mask)
+    final_mask[np.logical_not(inputBuffer[5][0])] = 255
+    
+    return final_mask
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -1237,62 +1259,6 @@ def main():
             # Store image in shared memmory
             key_phr = eoscale_manager.open_raster(raster_path = args.file_phr)
             
-            ### Valid PHR
-            
-            
-            
-            ### Compute NDVI 
-            if args.file_ndvi == None:
-                key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                               image_filter = compute_ndvi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = single_float_profile,
-                                                               stable_margin= 0,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "NDVI processing...")
-                if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
-            else:
-                key_ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
-                
-            
-            ### Compute NDWI        
-            if args.file_ndwi == None:
-                key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                               image_filter = compute_ndwi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = single_float_profile,
-                                                               stable_margin= 0,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "NDWI processing...")         
-                if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
-            else:
-                key_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
-  
-            
-
-            if args.file_watermask:
-                valid_watermask_key= eoscale_manager.open_raster(raster_path =args.file_watermask)
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                valid_watermask_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=valid_watermask_key).fill(0)
-
-
-            if args.file_vegetationmask:
-                valid_vegmask_key= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                valid_vegmask_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=valid_vegmask_key).fill(0)
-                
             # Get cloud mask if any
             if args.file_cloud_gml:
                 cloud_mask_array = np.logical_not(
@@ -1328,13 +1294,67 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Valid stack processing...")       
+            
+            
+            
+            ### Compute NDVI 
+            if args.file_ndvi == None:
+                key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr, valid_stack_key[0]],
+                                                               image_filter = compute_ndvi,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = single_int16_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDVI processing...")
+                if (args.save_mode != "none" and args.save_mode != "aux"):
+                    eoscale_manager.write(key = key_ndvi[0], img_path = args.file_classif.replace(".tif","_NDVI.tif"))
+            else:
+                key_ndvi = [ eoscale_manager.open_raster(raster_path =args.file_ndvi) ]
+                
+            
+            ### Compute NDWI        
+            if args.file_ndwi == None:
+                key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr, valid_stack_key[0]],
+                                                               image_filter = compute_ndwi,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = single_int16_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDWI processing...")         
+                if (args.save_mode != "none" and args.save_mode != "aux"):
+                    eoscale_manager.write(key = key_ndwi[0], img_path = args.file_classif.replace(".tif","_NDWI.tif"))
+            else:
+                key_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
+  
+            
+
+            if args.file_watermask:
+                valid_watermask_key= eoscale_manager.open_raster(raster_path =args.file_watermask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                valid_watermask_key = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=valid_watermask_key).fill(0)
+
+
+            if args.file_vegetationmask:
+                valid_vegmask_key= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                valid_vegmask_key = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=valid_vegmask_key).fill(0)
+                
+
            
 
             time_stack = time.time()
             
             ################ Build samples #################
-            
-
             
             if args.urban_raster:
                 gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
@@ -1365,6 +1385,7 @@ def main():
             time_samples = time.time()
             
             ################ Train classifier from samples #########
+            
             classifier = RandomForestClassifier(
             n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced",
             random_state=0, n_jobs=args.nb_jobs
@@ -1381,10 +1402,11 @@ def main():
             
             
             ######### Predict  ################
+            
             key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]],   
                                                            image_filter = RF_prediction,
                                                            filter_parameters= {"classifier": classifier},
-                                                           generate_output_profiles = single_float_profile,
+                                                           generate_output_profiles = single_uint8_profile,
                                                            stable_margin= 0,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
@@ -1392,13 +1414,14 @@ def main():
             time_random_forest = time.time()
             
             ######### Post_processing  ################
+            
             file_filters= [eoscale_manager.open_raster(raster_path =args.files_layers[i]) for i in range(len(args.files_layers))]
             
             key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_filters,   
                                                            image_filter = post_process,
                                                            filter_parameters= args,
-                                                           generate_output_profiles = single_float_profile,
-                                                           stable_margin= 3,
+                                                           generate_output_profiles = single_uint8_profile,
+                                                           stable_margin= 20,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Post processing...")
@@ -1417,7 +1440,7 @@ def main():
                 args.rpc,
                 tags=args.__dict__,
             )
-            '''
+            
             save_image(
                 final_classif,
                 args.file_classif,
@@ -1427,7 +1450,7 @@ def main():
                 args.rpc,
                 tags=args.__dict__,
             )   
-            '''
+            
             end_time = time.time()
             
             print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
