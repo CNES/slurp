@@ -631,8 +631,9 @@ def RF_prediction(inputBuffer: list,
             params: dict) -> list:
     
     #inputBuffer = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]] + file_layers
-    im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0) 
-    buffer_to_predict=np.transpose(im_stack[:,inputBuffer[3][0]])
+    #im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0)
+    im_stack= np.concatenate((inputBuffer[1:]),axis=0)
+    buffer_to_predict=np.transpose(im_stack[:,inputBuffer[0][0]])
 
     classifier =params["classifier"]
     proba = classifier.predict_proba(buffer_to_predict)
@@ -982,6 +983,8 @@ def main():
                 names_stack = ["R", "G", "B", "NIR", "NDVI", "NDWI"]
             else:
                 names_stack = ["B", "G", "R", "NIR", "NDVI", "NDWI"]
+
+            names_stack += [basename(f) for f in args.files_layers]
             
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             ds_phr = rio.open(args.file_phr)
@@ -1151,7 +1154,7 @@ def main():
             
             ######### Predict  ################
             
-            key_predict = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]] + file_filters,   
+            key_predict = eoexe.n_images_to_m_images_filter(inputs = [valid_stack_key[0], key_phr, key_ndvi[0], key_ndwi[0]] + file_filters,   
                                                            image_filter = RF_prediction,
                                                            filter_parameters= {"classifier": classifier},
                                                            generate_output_profiles = three_uint8_profile,
@@ -1207,7 +1210,15 @@ def main():
                     args.rpc,
                     tags=args.__dict__,
                 )
-            
+                save_image(
+                    final_predict[2],
+                    join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba_urban.tif")),
+                    args.crs,
+                    args.transform,
+                    255,
+                    args.rpc,
+                    tags=args.__dict__,
+                )
             end_time = time.time()
             
             print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
