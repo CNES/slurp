@@ -2,65 +2,6 @@
 # -*- coding: utf-8 -*-
 """ Compute building and road masks from VHR images thanks to OSM layers """
 
-# Base from Xavier RAVE co3d_mask.py for water detection
-# Adaptations to extract ground truth from OSM (shapefile) layers or raster building mask
-# YT: TODO : fixer la valeur des masques en entrée
-# YT: TODO : revoir arguments
-# YT: TODO : distinguer deux modes : masque(s) complémentaire(s) pour ajouter des échantillons non buildings
-#            et mode "nettoyage" ou le masque complémentaire sert à nettoyer le résultat
-
-# Code linted with python linter pylint, score > 9
-
-# XR: DONE: Utilisation de la librairie optimisée Intel
-# XR: DONE: Correction typage du fichier de sortie SuperImpose
-# XR: DONE: Ajout writerpctags pour OTB superimpose pour images sans geotags mais avec PHRDIMAP.XML
-# XR: DONE: Utilisation de l'interpolateur NN pour OTB superimpose
-# XR: DONE: Sauvegarde des points d'apprentissage dans un fichier pour analyse
-# XR: DONE: Ajout d'une option use_rgb_layers pour ajouter les bandes rgb dans la stack d'apprentissage
-# XR: DONE: Ajout d'une option -esri pour post processing avec carte ESRI
-# XR: DONE: Ajout prise en compte des RPC
-# XR: DONE: Superimpose Ajouter -elev.dem et -elev.geoid
-# XR: TODO: Utiliser méthodes de Boosting
-# XR: TODO: Utiliser l'attributs rasterio ds.descriptions=("",...) (liste de string)
-# XR: TODO: Utiliser rasterio .tags() et .update_tags(ns='namespace', ...)
-# XR: TODO: Ajouter des métadonnées dans le masque de sortie (valeur thresh, rgb, ...)
-# XR: TODO: traiter le cas où il y a très peu de point dans le masque pekel (ajuster le seuil)
-# XR: TODO: Mettre un facteur d'échelle modifiable sur le calcul des ndxi
-# XR: DONE: Afficher l'importance des features
-# XR: DONE: Optim1, pour calcul des echantillons non eau, utiliser le masque "hand and not pekel0"
-# XR: DONE: Ajouter affichage d'un estimateur du Random Forest
-# XR: DONE: Faire le post processing sur la carte pekel non seuillée
-# XR: DONE: Mettre le ndvi et ndwi sur la plage [-1000,1000]
-# XR: DONE: Ajouter le filtrage Hand (mettre à zéro les pixels non inondables)
-# XR: TODO: Ajouter une colormap dans le predict.tif et le classif.tif
-# XR: DONE: Ajouter la possibilité de lire le ndvi et ndwi dans un fichier
-# XR: DONE: Ajouter une option pour activer ou non le post processing
-# XR: DONE: Ajouter la possibilité de choisir la valeur du masque de sortie
-# XR: DONE: Corriger l'utilisation du mask HAND, on ne garde que les zones inondables
-# XR: DONE: Implémenter l'ajout de layers dans la stack pour le Random Forest
-# XR: TODO: Dans superimpose, utiliser le type de l'image en entrée
-# XR: TODO: Utiliser rasterio pour faire le superimpose ?
-# XR: DONE: Ajouter un masque de validité global
-# XR: DONE: Ajouter un masque de validité pekel
-# XR: DONE: Ajouter un masque de validité hand
-# XR: DONE: Ajouter un masque de validité dans le fonction de calcul du ndvi, ndwi
-# XR: DONE: Gestion des divisions par 0 dans le calcul du ndvi, ndwi
-# XR: DONE: Gestion des nan de la calcul des ndvi et ndwi
-# XR: DONE: Supprimer la boucle pour le calcul des echantillons
-# XR: DONE: Utiliser des int16 pour calcul ndvi et ndwi
-# XR: DONE: KO: Utiliser des int8 pour calcul ndvi et ndwi (pb QGIS)
-# XR: DONE: Resoudre pb calcul ndvi avec np.uint16
-# XR: DONE: Mettre le crs + transform dans les images sauvegardées
-# XR: DONE: Implementer la fonction save_image, avec compression des données
-# XR: DONE: Implementer la fonction show_images
-# XR: DONE: Implementer la fonction de filtrage post_process
-# XR: DONE: Fusionner les masques nodata de l'image PHR
-# XR: DONE: Utiliser rasterio pour la generation de la sortie
-# XR: DONE: Ajouter le ndwi dans la stack PHR
-# XR: DONE: Ajouter les options à la fonction classify
-# XR: DONE: Ameliorer/simplifier la fonction hand_recovery
-# XR: DONE: Ameliorer/simplifier la fonction pekel_recovery
-
 import argparse
 import gc
 import time
@@ -118,12 +59,13 @@ def single_float_profile(input_profiles: list, map_params):
     
     return profile
 
-def three_float_profile(input_profiles: list, map_params):
+def post_process_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
-    profile['count']=3
-    profile['dtype']=np.float32
+    profile['count']=2
+    profile['dtype']=np.uint8
     profile["compress"] = "lzw"
-    profile["nodata"] = 32767
+    profile["nodata"] = 255
+
     return profile
 
 def single_int16_profile(input_profiles: list, map_params):
@@ -150,6 +92,15 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile["dtype"]= np.uint8
     profile["compress"] = "lzw"
     profile["nodata"] = 255
+    
+    return profile
+
+def three_int16_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile["count"]= 3
+    profile["dtype"]= np.int16
+    profile["compress"] = "lzw"
+    profile["nodata"] = 32767
     
     return profile
 
@@ -214,21 +165,25 @@ def print_dataset_infos(dataset, prefix=""):
     print()
 
 def save_image(
-    image,
-    file,
-    crs=None,
-    transform=None,
-    nodata=None,
-    rpc=None,
-    colormap=None,
-    tags=None,
-    **kwargs,
+        image,
+        file,
+        crs=None,
+        transform=None,
+        nodata=None,
+        rpc=None,
+        colormap=None,
+        tags=None,
+        dtype=None,
+        **kwargs,
 ):
     """Save 1 band numpy image to file with deflate compression.
     Note that rio.dtype is string so convert np.dtype to string.
     rpc must be a dictionnary.
     """
-    
+    if dtype != None:
+        type_save = dtype
+    else:
+        type_save = str(image.dtype)
     dataset = rio.open(
         file,
         "w",
@@ -237,7 +192,7 @@ def save_image(
         height=image.shape[0],
         width=image.shape[1],
         count=1,
-        dtype=str(image.dtype),
+        dtype=type_save,
         crs=crs,
         transform=transform,
         **kwargs,
@@ -634,12 +589,10 @@ def get_bornes(index, step, limit, margin):
 def watershed_regul(args, clean_predict, inputBuffer):    
     #inputBuffer= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_layers (TODO)
     # Compute gradient : either on NDVI image, or on RGB image 
-     #DEBUG im_stack = PHR image + ndvi + ndwi + file layers
-    if args.use_rgb_layers:
-        im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
-    else:
-        im_mono = inputBuffer[1][0]
-    
+    #DEBUG im_stack = PHR image + ndvi + ndwi + file layers
+    # Compute mono image from RGB image
+    im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
+       
     # compute gradient
     edges = sobel(im_mono)
 
@@ -671,7 +624,7 @@ def watershed_regul(args, clean_predict, inputBuffer):
         # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
         seg = np.multiply(res, seg)
 
-    return seg, edges, markers
+    return seg, markers, edges
 
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
@@ -706,17 +659,16 @@ def post_process(inputBuffer: list,
     # Clean
     im_classif = clean(params, inputBuffer[0][0])
     # Watershed regulation
-    final_mask, gradients, markers = watershed_regul(params, im_classif, inputBuffer)
+    final_mask, markers, edges = watershed_regul(params, im_classif, inputBuffer)
     
     # Add nodata in final_mask (inputBuffer[5] : valid mask)
     final_mask[np.logical_not(inputBuffer[5][0])] = 255
 
-    res = np.zeros((3,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
-    res[0] = final_mask
-    res[1] = gradients
-    res[2] = markers
-    
-    return res
+    res_int = np.zeros((2,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
+    res_int[0] = final_mask
+    res_int[1] = markers
+
+    return res_int
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -823,15 +775,6 @@ def getarguments():
         action="store",
         dest="file_cloud_gml",
         help="Cloud file in .GML format",
-    )
-
-    parser.add_argument(
-        "-use_rgb_layers",
-        default=False,
-        required=False,
-        action="store_true",
-        dest="use_rgb_layers",
-        help="Add R,G,B layers to image stack for learning",
     )
 
     parser.add_argument(
@@ -1223,26 +1166,15 @@ def main():
             key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]],   
                                                            image_filter = post_process,
                                                            filter_parameters= args,
-                                                           generate_output_profiles = three_float_profile,
+                                                           generate_output_profiles = post_process_profile,
                                                            stable_margin= 20,
                                                            context_manager = eoscale_manager,
                                                            multiproc_context= "fork",
                                                            filter_desc= "Post processing...")
 
             
-            # Save predict and classif image
-            final_predict = eoscale_manager.get_array(key_predict[0])
-            final_classif = np.int32(eoscale_manager.get_array(key_post_process[0])[0])
-            
-            save_image(
-                final_predict[0],
-                join(dirname(args.file_classif), "predict.tif"),
-                args.crs,
-                args.transform,
-                255,
-                args.rpc,
-                tags=args.__dict__,
-            )
+            # Save final mask (prediction + post-processing)
+            final_classif = eoscale_manager.get_array(key_post_process[0])[0]
             save_image(
                 final_classif,
                 args.file_classif,
@@ -1250,8 +1182,31 @@ def main():
                 args.transform,
                 255,
                 args.rpc,
+                dtype=np.dtype(np.uint8),
                 tags=args.__dict__,
-            )   
+            )
+            if args.save_mode == "debug":
+                # Save auxilliary results : raw prediction, markers
+                save_image(
+                    eoscale_manager.get_array(key_post_process[0])[1],
+                    join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
+                    args.crs,
+                    args.transform,
+                    255,
+                    args.rpc,
+                    dtype=np.dtype(np.uint8),
+                    tags=args.__dict__,
+                )
+                final_predict = eoscale_manager.get_array(key_predict[0])
+                save_image(
+                    final_predict[0],
+                    join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_raw_predict.tif")),
+                    args.crs,
+                    args.transform,
+                    255,
+                    args.rpc,
+                    tags=args.__dict__,
+                )
             
             end_time = time.time()
             
