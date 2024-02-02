@@ -587,9 +587,9 @@ def get_bornes(index, step, limit, margin):
 
 
 def watershed_regul(args, clean_predict, inputBuffer):    
-    #inputBuffer= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]] + file_layers (TODO)
+    # inputBuffer = [key_predict[0], key_phr, key_watermask[0], key_vegmask[0], gt_key, valid_stack_key[0]
     # Compute gradient : either on NDVI image, or on RGB image 
-    #DEBUG im_stack = PHR image + ndvi + ndwi + file layers
+    # DEBUG im_stack = PHR image + ndvi + ndwi + file layers
     # Compute mono image from RGB image
     im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
        
@@ -604,7 +604,11 @@ def watershed_regul(args, clean_predict, inputBuffer):
     probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
     probable_background = np.logical_and(inputBuffer[0][2] < 20, clean_predict == 0)
     markers[probable_background] = 3
-    markers[probable_buildings] = 1    
+    markers[probable_buildings] = 1
+    # vegetation
+    markers[inputBuffer[3][0] > args.vegmask_max_value] = 3
+    # water
+    markers[inputBuffer[2][0] == 1] = 3
     del probable_buildings, probable_background        
 
     if args.remove_false_positive:
@@ -629,34 +633,35 @@ def watershed_regul(args, clean_predict, inputBuffer):
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
             params: dict) -> list:
+    """
+    inputBuffer = [valid_stack_key[0], key_phr, key_ndvi[0], key_ndwi[0], + file_layers]
+    buffer_to_predict are non NODATA pixels, defined by all the primitives (R-G-B-NIR-NDVI-NDWI-[+ features]
     
-    #inputBuffer = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]] + file_layers
-    #im_stack = np.concatenate((inputBuffer[0],inputBuffer[1],inputBuffer[2]),axis=0)
+    """
     im_stack= np.concatenate((inputBuffer[1:]),axis=0)
     buffer_to_predict=np.transpose(im_stack[:,inputBuffer[0][0]])
 
     classifier =params["classifier"]
     proba = classifier.predict_proba(buffer_to_predict)
-    
+
     # Prediction, inspired by sklearn code to predict class
     res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
     res_classif[res_classif == 255] = 1
     
     prediction = np.zeros((3,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
     # Class predicted
-    prediction[0] = res_classif.reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    prediction[0][inputBuffer[0][0]] = res_classif 
     # Proba for class 0 (background)
-    prediction[1] = 100*proba[:,0].reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    prediction[1][inputBuffer[0][0]] = 100*proba[:,0]
     # Proba for class 1 (buildings)
-    prediction[2] = 100*proba[:,1].reshape(inputBuffer[0].shape[1],inputBuffer[0].shape[2])
+    prediction[2][inputBuffer[0][0]] = 100*proba[:,1]
     
     return prediction
 
 def post_process(inputBuffer: list, 
             input_profiles: list, 
             params: dict) -> list:
-    #inputs= [key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]]
-    
+    # inputs = [key_predict[0],key_phr, key_watermas[0], key_vegmask[0],gt_key,valid_stack_key[0]
     # Clean
     im_classif = clean(params, inputBuffer[0][0])
     # Watershed regulation
@@ -1077,23 +1082,23 @@ def main():
             
 
             if args.file_watermask:
-                valid_watermask_key= eoscale_manager.open_raster(raster_path =args.file_watermask)
+                key_watermask= eoscale_manager.open_raster(raster_path =args.file_watermask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
-                valid_watermask_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=valid_watermask_key).fill(0)
+                key_watermask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_watermask).fill(0)
 
 
             if args.file_vegetationmask:
-                valid_vegmask_key= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
+                key_vegmask= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
-                valid_vegmask_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=valid_vegmask_key).fill(0)
+                key_vegmask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_vegmask).fill(0)
                 
 
            
@@ -1166,7 +1171,7 @@ def main():
             
             ######### Post_processing  ################  
             
-            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_ndvi[0], key_ndwi[0],gt_key,valid_stack_key[0]],   
+            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask,gt_key,valid_stack_key[0]],   
                                                            image_filter = post_process,
                                                            filter_parameters= args,
                                                            generate_output_profiles = post_process_profile,
