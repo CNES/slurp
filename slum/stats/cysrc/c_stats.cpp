@@ -58,7 +58,7 @@ namespace stats {
 		     float * accumulator, unsigned int * counter, 
 		     unsigned int num_labels, unsigned int nb_bands,
 		     unsigned int nb_rows, unsigned int nb_cols) 
-  {if
+  {
         
     /*
       color_img and label_img are flattened chunks (1D)
