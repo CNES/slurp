@@ -358,11 +358,17 @@ def compute_mask(file_ref, field_value):
 def compute_valid_stack(inputBuffer: list, 
             input_profiles: list, 
             args: dict) -> list:
-    #inputBuffer = [im_phr, mask_nocloud]
+    #inputBuffer =  [key_phr, mask_nocloud_key, key_vegetationmask, key_watermask]
     # Valid_phr (boolean numpy array, True = valid data, False = no data)
     valid_phr = np.logical_and.reduce(inputBuffer[0] != args.nodata_phr, axis=0)
     valid_stack_cloud = np.logical_and(valid_phr, inputBuffer[1])
     
+    if args.file_vegetationmask != None:
+        valid_stack_cloud = np.logical_and(valid_stack_cloud, np.where(inputBuffer[2]<args.vegmask_max_value, True, False))
+
+    if args.file_watermask != None:
+        valid_stack_cloud = np.logical_and(valid_stack_cloud, np.where(inputBuffer[3] == 0, True, False))
+
     return valid_stack_cloud
 
 
@@ -601,20 +607,23 @@ def watershed_regul(args, clean_predict, inputBuffer):
     # markers map : -1, 1 and 2 : probable background, buildings or false positive
     # inputBuffer[0] = proba of building class
     markers = np.zeros_like(inputBuffer[0][0])
+
+    if args.file_shadowmask:
+        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
+        markers[inputBuffer[4][0] == 2] = 4
+
     probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
     probable_background = np.logical_and(inputBuffer[0][2] < 20, clean_predict == 0)
     markers[probable_background] = 3
     markers[probable_buildings] = 1
+
     if args.file_vegetationmask:
         # vegetation
-        markers[inputBuffer[3][0] > args.vegmask_max_value] = 3
+        markers[inputBuffer[3][0] > args.vegmask_max_value] = 6
     if args.file_watermask:
         # water
-        markers[inputBuffer[2][0] == 1] = 0
-    if args.file_shadowmask:
-        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
-        markers[inputBuffer[4][0] == 2] = 4
-    del probable_buildings, probable_background        
+        markers[inputBuffer[2][0] == 1] = 5
+        del probable_buildings, probable_background        
 
     if args.remove_false_positive:
         ground_truth = inputBuffer[5][0]
@@ -625,7 +634,7 @@ def watershed_regul(args, clean_predict, inputBuffer):
 
     # watershed segmentation
     seg = segmentation.watershed(edges, markers)
-    seg[seg==3] = 0
+    seg[np.where(seg>2, True, False)] = 0 
     
     # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
     if args.remove_small_objects:
@@ -1049,10 +1058,36 @@ def main():
                 mask_nocloud_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
 
+            if args.file_watermask:
+                key_watermask= eoscale_manager.open_raster(raster_path =args.file_watermask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                key_watermask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_watermask).fill(0)
+
+            if args.file_vegetationmask:
+                key_vegmask= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                key_vegmask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_vegmask).fill(0)
+                
+            if args.file_shadowmask:
+                key_shadowmask= eoscale_manager.open_raster(raster_path =args.file_shadowmask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                key_shadowmask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_shadowmask).fill(0)
 
             
             # Global validity mask construction
-            valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key],
+            valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key, key_vegmask, key_watermask],
                                                            image_filter = compute_valid_stack,   
                                                            filter_parameters=args,
                                                            generate_output_profiles = single_bool_profile,
@@ -1094,37 +1129,6 @@ def main():
             else:
                 key_ndwi= [ eoscale_manager.open_raster(raster_path =args.file_ndwi) ]
   
-            
-
-            if args.file_watermask:
-                key_watermask= eoscale_manager.open_raster(raster_path =args.file_watermask)
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                key_watermask = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=key_watermask).fill(0)
-
-
-            if args.file_vegetationmask:
-                key_vegmask= eoscale_manager.open_raster(raster_path =args.file_vegetationmask)
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                key_vegmask = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=key_vegmask).fill(0)
-                
-            if args.file_shadowmask:
-                key_shadowmask= eoscale_manager.open_raster(raster_path =args.file_shadowmask)
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                key_shadowmask = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=key_shadowmask).fill(0)
-           
-
             time_stack = time.time()
             
             ################ Build samples #################
