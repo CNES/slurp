@@ -52,8 +52,8 @@ def getarguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Input 4 bands VHR image")
     parser.add_argument("mask", help="Final mask")
-    parser.add_argument("-th_rgb", default=0.3, help="Relative shadow threshold for RGB bands")
-    parser.add_argument("-th_nir", default=0.3, help="Relative shadow threshold for NIR band")
+    parser.add_argument("-th_rgb", default=0.3, type=float, action="store", help="Relative shadow threshold for RGB bands")
+    parser.add_argument("-th_nir", default=0.3, type=float, action="store", help="Relative shadow threshold for NIR band")
     parser.add_argument("-percentile", default=2, help="Percentile value to cut histogram and estimate shadow threshold")
     parser.add_argument("-binary_opening","--binary_opening", type=int, required=False, default=0, action="store",
                         help="Size of ball structuring element")

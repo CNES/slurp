@@ -587,9 +587,9 @@ def get_bornes(index, step, limit, margin):
 
 
 def watershed_regul(args, clean_predict, inputBuffer):    
-    # inputBuffer = [key_predict[0], key_phr, key_watermask[0], key_vegmask[0], gt_key, valid_stack_key[0]
-    # Compute gradient : either on NDVI image, or on RGB image 
-    # DEBUG im_stack = PHR image + ndvi + ndwi + file layers
+    # inputBuffer = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
+    #                   0              1          2             3              4            5         6
+    
     # Compute mono image from RGB image
     im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
        
@@ -605,14 +605,19 @@ def watershed_regul(args, clean_predict, inputBuffer):
     probable_background = np.logical_and(inputBuffer[0][2] < 20, clean_predict == 0)
     markers[probable_background] = 3
     markers[probable_buildings] = 1
-    # vegetation
-    markers[inputBuffer[3][0] > args.vegmask_max_value] = 3
-    # water
-    markers[inputBuffer[2][0] == 1] = 3
+    if args.file_vegetationmask:
+        # vegetation
+        markers[inputBuffer[3][0] > args.vegmask_max_value] = 3
+    if args.file_watermask:
+        # water
+        markers[inputBuffer[2][0] == 1] = 0
+    if args.file_shadowmask:
+        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
+        markers[inputBuffer[4][0] == 2] = 4
     del probable_buildings, probable_background        
 
     if args.remove_false_positive:
-        ground_truth = inputBuffer[4][0]
+        ground_truth = inputBuffer[5][0]
         # mark as false positive pixels with high confidence but not covered by dilated ground truth
         false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0][2] > args.confidence_threshold)
         markers[false_positive] = 2
@@ -622,7 +627,7 @@ def watershed_regul(args, clean_predict, inputBuffer):
     seg = segmentation.watershed(edges, markers)
     seg[seg==3] = 0
     
-    # remove small artefacts 
+    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
     if args.remove_small_objects:
         res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
         # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
@@ -661,14 +666,15 @@ def RF_prediction(inputBuffer: list,
 def post_process(inputBuffer: list, 
             input_profiles: list, 
             params: dict) -> list:
-    # inputs = [key_predict[0],key_phr, key_watermas[0], key_vegmask[0],gt_key,valid_stack_key[0]
+    # inputs = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
+    #             0              1          2             3              4            5         6
     # Clean
     im_classif = clean(params, inputBuffer[0][0])
     # Watershed regulation
     final_mask, markers, edges = watershed_regul(params, im_classif, inputBuffer)
     
     # Add nodata in final_mask (inputBuffer[5] : valid mask)
-    final_mask[np.logical_not(inputBuffer[5][0])] = 255
+    final_mask[np.logical_not(inputBuffer[6][0])] = 255
 
     res_int = np.zeros((2,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
     res_int[0] = final_mask
@@ -773,6 +779,15 @@ def getarguments():
         action="store",
         dest="vegmask_max_value",
         help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted"
+    )
+
+    parser.add_argument(
+        "-shadowmask",
+        default=None,
+        required=False,
+        action="store",
+        dest="file_shadowmask",
+        help="Shadowmask filename : big shadow areas will be marked as background"
     )
 
     parser.add_argument(
@@ -1100,7 +1115,14 @@ def main():
                 key_vegmask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_vegmask).fill(0)
                 
-
+            if args.file_shadowmask:
+                key_shadowmask= eoscale_manager.open_raster(raster_path =args.file_shadowmask)
+            else:
+                profile = eoscale_manager.get_profile(key_phr)
+                profile["count"] = 1
+                profile["dtype"] = np.uint8
+                key_shadowmask = eoscale_manager.create_image(profile)
+                eoscale_manager.get_array(key=key_shadowmask).fill(0)
            
 
             time_stack = time.time()
@@ -1171,7 +1193,7 @@ def main():
             
             ######### Post_processing  ################  
             
-            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask,gt_key,valid_stack_key[0]],   
+            key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]],   
                                                            image_filter = post_process,
                                                            filter_parameters= args,
                                                            generate_output_profiles = post_process_profile,
