@@ -2,12 +2,12 @@
 
 ## Water Mask
 
-Use-cases to cover : 
-- area with some persistent water (known in Pekel)
-- area with no water
-- area with few water (unknown in Pekel)
-- area with some water known in Pekel but a different landscape in the current image
-
+| Use-cases to cover | Image | Expected result | 
+| ------ | ------ | ------ |
+| area with some persistent water (known in Pekel) | image | not run |
+| area with no water | image | not run |
+| area with few water (unknown in Pekel)    | image | not run |
+| area with some water known in Pekel but a different landscape in the current image    | image | not run |
 
 
 ## Vegetation Mask
@@ -18,6 +18,8 @@ Use-cases to cover :
 - 
 
 ## Urban Mask
+
+
 
 ## Shadow Mask
 
