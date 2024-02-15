@@ -1,80 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """ Compute water mask of PHR image with help of Pekel and Hand images."""
 
-# Code linted with python linter pylint, score > 9
-
-# XR: TODO: Utiliser les cartes de transitions
-# XR: TODO: Traiter le cas hand_strict=True + hand_filter=True
-# XR: TODO: Utiliser les cartes saisonnières
-# XR: TODO: Forcer un ratio de max 5 sur le nombre de points d'apprentissage de chaque classe
-# XR: TODO: Détecter automatiquement le "biome", dry, water, ...
-# XR: TODO: Traiter le cas où il y a très peu de point dans le masque pekel (ajuster le seuil)
-# XR: TODO: Pouvoir désactiver le filtre pekel
-# XR: DONE: Faire des groupes d'options
-# XR: DONE: Renommer samples_water, ... en nb_samples_water, ...
-# XR: DONE: Ajouter une option hand_filter et une option pekel_filter
-# XR: DONE: Remove dead code
-# XR: DONE: Renommer l'option optim1 pour être plus explicite => hand_strict
-# XR: DONE: Supprimer option nofilter
-# XR: DONE: Ajouter un auto config pour calculer le nombre de samples de chaque classe
-# XR: DONE: Ajout option smart_area_pct
-# XR: DONE: Ajout choix des échantillons sur une grille
-# XR: DONE: Utiliser les dernières versions de Pekel/GSW
-# XR: DONE: Ajouter une option de fermeture morphologique
-# XR: DONE: Sauvegarde des échantillons dilatés avec colormap
-# XR: DONE: Ajout gestion des nuages au format .GML
-# XR: DONE: Donner plus d'importance aux grosses zones d'eau dans l'échantillonage (smart2)
-# XR: DONE: Choix des points d'échantillonage dans chaque zone d'eau (smart1)
-# XR: DONE: Ajout paramètre colormap dans save_image
-# XR: DONE: Utilisation de la librairie optimisée Intel
-# XR: DONE: Correction typage du fichier de sortie SuperImpose
-# XR: DONE: Ajout writerpctags pour OTB superimpose pour images sans geotags mais avec PHRDIMAP.XML
-# XR: DONE: Utilisation de l'interpolateur NN pour OTB superimpose
-# XR: DONE: Sauvegarde des points d'apprentissage dans un fichier pour analyse
-# XR: DONE: Ajout d'une option use_rgb_layers pour ajouter les bandes rgb dans la stack d'apprentissage
-# XR: DONE: Ajout d'une option -esri pour post processing avec carte ESRI
-# XR: DONE: Ajout prise en compte des RPC
-# XR: DONE: Superimpose Ajouter -elev.dem et -elev.geoid
-# XR: TODO: Utiliser méthodes de Boosting
-# XR: CANCEL: Utiliser l'attributs rasterio ds.descriptions=("",...) (liste de string)
-# XR: DONE: Utiliser rasterio .tags() et .update_tags(ns='namespace', ...)
-# XR: DONE: Ajouter des métadonnées dans le masque de sortie (valeur thresh, rgb, ...)
-# XR: TODO: Mettre un facteur d'échelle modifiable sur le calcul des ndxi
-# XR: DONE: Afficher l'importance des features
-# XR: DONE: Optim1, pour calcul des echantillons non eau, utiliser le masque "hand and not pekel0"
-# XR: DONE: Ajouter affichage d'un estimateur du Random Forest
-# XR: DONE: Faire le post processing sur la carte pekel non seuillée
-# XR: DONE: Mettre le ndvi et ndwi sur la plage [-1000,1000]
-# XR: DONE: Ajouter le filtrage Hand (mettre à zéro les pixels non inondables)
-# XR: TODO: Ajouter une colormap dans le predict.tif et le classif.tif
-# XR: DONE: Ajouter la possibilité de lire le ndvi et ndwi dans un fichier
-# XR: DONE: Ajouter une option pour activer ou non le post processing
-# XR: DONE: Ajouter la possibilité de choisir la valeur du masque de sortie
-# XR: DONE: Corriger l'utilisation du mask HAND, on ne garde que les zones inondables
-# XR: DONE: Implémenter l'ajout de layers dans la stack pour le Random Forest
-# XR: TODO: Dans superimpose, utiliser le type de l'image en entrée
-# XR: TODO: Utiliser rasterio pour faire le superimpose ?
-# XR: DONE: Ajouter un masque de validité global
-# XR: DONE: Ajouter un masque de validité pekel
-# XR: DONE: Ajouter un masque de validité hand
-# XR: DONE: Ajouter un masque de validité dans le fonction de calcul du ndvi, ndwi
-# XR: DONE: Gestion des divisions par 0 dans le calcul du ndvi, ndwi
-# XR: DONE: Gestion des nan de la calcul des ndvi et ndwi
-# XR: DONE: Supprimer la boucle pour le calcul des echantillons
-# XR: DONE: Utiliser des int16 pour calcul ndvi et ndwi
-# XR: DONE: KO: Utiliser des int8 pour calcul ndvi et ndwi (pb QGIS)
-# XR: DONE: Resoudre pb calcul ndvi avec np.uint16
-# XR: DONE: Mettre le crs + transform dans les images sauvegardées
-# XR: DONE: Implementer la fonction save_image, avec compression des données
-# XR: DONE: Implementer la fonction show_images
-# XR: DONE: Implementer la fonction de filtrage post_process
-# XR: DONE: Fusionner les masques nodata de l'image PHR
-# XR: DONE: Utiliser rasterio pour la generation de la sortie
-# XR: DONE: Ajouter le ndwi dans la stack PHR
-# XR: DONE: Ajouter les options à la fonction classify
-# XR: DONE: Ameliorer/simplifier la fonction hand_recovery
-# XR: DONE: Ameliorer/simplifier la fonction pekel_recovery
 
 import argparse
 import gc
@@ -83,7 +11,6 @@ import traceback
 from os.path import dirname, join
 from subprocess import call
 
-import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import otbApplication as otb
@@ -121,9 +48,20 @@ def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile['count']=1
     profile['dtype']=np.float32
+    profile['nodata'] = 32737
     profile["compress"] = "lzw"
     
     return profile
+
+def single_int16_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count']=1
+    profile['dtype']=np.int16
+    profile['nodata'] = 32737
+    profile["compress"] = "lzw"
+    
+    return profile
+
 
 def single_bool_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
@@ -430,6 +368,20 @@ def compute_mask(im_ref, im_nodata, thresh_ref):
     
     return mask_ref, valid_ref
 
+def compute_mask_threshold(input_buffers: list, 
+                  input_profiles: list, 
+                  params: dict) -> np.ndarray :
+    
+    """ 
+    Simple threshold on input image
+    """
+    res = np.zeros(input_buffers[0][0].shape)
+    res = np.where(input_buffers[0][0] > params["threshold"], 1, 0)
+    res = np.where(input_buffers[1][0] != 1, 255, res)
+
+    return res
+
+
 def compute_ndwi(input_buffers: list, 
                   input_profiles: list, 
                   params: dict) -> np.ndarray :
@@ -611,6 +563,7 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
         max_col = np.max(nz_cols)
 
         while nb_idxs < nb_indexes:
+            np.random.seed(712) # reproductible results
             row = np.random.randint(0, height)
             col = np.random.randint(0, width)
 
@@ -649,6 +602,7 @@ def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
 
             nb_idxs = 0
             while nb_idxs < n3_indexes:
+                np.random.seed(712) # reproductible results
                 row = np.random.randint(min_row, max_row)
                 col = np.random.randint(min_col, max_col)
 
@@ -1287,7 +1241,7 @@ def main():
                 key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndvi,
                                                                filter_parameters=args,
-                                                               generate_output_profiles = single_float_profile,
+                                                               generate_output_profiles = single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -1303,7 +1257,7 @@ def main():
                 key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndwi,
                                                                filter_parameters=args,
-                                                               generate_output_profiles = single_float_profile,
+                                                               generate_output_profiles = single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -1406,14 +1360,9 @@ def main():
             local_mask_pekel = eoscale_manager.get_array(mask_pekel[0])
             
             if np.count_nonzero(local_mask_pekel) < 2000:
-                print("=> Warning : low water pixel number in Pekel Mask\n")        
-                im_ndwi = eoscale_manager.get_array(mask_pekel[0])
-                # Threshold NDWI (and then pick-up samples in supposed water areas)
-                mask_pekel = compute_mask(im_ndwi, 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
-                mask_pekel0 = mask_pekel
-                if np.count_nonzero(local_mask_pekel) < 2000:
-                    print("** WARNING ** too few pixels are considered as water : skip machine learning step")
-                    select_samples = False
+                # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
+                # Alternative would be to select samples in a thresholded NDWI..
+                select_samples = False
 
             ### Image HAND (numpy array, first band)
             if not args.file_hand:
@@ -1446,15 +1395,24 @@ def main():
             
             if select_samples == False:
                 # Not enough supposed water areas : skip sample selection
-                # --> we force NDWI threshold
-                args.simple_ndwi_threshold = True 
-                print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
-                im_predict = compute_mask(eoscale_manager.get_array(key_ndwi[0]), 32767, 1000*args.ndwi_threshold)[0].astype(np.uint8)
-                # Force no cleaning with Pekel
+                # --> we force NDWI threshold and deactivate Pekel filter,
+                # otherwise it would remove afain supposed areas
+                args.simple_ndwi_threshold = True
                 args.no_pekel_filter = True
+                print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
+                key_predict = eoexe.n_images_to_m_images_filter(inputs = [key_ndwi[0], valid_stack_key[0]],
+                                                               image_filter = compute_mask_threshold,
+                                                               filter_parameters= {"threshold":1000*args.ndwi_threshold},
+                                                                context_manager = eoscale_manager,
+                                                                generate_output_profiles = single_float_profile,
+                                                                multiproc_context= "fork",
+                                                           filter_desc= "Simple NDWI threshold") 
                 time_random_forest = time.time() 
-                           
+                time_samples = time_random_forest           
             else:
+                # Nominal case : select samples, train, predict
+                #
+                # Sample selection
                 valid_stack= eoscale_manager.get_array(valid_stack_key[0])
                 nb_valid_pixels = np.count_nonzero(valid_stack)
                 args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
@@ -1470,35 +1428,33 @@ def main():
                                                            multiproc_context= "fork",
                                                            filter_desc= "Samples building processing...")       # samples=[x_samples, y_samples]
             
-            time_samples = time.time()
-            
-            ################ Train classifier from samples ########
+                time_samples = time.time()
 
-            classifier = RandomForestClassifier(
-            n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=0, n_jobs=args.nb_jobs
-            )
-            print("RandomForest parameters:\n", classifier.get_params(), "\n")
-            samples=np.concatenate(samples[:]) # A revoir si possible
-            x_samples= samples[:,:-1]
-            y_samples= samples[:,-1]
-            train_classifier(classifier, x_samples, y_samples)
-            print("Dump classifier to model_rf.dump")
-            joblib.dump(classifier, "model_rf.dump")
-            print_feature_importance(classifier, names_stack)
-            gc.collect()
-            
-     
-            
-            ######### Predict  ################
-            key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]],       
-                                                           image_filter = RF_prediction,
-                                                           filter_parameters= {"classifier": classifier},
-                                                           generate_output_profiles = single_float_profile,
-                                                           stable_margin= 0,
-                                                           context_manager = eoscale_manager,
-                                                           multiproc_context= "fork",
-                                                           filter_desc= "RF prediction processing...")             
-            time_random_forest = time.time()
+                ################ Train classifier from samples ########
+
+                classifier = RandomForestClassifier(
+                n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=712, n_jobs=args.nb_jobs
+                )
+                print("RandomForest parameters:\n", classifier.get_params(), "\n")
+                samples=np.concatenate(samples[:]) # A revoir si possible
+                x_samples= samples[:,:-1]
+                y_samples= samples[:,-1]
+                train_classifier(classifier, x_samples, y_samples)
+                print_feature_importance(classifier, names_stack)
+                gc.collect()
+
+
+
+                ######### Predict  ################
+                key_predict= eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_ndvi[0], key_ndwi[0],valid_stack_key[0]],       
+                                                               image_filter = RF_prediction,
+                                                               filter_parameters= {"classifier": classifier},
+                                                               generate_output_profiles = single_float_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "RF prediction processing...")             
+                time_random_forest = time.time()
             
             ######### Post_processing  ################
             
