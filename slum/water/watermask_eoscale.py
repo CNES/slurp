@@ -20,9 +20,8 @@ from skimage.measure import label, regionprops
 from skimage.morphology import (
     area_closing,
     binary_closing,
-    diameter_closing,
     remove_small_holes,
-    square,
+    square, disk
 )
 from copy import deepcopy
 from sklearn.ensemble import RandomForestClassifier
@@ -517,19 +516,12 @@ def post_process(inputBuffer: list,
         
     # Closing
     if args.binary_closing:
-        im_classif = binary_closing(
-            im_classif, square(args.binary_closing)
-        ).astype(np.uint8)
-    elif args.diameter_closing:
-        # XR: TODO très long voir bloqué
-        im_classif = diameter_closing(
-            im_classif, args.diameter_closing, connectivity=2
-        )
+        im_classif[0,:,:] = binary_closing(im_classif[0,:,:].astype(bool), disk(args.binary_closing)).astype(np.uint8)
     elif args.area_closing:
-        im_classif = area_closing(im_classif, args.area_closing, connectivity=2)
+        im_classif[0,:,:] = area_closing(im_classif[0,:,:], args.area_closing, connectivity=2)
     elif args.remove_small_holes:
-        im_classif = remove_small_holes(
-            im_classif.astype(bool), args.remove_small_holes, connectivity=2
+        im_classif[0,:,:] = remove_small_holes(
+            im_classif[0,:,:].astype(bool), args.remove_small_holes, connectivity=2
         ).astype(np.uint8)
         
     # Add nodata in im_classif 
@@ -574,6 +566,22 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
     
     return rows_idxs, cols_idxs
 
+def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
+    
+    valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
+    _, rows, cols = np.where(valid_samples)
+
+    if len(rows) >= nb_samples and nb_samples >= 1:
+        indices = np.arange(0, len(rows), len(rows)/nb_samples).astype(np.uint16)
+
+        s_rows = rows[indices]
+        s_cols = cols[indices]
+    else:
+        s_rows = []
+        s_cols = []
+        
+    return s_rows, s_cols
+    
 
 def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
 
@@ -688,88 +696,71 @@ def build_samples(inputBuffer: list,
     # Retrieve number of samples to create for each class in this subset 
     nb_water_subsamples = round(water_ratio*args.nb_samples_water)
     nb_other_subsamples = round(other_ratio*args.nb_samples_other) 
-    
-    if args.samples_method != "grid":
-        # Prepare random water and other samples
-        if args.nb_samples_auto:
-            nb_water_subsamples = int(nb_water_subset * args.auto_pct)
-            nb_other_subsamples = int(nb_other_subset * args.auto_pct)
-        
-        # Pekel samples
-        if args.samples_method == "random":
-            rows_pekel, cols_pekel = get_random_indexes_from_masks(
-                nb_water_subsamples, inputBuffer[1][0], inputBuffer[0][0]
-            )
 
-        if args.samples_method == "smart":
-            rows_pekel, cols_pekel = get_smart_indexes_from_mask(
-                nb_water_subsamples,
-                args.smart_area_pct,
-                args.smart_minimum,
-                np.logical_and(inputBuffer[0][0], inputBuffer[1][0]),
-            )
-        
+    # Prepare random water and other samples
+    if args.nb_samples_auto:
+        nb_water_subsamples = int(nb_water_subset * args.auto_pct)
+        nb_other_subsamples = int(nb_other_subset * args.auto_pct)
+            
+    # Pekel samples
+    if args.samples_method == "random":
+        rows_pekel, cols_pekel = get_random_indexes_from_masks(
+            nb_water_subsamples, inputBuffer[1][0], inputBuffer[0][0]
+        )
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
             nb_other_subsamples, inputBuffer[1][0], inputBuffer[2][0]
         )
+
+    if args.samples_method == "smart":
+        rows_pekel, cols_pekel = get_smart_indexes_from_mask(
+            nb_water_subsamples,
+            args.smart_area_pct,
+            args.smart_minimum,
+            np.logical_and(inputBuffer[0][0], inputBuffer[1][0]),
+        )
+        # Hand samples, always random (currently)
+        rows_hand, cols_hand = get_random_indexes_from_masks(
+            nb_other_subsamples, inputBuffer[1][0], inputBuffer[2][0]
+        )
+            
+            
+    if args.samples_method == "grid":
+        rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples,
+                                                            inputBuffer[1],
+                                                            inputBuffer[0])
         
-        # All samples
-        rows = rows_pekel + rows_hand
-        cols = cols_pekel + cols_hand
-        if args.save_mode == "debug":
-            colormap = {
-                0: (0, 0, 0, 0),  # nodata
-                1: (0, 0, 255),  # eau
-                2: (255, 0, 0),  # autre
-                3: (0, 0, 0, 0),
-            }
-            save_indexes(
-                "samples.tif",
-                zip(rows_pekel, cols_pekel),
-                zip(rows_hand, cols_hand),
-                args.shape,
-                args.crs,
-                args.transform,
-                args.rpc,
-                colormap,
-            )
+        # Hand samples, always random (currently)
+        rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples,
+                                                              inputBuffer[1],
+                                                              inputBuffer[2])
 
-    else:
-        # Prepare regular samples
-        rows, cols = get_grid_indexes_from_masks(inputBuffer[1], args.grid_spacing)
-        if args.save_mode == "debug":
-            rc_pekel = [
-                (row, col)
-                for (row, col) in zip(rows, cols)
-                if inputBuffer[0][0][row, col] == 1
-            ]
-            rc_others = [
-                (row, col)
-                for (row, col) in zip(rows, cols)
-                if inputBuffer[0][0][row, col] != 1
-            ]
 
-            colormap = {
-                0: (0, 0, 0, 0),  # nodata
-                1: (0, 0, 255),  # eau
-                2: (255, 0, 0),  # autre
-                3: (0, 0, 0, 0),
-            }
-            save_indexes(
-                "samples.tif",
-                rc_pekel,
-                rc_others,
-                args.shape,
-                args.crs,
-                args.transform,
-                args.rpc,
-                colormap,
-            )
+    # All samples
+    rows = np.concatenate((rows_pekel, rows_hand))
+    cols = np.concatenate((cols_pekel, cols_hand))
+    if args.save_mode == "debug":
+        colormap = {
+            0: (0, 0, 0, 0),  # nodata
+            1: (0, 0, 255),  # eau
+            2: (255, 0, 0),  # autre
+            3: (0, 0, 0, 0),
+        }
+        save_indexes(
+            "samples.tif",
+            zip(rows_pekel, cols_pekel),
+            zip(rows_hand, cols_hand),
+            args.shape,
+            args.crs,
+            args.transform,
+            args.rpc,
+            colormap,
+        )
+
 
     # Prepare samples for learning
     im_stack = np.concatenate((inputBuffer[3],inputBuffer[4],inputBuffer[5],inputBuffer[0]),axis=0)
-    samples = np.transpose(im_stack[:, rows, cols])
+    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
 
     return samples   #[x_samples, y_samples]
 
@@ -806,7 +797,10 @@ def RF_prediction(inputBuffer: list,
 
     classifier =params["classifier"]
     prediction = np.zeros(inputBuffer[3][0].shape, dtype=np.uint8)
-    prediction[inputBuffer[3][0]] = classifier.predict(buffer_to_predict)  
+    if buffer_to_predict.shape[0] == 0:
+        print(f"WARNING > zone with NO DATA")
+    else:
+        prediction[inputBuffer[3][0]] = classifier.predict(buffer_to_predict)  
     
     return prediction
     
@@ -931,16 +925,7 @@ def getarguments():
     group2.add_argument("-red", default=1, help="Red band index")
     group2.add_argument("-nir", default=4, help="NIR band index")
     group2.add_argument("-green", default=2, help="green band index")
-
-    group2.add_argument(
-        "-use_rgb_layers",
-        default=False,
-        required=False,
-        action="store_true",
-        dest="use_rgb_layers",
-        help="Add R,G,B layers to image stack for learning",
-    )
-
+    
     group2.add_argument(
         "-hand_strict",
         default=False,
@@ -1000,7 +985,7 @@ def getarguments():
     group3.add_argument(
         "-samples_method",
         choices=["smart", "grid", "random"],
-        default="smart",
+        default="grid",
         required=False,
         action="store",
         dest="samples_method",
@@ -1427,7 +1412,8 @@ def main():
                                                            output_scalars= [],
                                                            multiproc_context= "fork",
                                                            filter_desc= "Samples building processing...")       # samples=[x_samples, y_samples]
-            
+
+                
                 time_samples = time.time()
 
                 ################ Train classifier from samples ########
