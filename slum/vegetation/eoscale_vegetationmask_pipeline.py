@@ -355,7 +355,8 @@ def apply_clustering(args, stats, nb_polys):
     clustering = apply_map(pred_veg, map_centroid)
 
     figure_name = splitext(args.file_classif)[0] + "_centroids_veg.png"
-    display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
+    if args.save_mode == "debug":
+        display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
     
     ## Analysis texture
     if args.texture_mode != "no":
@@ -416,11 +417,12 @@ def apply_clustering(args, stats, nb_polys):
                     map_centroid.append(UNDEFINED_TEXTURE)
                     
         figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
-        if args.texture_mode == "debug":
-            display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
-        else:
-            display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
-                         (9-nb_clusters_high_veg), figure_name)       
+        if args.save_mode == "debug":
+            if args.texture_mode == "debug":
+                display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
+            else:
+                display_clusters(list_clusters, "mean_texture", "mean_texture", args.nb_clusters_low_veg,
+                                 (9-nb_clusters_high_veg), figure_name)       
         
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
