@@ -15,15 +15,21 @@
 #module load otb/9.0.0rc2-python3.8
 #. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
 
-CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/vegetation/eoscale_vegetationmask_pipeline.py "
+CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/urban/urbanmask_eoscale.py"
 #CMD="slum_urbanmask"
 
-RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Vegetation/"
+RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Urban/"
 
-DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images/vegetation"
+DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images/urban"
 
 # Start
 echo "Launch SLUM from `pwd`"
+
+# Watermask
+# TODO : remove use_rgb_layers (always true)
+
+#${CMD_MASK} -use_rgb_layers ${DATA_DIR}/xt_no_peckel_but_water.tif ${RES_DIR}/watermask_no_peckel_area/watermask.tif -ndwi_threshold -0.1
+#${CMD_MASK} -use_rgb_layers ${DATA_DIR}/xt_no_peckel_no_water.tif ${RES_DIR}/watermask_dry_area/watermask.tif -save debug
 
 function compute_mask() {
     # Launch watermask computation on $1 with options $2
@@ -32,13 +38,13 @@ function compute_mask() {
     shift
     echo "Options : $*"
     # default options
-    options="-min_ndvi_veg 350 -max_ndvi_noveg 0 -remove_small_holes  50 -remove_small_objects 50 -binary_dilation 3 "
+    options="-remove_false_positive -remove_small_objects 100 -remove_small_holes 50 -binary_closing 3"
     # in order to pass all other options to the script
-    ${CMD_MASK} $options $* $image ${RES_DIR}/vegmask_${image_name}
+    ${CMD_MASK} $options $* $image ${RES_DIR}/urbanmask_${image_name}
 }
 
 function build_ref() {
-    prefix="vegmask"
+    prefix="urbanmask"
     image=`basename $1`
     mask=${RES_DIR}/${prefix}_${image}
     mask_ref=${RES_DIR}/ref_${prefix}_${image}
@@ -46,7 +52,7 @@ function build_ref() {
 }
 
 function check_ref() {
-    prefix="vegmask"
+    prefix="urbanmask"
     image=`basename $1`
     mask=${RES_DIR}/${prefix}_${image}
     mask_ref=${RES_DIR}/ref_${prefix}_${image}
@@ -112,6 +118,5 @@ else
     done
 fi	  
 	  
-
 
 # End
