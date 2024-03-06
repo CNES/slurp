@@ -15,7 +15,8 @@
 #module load otb/9.0.0rc2-python3.8
 #. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
 
-CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/water/watermask_eoscale.py"
+#CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/water/watermask_eoscale.py"
+CMD_MASK="slum_watermask"
 RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Water/"
 
 DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images"

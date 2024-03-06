@@ -15,8 +15,8 @@
 #module load otb/9.0.0rc2-python3.8
 #. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
 
-CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/urban/urbanmask_eoscale.py"
-#CMD="slum_urbanmask"
+#CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/urban/urbanmask_eoscale.py"
+CMD_MASK="slum_urbanmask"
 
 RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Urban/"
 
