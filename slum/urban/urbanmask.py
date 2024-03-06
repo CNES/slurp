@@ -244,7 +244,7 @@ def wsf_recovery(file_ref, file_out, write=False):
     else:
         print("Recover WSF file")        
     wsf_image = superimpose(
-        "/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
+        "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
         file_ref,
         file_out,
         otb.ImagePixelType_uint16,
@@ -1068,7 +1068,7 @@ def classify(args):
     
     end_time = time.time()
         
-    print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+    print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
     print("Total time (user)       :\t"+convert_time(end_time-t0))
     print("- Build_stack           :\t"+convert_time(time_stack-t0))
     print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
