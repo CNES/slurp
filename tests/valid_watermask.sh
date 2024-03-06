@@ -12,8 +12,8 @@
 # Example of command to lauch the script :
 # sbatch valid_watermask.sh
 
-module load otb/9.0.0rc2-python3.8
-. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
+#module load otb/9.0.0rc2-python3.8
+#. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
 
 CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/water/watermask_eoscale.py"
 RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Water/"
@@ -36,20 +36,14 @@ function compute_mask() {
     shift
     echo "Options : $*"
     # in order to pass all other options to the script
-    ${CMD_MASK} $* $image ${RES_DIR}/watermask_${image_name}
+    ${CMD_MASK} $* $image -binary_closing 3 -remove_small_holes 50 ${RES_DIR}/watermask_${image_name}
 }
 
 function build_ref() {
     image=`basename $1`
     mask=${RES_DIR}/watermask_${image}
     mask_ref=${RES_DIR}/watermask_ref_${image}
-    if [ -f "$mask_ref" ]
-    then
-	echo "$mask_ref already exists"
-    else
-	echo "create new ref $mask_ref"
-	cp $mask $mask_ref
-    fi
+    cp $mask $mask_ref
 }
 
 function check_ref() {
@@ -64,27 +58,49 @@ function check_ref() {
 	then
 	    echo "OK - $mask"
 	else
-	    echo "!!! NOK $mask differs from $mask_ref - please check !!"	    
+	    echo "!!! NOK $mask - please check !! otbcli_CompareImages -ref.in ${mask_ref} -meas.in ${mask}" 
 	fi
     else
 	echo "Warning : $mask_ref does not exist"
     fi
 }
 
-if [ -f "$1" ]
+function help() {
+    echo "Watermask unitary tests"
+    echo "-h : display this help"
+    echo "-r : compute watermask and build ref"
+    echo "-f <image> : launch only on <image>"
+}
+
+# Get the options
+while getopts ":hrf:" option; do
+   case $option in
+      h) # display Help
+          help
+          exit;;
+      r)
+	  build_ref=1
+	  echo "Build new references";;
+      f)
+	  single_test=1
+	  image=$OPTARG
+	  echo "Launch single test on $OPTARG";;
+      \?) # Invalid option
+         echo "Error: Invalid option -> use -h to display help"
+         exit;;
+   esac
+done
+
+if [ "$single_test" = "1" ]
 then
-    echo "Launch unitary test on $1"
-    im=$1
-    shift
-    options=$*
-    compute_mask $im $options
-    check_ref $im
+    echo "Launch unitary test on $image"
+    compute_mask $image
+    check_ref $image
 else
     for im in `ls ${DATA_DIR}/*.tif`;
     do
-	options="-use_rgb_layers"
 	compute_mask $im $options
-	if [ $1="-build_ref" ]
+	if [ "$build_ref"="1" ]
 	then
 	    build_ref $im
 	fi
