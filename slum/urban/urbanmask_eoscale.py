@@ -515,8 +515,10 @@ def build_samples(inputBuffer: list,
                     args: dict) -> list:
     """Build samples."""
     #inputBuffer=[valid_stack_key[0], key_gt, key_phr, key_ndvi[0], key_ndwi[0]]+ files_layers 
-    
-    mask_building = inputBuffer[1]==args.value_classif
+
+    # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
+    mask_building = np.where(inputBuffer[1]==args.value_classif,True,False)
+    mask_non_building = np.where(inputBuffer[1]==0,True,False)
     
     # Retrieve number of pixels for each class
     nb_valid_subset = np.count_nonzero(inputBuffer[0])
@@ -528,18 +530,18 @@ def build_samples(inputBuffer: list,
     # Retrieve number of samples to create for each class in this subset 
     nb_urban_subsamples = round(urban_ratio*args.nb_samples_urban)
     nb_other_subsamples = round(other_ratio*args.nb_samples_other)
-    
+
     if nb_urban_subsamples > 0:
         # Building samples
         rows, cols = get_grid_indexes_from_mask(nb_urban_subsamples, inputBuffer[0][0], mask_building)
     
         if nb_other_subsamples > 0:
-            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, inputBuffer[0][0], np.invert(mask_building))
+            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, inputBuffer[0][0], mask_non_building)
             rows = np.concatenate((rows, rows_nob), axis=0)
             cols = np.concatenate((cols, cols_nob), axis=0)
     else:
         if nb_other_subsamples > 0:
-            rows, cols = get_grid_indexes_from_mask(nb_other_subsamples, inputBuffer[0][0], np.invert(mask_building))
+            rows, cols = get_grid_indexes_from_mask(nb_other_subsamples, inputBuffer[0][0], mask_non_building)
         else:
             rows = []
             cols = []
@@ -681,7 +683,6 @@ def RF_prediction(inputBuffer: list,
     classifier =params["classifier"]
     if buffer_to_predict.shape[0] > 0:
         proba = classifier.predict_proba(buffer_to_predict)
-
         # Prediction, inspired by sklearn code to predict class
         res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
         res_classif[res_classif == 255] = 1
@@ -693,7 +694,7 @@ def RF_prediction(inputBuffer: list,
         prediction[1][inputBuffer[0][0]] = 100*proba[:,0]
         # Proba for class 1 (buildings)
         prediction[2][inputBuffer[0][0]] = 100*proba[:,1]
-    
+        
     else:
         ### corner case : only NO_DATA !
         prediction = np.zeros((3,inputBuffer[0].shape[1],inputBuffer[0].shape[2]))
@@ -1130,6 +1131,14 @@ def main():
                 key_shadowmask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_shadowmask).fill(0)
 
+            if args.urban_raster:
+                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
+
+            else:
+                args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
+                im_gt = wsf_recovery(args.file_phr, args.urban_raster, True)  
+                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
+                
             
             # Global validity mask construction
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs = [key_phr, mask_nocloud_key, key_vegmask, key_watermask],
@@ -1177,15 +1186,7 @@ def main():
             time_stack = time.time()
             
             ################ Build samples #################
-            
-            if args.urban_raster:
-                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
-
-            else:
-                args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
-                im_gt = wsf_recovery(args.file_phr, args.urban_raster, True)  
-                gt_key= eoscale_manager.open_raster(raster_path =args.urban_raster)
-            
+                                   
             #Recover useful features
             valid_stack= eoscale_manager.get_array(valid_stack_key[0])
             local_gt= eoscale_manager.get_array(gt_key)
