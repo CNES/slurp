@@ -27,12 +27,7 @@ cdef extern from "c_stats.cpp":
 
 # Declare the class with cdef
 cdef extern from "c_stats.h" namespace "stats":
-
-    void compute_stats_single_band(float * , unsigned int * , 
-		     float * , unsigned int * , 
-		     unsigned int , unsigned int ,
-		     unsigned int , unsigned int )
-
+   
     void compute_stats(float * , unsigned int * , 
 		     float * , unsigned int * , 
 		     unsigned int , unsigned int ,
@@ -51,30 +46,12 @@ cdef class PyStats:
     def __cinit__(self):
         pass
 
-    def run_stats_single_band(self, colorImage: np.ndarray, labelImage: np.ndarray, nbLabels):
-        
-        cdef float[::1] color_img_memview = colorImage.flatten().astype(np.float32)
-        cdef unsigned int[::1] label_img_memview = labelImage.flatten().astype(np.uint32)
-	
-        cdef float[::1] accumulator_mem_view = np.zeros(nbLabels).astype(np.float32)
-        cdef unsigned int[::1] counter_mem_view = np.zeros(nbLabels).astype(np.uint32)
-        
-        nbBands = colorImage.shape[0]
-        nbRows = colorImage.shape[1]
-        nbCols = colorImage.shape[2]
-
-        compute_stats_single_band(&color_img_memview[0],
-                      &label_img_memview[0], 
-                      &accumulator_mem_view[0], 
-                      &counter_mem_view[0],
-                      nbLabels, 
-                      nbBands, 
-                      nbRows, 
-                      nbCols)
-
-        return np.asarray(accumulator_mem_view), np.asarray(counter_mem_view)
-        
+    
     def run_stats(self, primitives: np.ndarray, labelImage: np.ndarray, nbLabels):
+        # Compute sums of different primitives, for each labeled segments of an image
+        # returns an accumulator and a counter 
+        # accumulator : sum of each primitive for each segment (dimension : nbBands * nbLabels)
+        # counter : nb of pixels by segment (dimension : nbLabels)
         
         nbBands = primitives.shape[0]
         nbRows = primitives.shape[1]
@@ -97,10 +74,10 @@ cdef class PyStats:
 
         return np.asarray(accumulator_mem_view), np.asarray(counter_mem_view)
 
-    
-    
     def finalize(self, segmentation: np.ndarray, clustering: np.ndarray):
-        
+        # Takes a segmented image as input, a clustering (labels -> class)
+        # and returns a classification map (each segment of the image defined by a class)
+                
         nbRows = segmentation.shape[1]
         nbCols = segmentation.shape[2]
         
