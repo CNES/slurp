@@ -43,7 +43,7 @@ slum_vegetationmask -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.ti
 slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_opening 2 -remove_small_objects 50
 
 # Urbanmask
-slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 100 -remove_small_holes 100 -remove_false_positive -confidence_threshold 70 -shadowmask shadows/shadowmask.tif -save debug  ${TMPDIR}/image/${filename} urban/urbanmask.tif
+slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 100 -remove_small_holes 100 -remove_false_positive -confidence_threshold 70 -shadowmask shadows/shadowmask.tif -save debug  ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000
 
 # Stack
 slum_stackmasks -vegetation vegetation/vegetationmask.tif -water water/watermask.tif -water_pred water/predict.tif -urban urban/urbanmask.tif -shadow shadows/shadowmask.tif stack/stack_simple.tif
