@@ -20,18 +20,17 @@ import eoscale.eo_executors as eoexe
 # Cython module to compute stats
 import stats as ts
 
-NO_VEG_CODE = 0
-WATER_CODE = 3
+NO_VEG_CODE = 0    # Water, other non vegetated areas
+UNDEFINED_VEG = 10 # Non vegetated or few vegetation (weak NDVI signal)
+VEG_CODE = 20      # Vegetation
 
-LOW_VEG_CODE = 1
-UNDEFINED_TEXTURE = 2
-HIGH_VEG_CODE = 3
 
-UNDEFINED_VEG = 10
-VEG_CODE = 20
+LOW_TEXTURE_CODE = 1     # Smooth areas (could be low vegetation or bare soil)
+MIDDLE_TEXTURE_CODE = 2  # Middle texture areas (could be high vegetation)
+HIGH_TEXTURE_CODE = 3    # High texture (could be high vegetation)
 
-LOW_VEG_CLASS = VEG_CODE + LOW_VEG_CODE
-UNDEFINED_TEXTURE_CLASS = VEG_CODE + UNDEFINED_TEXTURE
+LOW_VEG_CLASS = VEG_CODE + LOW_TEXTURE_CODE
+UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 
 ########### MISCELLANEOUS FUNCTIONS ##############
 
@@ -173,10 +172,14 @@ def std_convoluted(im, N, filter_texture, min_value, max_value):
     s = scipy.signal.convolve2d(im, kernel, mode="same", boundary="symm") # Local mean with convolution
     s2 = scipy.signal.convolve2d(im2, kernel, mode="same", boundary="symm") # local mean of the squared image with convolution
     ns = kernel.size * np.ones(im.shape)
+    # Invalid values will be handled later
+    np.seterr(divide="ignore", invalid="ignore")
     res = np.sqrt((s2 - s**2 / ns) / ns) # std calculation
     
     # Normalization
     res = 1000 * res / (max_value - min_value)
+
+    res = np.where(np.isnan(res),0,res)
     
     return res, (time.time() - t0)
 
@@ -187,17 +190,9 @@ def compute_segmentation(args, img, ndvi):
     """Compute segmentation with SLIC """
     nseg = int(img.shape[2] * img.shape[1] / args.slic_seg_size)
 
-    # TODO : RGB segmentation mode is not working fine. Could be deleted (keep only NDVI mode)
-    if args.segmentation_mode == "RGB":
-        # Note : we read RGB image.
-        # data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3] convert2lab=True,
-        data = img.reshape(img.shape[1], img.shape[2], img.shape[0])[:,:,:3]
-        res_seg = slic(data, compactness=float(args.slic_compactness), n_segments=nseg, sigma=1,  channel_axis = 2)
-        res_seg = res_seg.reshape(1,res_seg.shape[0], res_seg.shape[1])
-    else:
-        # Note : we read NDVI image.
-        # Estimation of the max number of segments (ie : each segment is > 100 pixels)
-        res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)        
+    # Note : we read NDVI image.
+    # Estimation of the max number of segments (ie : each segment is > 100 pixels)
+    res_seg = slic(ndvi.astype("double"), compactness=float(args.slic_compactness), n_segments=nseg, sigma=1, channel_axis=None)        
     
     return res_seg
 
@@ -208,11 +203,6 @@ def segmentation_task(input_buffers: list,
     # input_buffers = [input_img,ndvi,valid_stack]                    
     # Segmentation
     # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
-    '''
-    print(f"DBG > {input_buffers[2].shape=}")
-    print(f"DBG > {input_buffers[0].shape=}")
-    print(f"DBG > {input_buffers[1].shape=}")
-    '''
     
     # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
     #segments = compute_segmentation(args,input_buffers[0], input_buffers[1][0][input_buffers[2][0]])
@@ -226,7 +216,12 @@ def segmentation_task(input_buffers: list,
 
 
 def concat_seg(previousResult,outputAlgoComputer, tile):
-    #outputAlgoComputer= [segments]
+    """
+    Concatenates SLIC segmentation in a single segmentation
+    """
+
+    # Computes max of previous result and adds this value to the current result :
+    # prevents from computing a map with several identical labels !!
     num_seg= np.max(previousResult[0])
     
     previousResult[0][:, tile.start_y: tile.end_y + 1, tile.start_x : tile.end_x + 1] = outputAlgoComputer[0][:,:,:] + (num_seg)
@@ -251,37 +246,14 @@ def compute_stats_image(inputBuffer: list,
     # [:,0,:,:] -> transform in an array (3bands, rows, cols)
     accumulator, counter = ts_stats.run_stats(np.array(inputBuffer[1:nb_primitives+1])[:,0,:,:], inputBuffer[0], params["nb_lab"])
         
-    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
+    # output : [ sum of each primitive ; counter (nb pixels / seg) ]
     return [accumulator, counter]
 
-"""
-def compute_stats_image(inputBuffer: list, 
-                        input_profiles: list, 
-                        params: dict) -> list:
-    
-    # inputBuffer : seg, NDVI, NDWI, texture, valid_stack
-    shapes=inputBuffer[0].shape
-    ts_stats = ts.PyStats()
-    nb_primitives =  len(inputBuffer)-2  # - seg and valid_stack
-    
-    #Create the valid stack to apply to primitives
-    valid_bool = np.zeros((nb_primitives,shapes[1],shapes[2]),dtype=bool)
-    for k in range(nb_primitives):
-        valid_bool[k]=inputBuffer[-1]
-
-    print(inputBuffer[0][inputBuffer[-1]].shape)
-    print(np.array(inputBuffer[1:nb_primitives+1])[:,0][valid_bool].shape)
-    # inputBuffer : list of (one band, rows, cols) images
-    # [:,0,:,:] -> transform in an array (3bands, rows, cols)
-    accumulator, counter = ts_stats.run_stats(np.array(inputBuffer[1:nb_primitives+1])[:,0][valid_bool], inputBuffer[0][inputBuffer[-1]], params["nb_lab"])
-        
-    # output : [ mean of each primitive ; counter (nb pixels / seg) ]
-    return [accumulator, counter]
-"""
 
 def stats_concatenate(output_scalars, chunk_output_scalars, tile):
-    # single band version
+    # output_scalars[0] : sums of each segment
     output_scalars[0] += chunk_output_scalars[0]
+    # output_scalars[1] : counter of each segment (nb pixels/segment)
     output_scalars[1] += chunk_output_scalars[1]
 
 ########### Clustering ##############
@@ -302,7 +274,7 @@ def apply_clustering(args, stats, nb_polys):
                                  verbose=0,
                                  random_state=712)
     pred_veg = kmeans_rad_indices.fit_predict(np.stack((stats[0:nb_polys],stats[nb_polys:2*nb_polys]),axis=1))
-    print(f"{kmeans_rad_indices.cluster_centers_=}")
+    print(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
     
     list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
     list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
@@ -388,7 +360,7 @@ def apply_clustering(args, stats, nb_polys):
                                 verbose=0,
                                 random_state=712)
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1,1))
-        print(kmeans_texture.cluster_centers_)
+        print(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
 
         list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
         list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=True).index
@@ -410,11 +382,11 @@ def apply_clustering(args, stats, nb_polys):
                 nb_clusters_high_veg = 9 - args.nb_clusters_low_veg
             for t in range(kmeans_texture.n_clusters):
                 if t in list_clusters_by_texture[:args.nb_clusters_low_veg]:
-                    map_centroid.append(LOW_VEG_CODE)
+                    map_centroid.append(LOW_TEXTURE_CODE)
                 elif t in list_clusters_by_texture[9-nb_clusters_high_veg:]:
-                    map_centroid.append(HIGH_VEG_CODE)
+                    map_centroid.append(HIGH_TEXTURE_CODE)
                 else:
-                    map_centroid.append(UNDEFINED_TEXTURE)
+                    map_centroid.append(MIDDLE_TEXTURE_CODE)
                     
         figure_name = splitext(args.file_classif)[0] + "_centroids_texture.png"
         if args.save_mode == "debug":
@@ -465,14 +437,9 @@ def clean_task(input_buffers: list,
             high_veg_binary.astype(bool), args.remove_small_objects, connectivity=2
         ).astype(np.uint8) 
         im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, high_veg_binary == 1)] = UNDEFINED_TEXTURE_CLASS
-        """
-        low_veg_binary = remove_small_objects(
-            low_veg_binary, args.remove_small_objects, connectivity=2
-        ).astype(np.uint8) 
-        im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, low_veg_binary == 0)] = UNDEFINED_TEXTURE_CLASS
-        """
-    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, True, False)  
+
         
+    low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, True, False)  
     if args.binary_dilation:
         low_veg_binary = binary_dilation(
             low_veg_binary, disk(args.binary_dilation)
@@ -512,7 +479,6 @@ def main():
                         help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
     #segmentation arguments
-    parser.add_argument("-seg", "--segmentation_mode", choices=["RGB", "NDVI"], default="NDVI", help="Image to segment : RGB or NDVI")
     parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100, help="Approximative segment size (100 by default)")
     parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     
@@ -669,9 +635,22 @@ def main():
                                             concatenate_filter = stats_concatenate,
                                             multiproc_context= "fork",
                                             filter_desc = "Stats ")
+        
+        # stats[0] : sum of each primitives [ <- NDVI -><- NDWI -><- texture -> ]
+        # stats[1] : nb pixels by segment   [ counter  ]
+        # Once the sum of each primitives is computed, we compute the mean by dividing by the size of each segment
+        np.seterr(divide="ignore", invalid="ignore")
 
+        #stats[0] = np.where(np.isnan(stats[0]),0,stats[0])
+        stats[0][:nb_polys] = stats[0][:nb_polys]/stats[1][:nb_polys]
+        stats[0][nb_polys:2*nb_polys] = stats[0][nb_polys:2*nb_polys]/stats[1][:nb_polys]
+        stats[0][2*nb_polys:3*nb_polys] = stats[0][2*nb_polys:3*nb_polys]/stats[1][:nb_polys]
+
+        # Replace NaN by 0. After clustering, NO_DATA values will be masked
+        stats[0] = np.where(np.isnan(stats[0]),0,stats[0])
+        
         t_stats = time.time()
-
+        
         # Clustering 
         clusters = apply_clustering(args, stats[0], nb_polys)
         t_cluster = time.time()       
