@@ -12,10 +12,6 @@
 # Example of command to lauch the script :
 # sbatch valid_watermask.sh
 
-#module load otb/9.0.0rc2-python3.8
-#. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
-
-#CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/water/watermask_eoscale.py"
 CMD_MASK="slum_watermask"
 RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Water/"
 
@@ -23,12 +19,6 @@ DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images"
 
 # Start
 echo "Launch SLUM from `pwd`"
-
-# Watermask
-# TODO : remove use_rgb_layers (always true)
-
-#${CMD_MASK} -use_rgb_layers ${DATA_DIR}/xt_no_peckel_but_water.tif ${RES_DIR}/watermask_no_peckel_area/watermask.tif -ndwi_threshold -0.1
-#${CMD_MASK} -use_rgb_layers ${DATA_DIR}/xt_no_peckel_no_water.tif ${RES_DIR}/watermask_dry_area/watermask.tif -save debug
 
 function compute_mask() {
     # Launch watermask computation on $1 with options $2
@@ -43,14 +33,14 @@ function compute_mask() {
 function build_ref() {
     image=`basename $1`
     mask=${RES_DIR}/watermask_${image}
-    mask_ref=${RES_DIR}/watermask_ref_${image}
+    mask_ref=${RES_DIR}/ref_watermask_${image}
     cp $mask $mask_ref
 }
 
 function check_ref() {
     image=`basename $1`
     mask=${RES_DIR}/watermask_${image}
-    mask_ref=${RES_DIR}/watermask_ref_${image}
+    mask_ref=${RES_DIR}/ref_watermask_${image}
     if [ -f $mask_ref ] && [ -f $mask ]
     then
 	md5_res=`md5sum $mask`
@@ -101,8 +91,9 @@ else
     for im in `ls ${DATA_DIR}/*.tif`;
     do
 	compute_mask $im $options
-	if [ "$build_ref"="1" ]
+	if [ "$build_ref" = "1" ]
 	then
+	    echo "Build ref"
 	    build_ref $im
 	fi
     done

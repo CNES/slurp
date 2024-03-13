@@ -12,10 +12,6 @@
 # Example of command to lauch the script :
 # sbatch valid_watermask.sh
 
-#module load otb/9.0.0rc2-python3.8
-#. /work/scratch/env/tanguyy/venv/slum_otb9/bin/activate
-
-#CMD_MASK="python /home/qt/tanguyy/SRC/slum/slum/vegetation/eoscale_vegetationmask_pipeline.py "
 CMD_MASK="slum_vegetationmask"
 
 RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Vegetation/"
@@ -100,7 +96,7 @@ else
     for im in `ls ${DATA_DIR}/*.tif`;
     do
 	compute_mask $im $options
-	if [ "$build_ref"="1" ]
+	if [ "$build_ref" = "1" ]
 	then
 	    build_ref $im
 	fi
