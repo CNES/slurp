@@ -40,22 +40,25 @@ slum_watermask -remove_small_holes 100 -binary_closing 2 -save prim ${TMPDIR}/im
 slum_vegetationmask -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -non_veg_clusters -remove_small_objects 100 -binary_dilation 2 -remove_small_holes 100 -nbclusters ${CLUSTERS_VEG} -nbclusters_low ${CLUSTERS_LOW_VEG} ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif 
 
 # Shadowmask
-slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_opening 2 -remove_small_objects 50
+slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_opening 2 -remove_small_objects 100 -th_rgb 0.2 -th_nir 0.2
+
 
 # Urbanmask
 slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 100 -remove_small_holes 100 -remove_false_positive -confidence_threshold 70 -shadowmask shadows/shadowmask.tif -save debug  ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000
 
 # Stack
-slum_stackmasks -vegetation vegetation/vegetationmask.tif -water water/watermask.tif -water_pred water/predict.tif -urban urban/urbanmask.tif -shadow shadows/shadowmask.tif stack/stack_simple.tif
+slum_stackmasks ${TMPDIR}/image/${filename} stack/stack_simple.tif -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -waterpred water/watermask.tif -urban_proba urban/urbanmask_proba.tif  -shadow shadows/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 500 -binary_closing 3 -binary_opening 3 -remove_small_holes 500
 
 stop_monitoring.sh --name SLUM_all_masks
 
-tar cf ${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tar water urban vegetation shadows stack
+current_date=`date +%F`
+
+tar cf ${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar water urban vegetation shadows stack
 
 ln -s $PHR_IM ${OUTPUT_DIR}/link_to_VHR_image.tif
 
-# sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,vegetationmask.tif,vegetationmask_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tif," | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
-sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
+# sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,vegetationmask.tif,vegetationmask_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tif," | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
+sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
 
 echo "QGIS project available : check the geographical extent (Apply image CRS to other layers), check the image THR layer (fix percentiles to 2/98) and enjoy !"
 # End

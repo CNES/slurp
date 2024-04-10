@@ -36,12 +36,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
 from slum.tools import io_utils
+from slum.stack import stack_masks
 import otbApplication as otb
 
 from multiprocessing import shared_memory, get_context
 import concurrent.futures
 import sys
-import uuid
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -501,7 +501,9 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     _, rows, cols = np.where(valid_samples)
 
     if len(rows) >= nb_samples and nb_samples >= 1:
-        indices = np.arange(0, len(rows), int(len(rows)/nb_samples))
+        # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
+        # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
+        indices = np.arange(0, len(rows)-1, int(len(rows)/nb_samples))
         s_rows = rows[indices]
         s_cols = cols[indices]
     else:
@@ -597,77 +599,6 @@ def get_bornes(index, step, limit, margin):
     return start_with_margin, end_with_margin, start_extract, end_extract
 
 
-def watershed_regul(args, clean_predict, inputBuffer):    
-    # inputBuffer = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
-    #                   0              1          2             3              4            5         6
-    
-    # Compute mono image from RGB image
-    im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
-       
-    # compute gradient
-    edges = sobel(im_mono)
-
-    del im_mono
-
-    # markers map : -1, 1 and 2 : probable background, buildings or false positive
-    # inputBuffer[0] = proba of building class
-    markers = np.zeros_like(inputBuffer[0][0])
-
-    """
-    weak_detection = np.logical_and(inputBuffer[0][2] > 50, inputBuffer[0][2] < args.confidence_threshold)
-    true_negative = np.logical_and(binary_closing(inputBuffer[5][0], disk(10)) == 255, weak_detection)
-    markers[weak_detection] = 3
-    """
-    probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
-    probable_background = np.logical_and(inputBuffer[0][2] < 40, clean_predict == 0)
-    markers[probable_background] = 4
-    markers[probable_buildings] = 1
-
-    if args.file_shadowmask:
-        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
-        markers[binary_erosion(inputBuffer[4][0] == 2, disk(5))] = 8
-
-
-    if args.file_vegetationmask:
-        # vegetation
-        markers[inputBuffer[3][0] > args.vegmask_max_value] = 7
-    if args.file_watermask:
-        # water
-        markers[inputBuffer[2][0] == 1] = 6
-    
-         
-
-    if args.remove_false_positive:
-        ground_truth = inputBuffer[5][0]
-        # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0][2] > args.confidence_threshold)
-        markers[false_positive] = 2
-        del ground_truth, false_positive
-        
-    # watershed segmentation
-
-    # seg[np.where(seg>3, True, False)] = 0 
-    #markers[np.where(markers > 3)] = 0
-    seg = segmentation.watershed(edges, markers)
-    seg[np.where(seg > 2, True, False)] = 0
-
-    seg[binary_opening(seg == 1, disk(10))] = 1
-
-    #markers[binary_opening(inputBuffer[4][0] == 2, disk(10))] = 8
-
-    if args.remove_small_holes:
-        res = remove_small_holes(
-            seg.astype(bool), args.remove_small_holes, connectivity=2
-        ).astype(np.uint8)
-        seg = np.multiply(res, seg)
-
-    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
-    if args.remove_small_objects:
-        res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
-        # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
-        seg = np.multiply(res, seg)
-
-    return seg, markers, edges
 
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
@@ -710,19 +641,20 @@ def post_process(inputBuffer: list,
     # inputs = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
     #             0              1          2             3              4            5         6
     # Clean
-    im_classif = clean(params, inputBuffer[0][0])
+    # im_classif = clean(params, inputBuffer[0][0])
+
     # Watershed regulation
-    final_mask, markers, edges = watershed_regul(params, im_classif, inputBuffer)
+    final_mask, markers, edges = stack_masks.watershed_regul(params, inputBuffer[0][0], inputBuffer)
     
     
 
-    # Add nodata in final_mask (inputBuffer[5] : valid mask)
+    # Add nodata in final_mask (inputBuffer[6] : valid mask)
     final_mask[np.logical_not(inputBuffer[6][0])] = 255
 
     res_int = np.zeros((3,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
     res_int[0] = final_mask
     res_int[1] = markers
-    res_int[2] = im_classif
+    res_int[2] = inputBuffer[0][0] #im_classif
 
     
     return res_int
@@ -959,16 +891,6 @@ def getarguments():
     )
     
     parser.add_argument(
-        "-margin",
-        type=int,
-        default=0,
-        required=False,
-        action="store",
-        dest="margin",
-        help="Margin for the regularization (clean and watershed)"
-    )
-
-    parser.add_argument(
         "-random_seed",
         type=int,
         default=712,
@@ -1050,7 +972,7 @@ def main():
         try:
             
             t0 = time.time()
-            
+
             ################ Build stack with all layers #######
             
             # Band positions in PHR image
@@ -1298,7 +1220,7 @@ def main():
                     )
                     save_image(
                         final_predict[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba_urban.tif")),
+                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba.tif")),
                         args.crs,
                         args.transform,
                         255,

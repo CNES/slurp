@@ -28,7 +28,8 @@ function compute_mask() {
     shift
     echo "Options : $*"
     # default options
-    options="-remove_false_positive -remove_small_objects 100 -remove_small_holes 50 -binary_closing 3"
+    #options="-remove_false_positive -remove_small_objects 100 -remove_small_holes 50 -binary_closing 3 -save debug"
+    options=" -binary_closing 3 -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 -binary_closing 3 -binary_opening 3 -save debug"
     # in order to pass all other options to the script
     ${CMD_MASK} $options $* $image ${RES_DIR}/urbanmask_${image_name}
 }
