@@ -36,7 +36,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
 from slum.tools import io_utils
-from slum.stack import stack_masks
 import otbApplication as otb
 
 from multiprocessing import shared_memory, get_context
@@ -644,7 +643,7 @@ def post_process(inputBuffer: list,
     # im_classif = clean(params, inputBuffer[0][0])
 
     # Watershed regulation
-    final_mask, markers, edges = stack_masks.watershed_regul(params, inputBuffer[0][0], inputBuffer)
+    final_mask, markers, edges = watershed_regul(params, inputBuffer[0][0], inputBuffer)
     
     
 
@@ -658,6 +657,116 @@ def post_process(inputBuffer: list,
 
     
     return res_int
+
+
+
+def watershed_regul(args, clean_predict, inputBuffer):    
+    # inputBuffer = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
+    #                   0              1          2             3              4            5         6
+    
+    # Compute mono image from RGB image
+    im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
+       
+    # compute gradient
+    edges = sobel(im_mono)
+
+    del im_mono
+
+    # markers map : -1, 1 and 2 : probable background, buildings or false positive
+    # inputBuffer[0] = proba of building class
+    markers = np.zeros_like(inputBuffer[0][0])
+
+    """
+    weak_detection = np.logical_and(inputBuffer[0][2] > 50, inputBuffer[0][2] < args.confidence_threshold)
+    true_negative = np.logical_and(binary_closing(inputBuffer[5][0], disk(10)) == 255, weak_detection)
+    markers[weak_detection] = 3
+    """
+    
+    #  probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
+    probable_background = np.logical_and(inputBuffer[0][2] < 40, clean_predict == 0)
+    ground_truth_eroded = binary_erosion(inputBuffer[5][0]==255, disk(5))
+    
+    probable_buildings = np.logical_and(ground_truth_eroded, inputBuffer[0][2] > 50)
+    
+    
+
+    """
+    ground_truth_eroded = binary_erosion(inputBuffer[5][0]==255, disk(5))
+    # If WSF = 1
+    probable_buildings = np.logical_and(inputBuffer[0][2] > 70, ground_truth_eroded)
+    #probable_background = np.logical_and(inputBuffer[0][2] < 40, ground_truth_eroded)
+
+    no_WSF = binary_dilation(inputBuffer[5][0]==0, disk(5)) 
+    false_positive = np.logical_and(no_WSF, inputBuffer[0][2] > args.confidence_threshold)
+
+    # note : all other pixels are 0
+    markers[false_positive] = 2
+    """    
+
+    confident_buildings = np.logical_and(ground_truth_eroded, inputBuffer[0][2] > args.confidence_threshold)
+    
+    markers[probable_background] = 4
+    markers[probable_buildings] = 1
+    markers[confident_buildings] = 2
+    
+    
+    if args.file_shadowmask:
+        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
+        markers[binary_erosion(inputBuffer[4][0] == 2, disk(5))] = 8
+
+    '''
+    if args.file_vegetationmask:
+        # vegetation
+        markers[inputBuffer[3][0] > args.vegmask_max_value] = 7
+    if args.file_watermask:
+        # water
+        markers[inputBuffer[2][0] == 1] = 6
+    '''
+         
+    
+    if args.remove_false_positive:
+        ground_truth = inputBuffer[5][0]
+        # mark as false positive pixels with high confidence but not covered by dilated ground truth
+        # TODO : check if we can reduce radius for dilation
+        false_positive = np.logical_and(binary_dilation(ground_truth, disk(10)) == 0, inputBuffer[0][2] > args.confidence_threshold)
+        markers[false_positive] = 3
+        del ground_truth, false_positive
+    
+    
+    # watershed segmentation
+
+    # seg[np.where(seg>3, True, False)] = 0 
+    #markers[np.where(markers > 3)] = 0
+    seg = segmentation.watershed(edges, markers)
+
+
+    seg[np.where(seg > 3, True, False)] = 0
+    seg[np.where(seg == 2, True, False)] = 1
+    
+    # TODO : check if we can remove/reduce this opening
+
+    
+    seg[binary_closing(seg == 1, disk(args.binary_closing))] = 1
+    
+    seg[binary_opening(seg == 1, disk(args.binary_closing))] = 1
+
+    #markers[binary_opening(inputBuffer[4][0] == 2, disk(10))] = 8
+
+    if args.remove_small_holes:
+        res = remove_small_holes(
+            seg.astype(bool), args.remove_small_holes, connectivity=2
+        ).astype(np.uint8)
+        seg = np.multiply(res, seg)
+
+    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
+    #args.remove_small_objects = False
+    if args.remove_small_objects:
+        res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
+        # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
+        seg = np.multiply(res, seg)
+
+    return seg, markers, edges
+
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
