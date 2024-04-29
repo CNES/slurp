@@ -90,7 +90,7 @@ def single_bool_profile(input_profiles: list, map_params):
 
     return profile
 
-def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask):
+def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params):
     # Compute mono image from RGB image
     im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
     edges = sobel(im_mono)
@@ -102,7 +102,8 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     
     ground_truth_eroded = binary_erosion(wsf[0]==255, disk(5)) 
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > 70)
-
+    probable_buildings = binary_erosion(probable_buildings, disk(params.building_erosion))
+    
     false_positive = np.logical_and(binary_dilation(wsf[0], disk(10)) == 0, urban_proba[0] > 70)
     
     markers[0][probable_buildings] = BUILDINGS
@@ -167,7 +168,7 @@ def post_process(inputBuffer: list,
     stack = np.zeros((3,input_image.shape[1],input_image.shape[2]))
 
     # Improve buildings detection using a watershed / markers regularization
-    segmented_buildings, markers = watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask)
+    segmented_buildings, markers = watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params)
 
     clean_bare_ground = morpho_clean(vegmask[0] == 11, params) == 1
     stack[0][clean_bare_ground] = BARE_GROUND
@@ -244,7 +245,7 @@ def getarguments():
          required=False,
          action="store",
          dest="binary_closing",
-         help="Size of square structuring element"
+         help="Size of square structuring element (clean BUILDING / BARE_GROUND classes)"
      )
      
      parser.add_argument(
@@ -254,7 +255,17 @@ def getarguments():
          required=False,
          action="store",
          dest="binary_opening",
-         help="Size of square structuring element"
+         help="Size of square structuring element (clean BUILDING / BARE_GROUND classes)"
+     )
+
+     parser.add_argument(
+         "-building_erosion",
+         type=int,
+         default=0,
+         required=False,
+         action="store",
+         dest="building_erosion",
+         help="Supposed buildings will be eroded by this size in the marker step"
      )
      
      parser.add_argument(
