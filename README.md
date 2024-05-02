@@ -43,18 +43,19 @@ You need to clone the repository and pip install SLUM.
 ```
 git clone git@gitlab.cnes.fr:pluto/slum.git
 ```
-To install SLUM, you need OTB and some libraries already installed on VRE OT.
-Otherwise, if you are are connected to HAL, or working on your personal computer (Linux), 
+To install SLUM, you need OTB, [EOScale](https://gitlab.cnes.fr/pluto/eoscale) and some libraries already installed on VRE OT.
+
+Otherwise, if you are are connected to TREX, or working on your personal computer (Linux), 
 you may set the environment as mentioned below.
 ### Create a virtual env with all libraries (if you don't use VRE OT)
-On HAL, connect to a computing node to create & compile the virtual environment (needed to compile rasterio at install time)
+On TREX, connect to a computing node to create & compile the virtual environment (needed to compile rasterio at install time)
 ```
-qsub -l select=1:ncpus=8 -l walltime=01:00:00 -I
+unset SLURM_JOB_ID ; srun -A cnes_level2 -N 1 -n 8 --time=02:00:00 --mem=64G --x11 --pty bash
 ```
 Load OTB and create a virtual env with some Python libraries
 ```
-module load otb/7.4-python3.8.4
-# Creates a virtual env base on Python 3.8.4
+module load otb/9.0.0-python3.8
+# Creates a virtual env base on Python 3.8.13
 python -m venv slum_env
 . slum_env/bin/activate
 # upgrade pip and install several libraries
@@ -71,7 +72,7 @@ pip install .
 ```
 Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
-## Use SLUM on HAL
+## Use SLUM on TREX
 On HAL, you can directly use SLUM by sourcing the following environment.
 ```
 source /softs/projets/pluto/init_slum_v2.sh
