@@ -877,6 +877,14 @@ def getarguments():
     )
 
     parser.add_argument(
+        "-post_process",
+        default=False,
+        required=False,
+        action="store_true",
+        dest="post_process",
+        help="Post-process urban mask : apply morphological operations and regularize building shapes (watershed regularization)"
+    )
+    parser.add_argument(
         "-cloud_gml",
         required=False,
         action="store",
@@ -1271,53 +1279,17 @@ def main():
                                                                filter_desc= "RF prediction processing...")             
                 time_random_forest = time.time()
 
-                ######### Post_processing  ################  
-
-                key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]],   
-                                                               image_filter = post_process,
-                                                               filter_parameters= args,
-                                                               generate_output_profiles = post_process_profile,
-                                                               stable_margin= 20,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "Post processing...")
-
-
-                # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.get_array(key_post_process[0])[0]
+                final_predict = eoscale_manager.get_array(key_predict[0])
                 save_image(
-                    final_classif,
-                    args.file_classif,
-                    args.crs,
-                    args.transform,
-                    255,
-                    args.rpc,
-                    dtype=np.dtype(np.uint8),
-                    tags=args.__dict__,
-                )
-                save_image(
-                        eoscale_manager.get_array(key_post_process[0])[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
+                        final_predict[2],
+                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba.tif")),
                         args.crs,
                         args.transform,
                         255,
                         args.rpc,
-                        dtype=np.dtype(np.uint8),
                         tags=args.__dict__,
                 )
                 if args.save_mode == "debug":
-                    # Save auxilliary results : raw prediction, markers
-                    save_image(
-                        eoscale_manager.get_array(key_post_process[0])[1],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        dtype=np.dtype(np.uint8),
-                        tags=args.__dict__,
-                    )
-                    final_predict = eoscale_manager.get_array(key_predict[0])
                     save_image(
                         final_predict[0],
                         join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_raw_predict.tif")),
@@ -1326,16 +1298,55 @@ def main():
                         255,
                         args.rpc,
                         tags=args.__dict__,
-                    )
+                )
+
+
+                ######### Post_processing  ################  
+                if args.post_process == True:
+                    key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]],   
+                                                                         image_filter = post_process,
+                                                                         filter_parameters= args,
+                                                                         generate_output_profiles = post_process_profile,
+                                                                         stable_margin= 20,
+                                                                         context_manager = eoscale_manager,
+                                                                         multiproc_context= "fork",
+                                                                         filter_desc= "Post processing...")
+                
+                    # Save final mask (prediction + post-processing)
+                    final_classif = eoscale_manager.get_array(key_post_process[0])[0]
                     save_image(
-                        final_predict[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba.tif")),
+                        final_classif,
+                        args.file_classif,
                         args.crs,
                         args.transform,
                         255,
                         args.rpc,
+                        dtype=np.dtype(np.uint8),
                         tags=args.__dict__,
                     )
+                    save_image(
+                        eoscale_manager.get_array(key_post_process[0])[2],
+                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
+                        args.crs,
+                        args.transform,
+                        255,
+                        args.rpc,
+                        dtype=np.dtype(np.uint8),
+                        tags=args.__dict__,
+                    )
+                    if args.save_mode == "debug":
+                    # Save auxilliary results : raw prediction, markers
+                        save_image(
+                            eoscale_manager.get_array(key_post_process[0])[1],
+                            join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
+                            args.crs,
+                            args.transform,
+                            255,
+                            args.rpc,
+                            dtype=np.dtype(np.uint8),
+                            tags=args.__dict__,
+                        )
+                        
                 end_time = time.time()
 
                 print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
@@ -1343,7 +1354,8 @@ def main():
                 print("- Build_stack           :\t"+convert_time(time_stack-t0))
                 print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
                 print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
-                print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+                if args.post_process == True:
+                    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
                 print("***")    
             elif args.nb_valid_built_pixels > 0:
                 #### Corner case : no "non building pixels"
