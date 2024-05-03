@@ -52,7 +52,8 @@ On TREX, connect to a computing node to create & compile the virtual environment
 ```
 unset SLURM_JOB_ID ; srun -A cnes_level2 -N 1 -n 8 --time=02:00:00 --mem=64G --x11 --pty bash
 ```
-Load OTB and create a virtual env with some Python libraries
+Load OTB and create a virtual env with some Python libraries. 
+Compile and install EOScale and then SLUM
 ```
 module load otb/9.0.0-python3.8
 # Creates a virtual env base on Python 3.8.13
@@ -60,24 +61,19 @@ python -m venv slum_env
 . slum_env/bin/activate
 # upgrade pip and install several libraries
 pip install pip --upgrade
-pip install scikit-image scikit-learn geopandas scikit-learn-intelex matplotlib cython psutil pygeos
-# install and compile rasterio with compatible GDAL 
-pip install rasterio --no-binary :all:
-```
-### Pip install
-Go to the directory where SLUM had been cloned and pip install it.
-```
-cd slum
+cd <EOScale source folder>
+pip install .
+cd <SLUM source folder>
 pip install .
 ```
 Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
 ## Use SLUM on TREX
-On HAL, you can directly use SLUM by sourcing the following environment.
+On TREX, you can directly use SLUM by sourcing the following environment.
 ```
-source /softs/projets/pluto/init_slum_v2.sh
+source /work/CAMPUS/users/tanguyy/PLUTO/slum_demo/init_slum.sh
 ```
-This will load OTB 8.1-python3.8.4.
+This will load OTB 9.0 and all Python dependencies
 
 You can also use a .pbs script to launch different masks algorithms on your images.
 ```
