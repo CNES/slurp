@@ -514,10 +514,7 @@ def main(args=None):
     #Debug argument
     parser.add_argument('--debug', action='store_true', help='Debug flag')
 
-    if args is None:
-        args = parser.parse_args()
-    else:
-        args = parser.parse_args(args)
+    args = parser.parse_args(args)
 
     if args.debug:
         print("DBG > arguments parsed "+str(args))
