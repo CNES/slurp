@@ -91,6 +91,8 @@ def multiple_int32_profile(input_profiles: list, map_params):
 
 def single_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
+    if profile["crs"] is None:
+        profile["transform"] = None
     profile["count"]= 1
     profile["dtype"]= np.uint8
     profile["compress"] = "lzw"
