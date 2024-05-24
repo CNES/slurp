@@ -737,7 +737,7 @@ def build_samples(inputBuffer: list,
                                                             inputBuffer[1],
                                                             valid_water_pixels[0])
         
-        # Hand samples, always random (currently)
+        # Hand samples
         rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples,
                                                               inputBuffer[1],
                                                               inputBuffer[2])
