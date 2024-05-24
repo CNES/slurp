@@ -1365,13 +1365,13 @@ def main():
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
                 final_classif_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=final_classif_key).fill(1)
+                eoscale_manager.get_array(key=final_classif_key).fill(100)
                 
                 # Save final mask (prediction + post-processing)
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
                 save_image(
                     final_classif,
-                    args.file_classif,
+                    args.file_classif.replace(".tif","_proba.tif"),
                     args.crs,
                     args.transform,
                     255,
@@ -1394,7 +1394,7 @@ def main():
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
                 save_image(
                     final_classif,
-                    args.file_classif,
+                    args.file_classif.replace(".tif","_proba.tif"),
                     args.crs,
                     args.transform,
                     255,
