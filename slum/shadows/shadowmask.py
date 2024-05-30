@@ -8,7 +8,6 @@ This script stacks existing masks
 import argparse
 import rasterio
 import numpy as np
-import argparse
 import os
 
 from skimage.morphology import binary_closing, binary_opening, binary_erosion, remove_small_objects, disk, remove_small_holes
@@ -88,7 +87,7 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "Shadow mask processing...")          
 
-            eoscale_manager.write(key = mask_shadow[0], img_path = args.mask)
+            eoscale_manager.write(key = mask_shadow[0], img_path = args.mask, compress='deflate')
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

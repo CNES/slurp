@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import numpy as np
-
+import copy
 
 def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
@@ -79,7 +79,7 @@ def multiple_single_float_profile(input_profiles: list, map_params):
     profile1["compress"] = "lzw"
     
     # avoid to modify profile1
-    profile2 = deepcopy(profile1)
+    profile2 = copy.deepcopy(profile1)
     profile2['count']=1
     profile2['dtype']=np.float32
     profile2["compress"] = "lzw"

@@ -8,8 +8,8 @@ This script stacks existing masks
 import argparse
 import rasterio as rio
 import numpy as np
-import argparse
 import os
+from slum.tools import io_utils
 from skimage.morphology import (
     area_closing,
     binary_closing,
@@ -318,7 +318,7 @@ def main():
                         cloud_from_gml(args.file_cloud_gml, args.im)   
                     )
                     #save cloud mask
-                    save_image(cloud_mask_array,
+                    io_utils.save_image(cloud_mask_array,
                                join(dirname(args.mask), "nocloud.tif"),
                                args.crs,
                                args.transform,
@@ -356,7 +356,7 @@ def main():
                                                                multiproc_context= "fork",
                                                                filter_desc= "Post processing...")
                 
-                eoscale_manager.write(key = final_mask[0], img_path = args.mask)
+                eoscale_manager.write(key = final_mask[0], img_path = args.mask, compress='deflate')
 
                 t1 = time.time()
 

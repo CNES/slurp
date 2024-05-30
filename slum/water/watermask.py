@@ -11,7 +11,6 @@ import traceback
 from os.path import dirname, join
 from subprocess import call
 
-import matplotlib.pyplot as plt
 import numpy as np
 import otbApplication as otb
 import rasterio as rio
@@ -1274,28 +1273,8 @@ def main():
 
 
             # Save predict and classif image
-            final_predict = eoscale_manager.get_array(im_classif[0])[0]
-            final_classif = eoscale_manager.get_array(im_classif[1])[0]
-            
-            io_utils.save_image(
-                final_predict,
-                join(dirname(args.file_classif), "predict.tif"),
-                args.crs,
-                args.transform,
-                255,
-                args.rpc,
-                tags=args.__dict__,
-            )
-
-            io_utils.save_image(
-                final_classif,
-                args.file_classif,
-                args.crs,
-                args.transform,
-                255,
-                args.rpc,
-                tags=args.__dict__,
-            )
+            final_predict = eoscale_manager.write(key=im_classif[0], img_path = join(dirname(args.file_classif), "predict.tif"), compress='deflate')
+            final_classif = eoscale_manager.write(key=im_classif[1], img_path = args.file_classif, compress='deflate')
 
             end_time = time.time()
 

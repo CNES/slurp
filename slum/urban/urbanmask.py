@@ -11,7 +11,6 @@ from subprocess import call
 from math import sqrt, ceil
 
 import joblib
-import matplotlib.pyplot as plt
 import numpy as np
 import rasterio as rio
 from skimage.morphology import (
@@ -26,12 +25,11 @@ from skimage.morphology import (
     square, disk
 )
 from skimage import segmentation
-from skimage.filters import rank
 from skimage.measure import label
 from skimage.filters import sobel
 from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
@@ -91,60 +89,7 @@ def compute_ndvi(input_buffers: list,
     im_ndvi = np.int16(im_ndvi)
     
     return im_ndvi
-    
-    
-def save_image(
-        image,
-        file,
-        crs=None,
-        transform=None,
-        nodata=None,
-        rpc=None,
-        colormap=None,
-        tags=None,
-        dtype=None,
-        **kwargs,
-):
-    """Save 1 band numpy image to file with deflate compression.
-    Note that rio.dtype is string so convert np.dtype to string.
-    rpc must be a dictionnary.
-    """
-    if dtype != None:
-        type_save = dtype
-    else:
-        type_save = str(image.dtype)
-    dataset = rio.open(
-        file,
-        "w",
-        driver="GTiff",
-        compress="deflate",
-        height=image.shape[0],
-        width=image.shape[1],
-        count=1,
-        dtype=type_save,
-        crs=crs,
-        transform=transform,
-        **kwargs,
-    )
-    dataset.write(image, 1)
-    dataset.nodata = nodata
-
-    if rpc:
-        dataset.update_tags(**rpc, ns="RPC")
-
-    if colormap:
-        dataset.write_colormap(1, colormap)
-
-    if tags:
-        dataset.update_tags(**tags)
-        
-    dataset.close()
-    del dataset
-
-
-
-
-
+   
     
 def superimpose(file_in, file_ref, file_out, type_out, write=False):
     """SuperImpose file_in with file_ref, output to file_out."""
@@ -969,7 +914,7 @@ def main():
                     cloud_from_gml(args.file_cloud_gml, args.file_phr)   
                 )
                 #save cloud mask
-                save_image(cloud_mask_array,
+                io_utils.save_image(cloud_mask_array,
                     join(dirname(args.file_classif), "nocloud.tif"),
                     args.crs,
                     args.transform,
@@ -1124,7 +1069,7 @@ def main():
                 time_random_forest = time.time()
 
                 final_predict = eoscale_manager.get_array(key_predict[0])
-                save_image(
+                io_utils.save_image(
                         final_predict[2],
                         join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba.tif")),
                         args.crs,
@@ -1134,7 +1079,7 @@ def main():
                         tags=args.__dict__,
                 )
                 if args.save_mode == "debug":
-                    save_image(
+                    io_utils.save_image(
                         final_predict[0],
                         join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_raw_predict.tif")),
                         args.crs,
@@ -1158,7 +1103,7 @@ def main():
                 
                     # Save final mask (prediction + post-processing)
                     final_classif = eoscale_manager.get_array(key_post_process[0])[0]
-                    save_image(
+                    io_utils.save_image(
                         final_classif,
                         args.file_classif,
                         args.crs,
@@ -1168,7 +1113,7 @@ def main():
                         dtype=np.dtype(np.uint8),
                         tags=args.__dict__,
                     )
-                    save_image(
+                    io_utils.save_image(
                         eoscale_manager.get_array(key_post_process[0])[2],
                         join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
                         args.crs,
@@ -1180,7 +1125,7 @@ def main():
                     )
                     if args.save_mode == "debug":
                     # Save auxilliary results : raw prediction, markers
-                        save_image(
+                        io_utils.save_image(
                             eoscale_manager.get_array(key_post_process[0])[1],
                             join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
                             args.crs,
@@ -1213,7 +1158,7 @@ def main():
                 
                 # Save final mask (prediction + post-processing)
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
-                save_image(
+                io_utils.save_image(
                     final_classif,
                     args.file_classif,
                     args.crs,
@@ -1236,7 +1181,7 @@ def main():
                 
                 # Save final mask (prediction + post-processing)
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
-                save_image(
+                io_utils.save_image(
                     final_classif,
                     args.file_classif,
                     args.crs,

@@ -472,7 +472,7 @@ def main():
                 cloud_from_gml(args.file_cloud_gml, args.file_phr)   
             )
             #save cloud mask
-            save_image(cloud_mask_array,
+            io_utils.save_image(cloud_mask_array,
                     join(dirname(args.file_classif), "nocloud.tif"),
                     args.crs,
                     args.transform,
@@ -636,7 +636,7 @@ def main():
         t_closing = time.time()
         
         # Write output mask
-        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
+        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif, compress='deflate')
         t_write = time.time()
         
         print(f">>> Total time = {t_final - t0:.2f}")
