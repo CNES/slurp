@@ -33,6 +33,8 @@ Final mask values
 - 1st layer : class
 - 2nd layer : estimation of elevation
 """
+BACKGROUND = 11
+
 LOW_VEG = 1
 HIGH_VEG = 2
 WATER = 3
@@ -46,7 +48,7 @@ WATER_PRED = 8  # Prediction of water, but not in Peckel database
 SHADOW = 9
 BUILDINGS_FALSE_POSITIVE = 10
 
-BACKGROUND = 0
+
 
 # Elevation estimation in 2nd layer
 LOW = 1
@@ -98,9 +100,11 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     markers = np.zeros((1,input_image.shape[1],input_image.shape[2]))
     
     # We set markers by reverse order of confidence
-    markers[vegmask == 11] = BARE_GROUND
+    eroded_bare_ground = binary_erosion(vegmask[0] == 11, disk(params.building_erosion))
+    #print(f"DBG> {eroded_bare_ground.shape=} {markers.shape=}")
+    markers[0][eroded_bare_ground] = BARE_GROUND
     
-    ground_truth_eroded = binary_erosion(wsf[0]==255, disk(5)) 
+    ground_truth_eroded = binary_erosion(wsf[0]==255, disk(params.building_erosion)) 
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params.building_threshold)
     probable_buildings = binary_erosion(probable_buildings, disk(params.building_erosion))
     
@@ -109,12 +113,18 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     markers[0][probable_buildings] = BUILDINGS
     markers[0][false_positive] = BUILDINGS_FALSE_POSITIVE
 
-    
+    """
     markers[vegmask == 21] = LOW_VEG
     markers[vegmask == 22] = HIGH_VEG
     markers[vegmask == 23] = HIGH_VEG
-
-    markers[shadowmask == 2] = BACKGROUND
+    """
+    
+    markers[0][binary_erosion(vegmask[0] == 21,disk(params.building_erosion))] = LOW_VEG
+    markers[0][binary_erosion(vegmask[0] == 22,disk(params.building_erosion))] = HIGH_VEG
+    markers[0][binary_erosion(vegmask[0] == 23,disk(params.building_erosion))] = HIGH_VEG
+    
+    #markers[shadowmask == 2] = BACKGROUND
+    markers[0][binary_erosion(shadowmask[0] == 2,disk(params.building_erosion))] = BACKGROUND
     
     markers[watermask == 1] = BACKGROUND
 
@@ -204,7 +214,8 @@ def post_process(inputBuffer: list,
     stack[1][np.logical_not(valid_stack[0])] = NODATA
 
     # Debug
-    stack[2] = markers
+    stack[1] = markers
+    stack[2] = segmented_buildings
     stack[2][np.logical_not(valid_stack[0])] = NODATA
     
 
@@ -380,7 +391,7 @@ def main():
                                                                filter_desc= "Post processing...")
                 
                 eoscale_manager.write(key = final_mask[0], img_path = args.mask)
-
+                
                 t1 = time.time()
 
                 print("Total time (user)       :\t"+str(t1-t0))
