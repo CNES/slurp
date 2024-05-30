@@ -356,7 +356,7 @@ def main():
                                                                multiproc_context= "fork",
                                                                filter_desc= "Post processing...")
                 
-                eoscale_manager.write(key = final_mask[0], img_path = args.mask, compress='deflate')
+                eoscale_manager.write(key = final_mask[0], img_path = args.mask)
 
                 t1 = time.time()
 

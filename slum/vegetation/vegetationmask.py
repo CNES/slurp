@@ -636,7 +636,7 @@ def main():
         t_closing = time.time()
         
         # Write output mask
-        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif, compress='deflate')
+        eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         t_write = time.time()
         
         print(f">>> Total time = {t_final - t0:.2f}")

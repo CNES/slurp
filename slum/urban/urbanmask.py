@@ -1102,40 +1102,14 @@ def main():
                                                                          filter_desc= "Post processing...")
                 
                     # Save final mask (prediction + post-processing)
-                    final_classif = eoscale_manager.get_array(key_post_process[0])[0]
-                    io_utils.save_image(
-                        final_classif,
-                        args.file_classif,
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        dtype=np.dtype(np.uint8),
-                        tags=args.__dict__,
-                    )
-                    io_utils.save_image(
-                        eoscale_manager.get_array(key_post_process[0])[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        dtype=np.dtype(np.uint8),
-                        tags=args.__dict__,
-                    )
+                    eoscale_manager.write(key=key_post_process[0][0],img_path= args.file_classif)
+
+                    eoscale_manager.write(key=key_post_process[0][2],img_path= join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")))
+                    
                     if args.save_mode == "debug":
-                    # Save auxilliary results : raw prediction, markers
-                        io_utils.save_image(
-                            eoscale_manager.get_array(key_post_process[0])[1],
-                            join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
-                            args.crs,
-                            args.transform,
-                            255,
-                            args.rpc,
-                            dtype=np.dtype(np.uint8),
-                            tags=args.__dict__,
-                        )
-                        
+                        # Save auxilliary results : raw prediction, markers
+                        eoscale_manager.write(key=key_post_process[0][1],img_path= join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")))
+
                 end_time = time.time()
 
                 print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
@@ -1145,7 +1119,8 @@ def main():
                 print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
                 if args.post_process == True:
                     print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
-                print("***")    
+                print("***")   
+                
             elif args.nb_valid_built_pixels > 0:
                 #### Corner case : no "non building pixels"
                 print("***** Only urban areas in "+str(args.file_phr)+" -> mask saved as "+str(args.file_classif)+") ****")
@@ -1157,17 +1132,7 @@ def main():
                 eoscale_manager.get_array(key=final_classif_key).fill(1)
                 
                 # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.get_array(final_classif_key)[0]
-                io_utils.save_image(
-                    final_classif,
-                    args.file_classif,
-                    args.crs,
-                    args.transform,
-                    255,
-                    args.rpc,
-                    dtype=np.dtype(np.uint8),
-                    tags=args.__dict__,
-                )
+                final_classif = eoscale_manager.write(key=final_classif_key[0],img_path= args.file_classif)
                 
             else:
                 #### Corner case : no "building pixels" --> void mask (0)
@@ -1180,20 +1145,8 @@ def main():
                 eoscale_manager.get_array(key=final_classif_key).fill(0)
                 
                 # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.get_array(final_classif_key)[0]
-                io_utils.save_image(
-                    final_classif,
-                    args.file_classif,
-                    args.crs,
-                    args.transform,
-                    255,
-                    args.rpc,
-                    dtype=np.dtype(np.uint8),
-                    tags=args.__dict__,
-                )
-        
-                
-        
+                final_classif = eoscale_manager.write(key=final_classif_key[0],img_path= args.file_classif)
+      
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 

@@ -1273,8 +1273,8 @@ def main():
 
 
             # Save predict and classif image
-            final_predict = eoscale_manager.write(key=im_classif[0], img_path = join(dirname(args.file_classif), "predict.tif"), compress='deflate')
-            final_classif = eoscale_manager.write(key=im_classif[1], img_path = args.file_classif, compress='deflate')
+            final_predict = eoscale_manager.write(key=im_classif[0], img_path = join(dirname(args.file_classif), "predict.tif"))
+            final_classif = eoscale_manager.write(key=im_classif[1], img_path = args.file_classif)
 
             end_time = time.time()
 

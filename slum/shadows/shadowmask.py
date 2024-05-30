@@ -87,7 +87,7 @@ def main():
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "Shadow mask processing...")          
 
-            eoscale_manager.write(key = mask_shadow[0], img_path = args.mask, compress='deflate')
+            eoscale_manager.write(key = mask_shadow[0], img_path = args.mask)
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
