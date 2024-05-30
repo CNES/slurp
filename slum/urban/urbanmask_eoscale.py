@@ -41,7 +41,6 @@ import otbApplication as otb
 from multiprocessing import shared_memory, get_context
 import concurrent.futures
 import sys
-import uuid
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -501,7 +500,9 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     _, rows, cols = np.where(valid_samples)
 
     if len(rows) >= nb_samples and nb_samples >= 1:
-        indices = np.arange(0, len(rows), int(len(rows)/nb_samples))
+        # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
+        # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
+        indices = np.arange(0, len(rows)-1, int(len(rows)/nb_samples))
         s_rows = rows[indices]
         s_cols = cols[indices]
     else:
@@ -597,77 +598,6 @@ def get_bornes(index, step, limit, margin):
     return start_with_margin, end_with_margin, start_extract, end_extract
 
 
-def watershed_regul(args, clean_predict, inputBuffer):    
-    # inputBuffer = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
-    #                   0              1          2             3              4            5         6
-    
-    # Compute mono image from RGB image
-    im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
-       
-    # compute gradient
-    edges = sobel(im_mono)
-
-    del im_mono
-
-    # markers map : -1, 1 and 2 : probable background, buildings or false positive
-    # inputBuffer[0] = proba of building class
-    markers = np.zeros_like(inputBuffer[0][0])
-
-    """
-    weak_detection = np.logical_and(inputBuffer[0][2] > 50, inputBuffer[0][2] < args.confidence_threshold)
-    true_negative = np.logical_and(binary_closing(inputBuffer[5][0], disk(10)) == 255, weak_detection)
-    markers[weak_detection] = 3
-    """
-    probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
-    probable_background = np.logical_and(inputBuffer[0][2] < 40, clean_predict == 0)
-    markers[probable_background] = 4
-    markers[probable_buildings] = 1
-
-    if args.file_shadowmask:
-        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
-        markers[binary_erosion(inputBuffer[4][0] == 2, disk(5))] = 8
-
-
-    if args.file_vegetationmask:
-        # vegetation
-        markers[inputBuffer[3][0] > args.vegmask_max_value] = 7
-    if args.file_watermask:
-        # water
-        markers[inputBuffer[2][0] == 1] = 6
-    
-         
-
-    if args.remove_false_positive:
-        ground_truth = inputBuffer[5][0]
-        # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(20)) == 0, inputBuffer[0][2] > args.confidence_threshold)
-        markers[false_positive] = 2
-        del ground_truth, false_positive
-        
-    # watershed segmentation
-
-    # seg[np.where(seg>3, True, False)] = 0 
-    #markers[np.where(markers > 3)] = 0
-    seg = segmentation.watershed(edges, markers)
-    seg[np.where(seg > 2, True, False)] = 0
-
-    seg[binary_opening(seg == 1, disk(10))] = 1
-
-    #markers[binary_opening(inputBuffer[4][0] == 2, disk(10))] = 8
-
-    if args.remove_small_holes:
-        res = remove_small_holes(
-            seg.astype(bool), args.remove_small_holes, connectivity=2
-        ).astype(np.uint8)
-        seg = np.multiply(res, seg)
-
-    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
-    if args.remove_small_objects:
-        res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
-        # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
-        seg = np.multiply(res, seg)
-
-    return seg, markers, edges
 
 def RF_prediction(inputBuffer: list, 
             input_profiles: list, 
@@ -710,22 +640,133 @@ def post_process(inputBuffer: list,
     # inputs = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
     #             0              1          2             3              4            5         6
     # Clean
-    im_classif = clean(params, inputBuffer[0][0])
+    # im_classif = clean(params, inputBuffer[0][0])
+
     # Watershed regulation
-    final_mask, markers, edges = watershed_regul(params, im_classif, inputBuffer)
+    final_mask, markers, edges = watershed_regul(params, inputBuffer[0][0], inputBuffer)
     
     
 
-    # Add nodata in final_mask (inputBuffer[5] : valid mask)
+    # Add nodata in final_mask (inputBuffer[6] : valid mask)
     final_mask[np.logical_not(inputBuffer[6][0])] = 255
 
     res_int = np.zeros((3,inputBuffer[1].shape[1],inputBuffer[1].shape[2]))
     res_int[0] = final_mask
     res_int[1] = markers
-    res_int[2] = im_classif
+    res_int[2] = inputBuffer[0][0] #im_classif
 
     
     return res_int
+
+
+
+def watershed_regul(args, clean_predict, inputBuffer):    
+    # inputBuffer = [key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]]
+    #                   0              1          2             3              4            5         6
+    
+    # Compute mono image from RGB image
+    im_mono = 0.29*inputBuffer[1][0] + 0.58*inputBuffer[1][1] + 0.114*inputBuffer[1][2]
+       
+    # compute gradient
+    edges = sobel(im_mono)
+
+    del im_mono
+
+    # markers map : -1, 1 and 2 : probable background, buildings or false positive
+    # inputBuffer[0] = proba of building class
+    markers = np.zeros_like(inputBuffer[0][0])
+
+    """
+    weak_detection = np.logical_and(inputBuffer[0][2] > 50, inputBuffer[0][2] < args.confidence_threshold)
+    true_negative = np.logical_and(binary_closing(inputBuffer[5][0], disk(10)) == 255, weak_detection)
+    markers[weak_detection] = 3
+    """
+    
+    #  probable_buildings = np.logical_and(inputBuffer[0][2] > args.confidence_threshold, clean_predict == 1)
+    probable_background = np.logical_and(inputBuffer[0][2] < 40, clean_predict == 0)
+    ground_truth_eroded = binary_erosion(inputBuffer[5][0]==255, disk(5))
+    
+    probable_buildings = np.logical_and(ground_truth_eroded, inputBuffer[0][2] > 50)
+    
+    
+
+    """
+    ground_truth_eroded = binary_erosion(inputBuffer[5][0]==255, disk(5))
+    # If WSF = 1
+    probable_buildings = np.logical_and(inputBuffer[0][2] > 70, ground_truth_eroded)
+    #probable_background = np.logical_and(inputBuffer[0][2] < 40, ground_truth_eroded)
+
+    no_WSF = binary_dilation(inputBuffer[5][0]==0, disk(5)) 
+    false_positive = np.logical_and(no_WSF, inputBuffer[0][2] > args.confidence_threshold)
+
+    # note : all other pixels are 0
+    markers[false_positive] = 2
+    """    
+
+    confident_buildings = np.logical_and(ground_truth_eroded, inputBuffer[0][2] > args.confidence_threshold)
+    
+    markers[probable_background] = 4
+    markers[probable_buildings] = 1
+    markers[confident_buildings] = 2
+    
+    
+    if args.file_shadowmask:
+        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
+        markers[binary_erosion(inputBuffer[4][0] == 2, disk(5))] = 8
+
+    '''
+    if args.file_vegetationmask:
+        # vegetation
+        markers[inputBuffer[3][0] > args.vegmask_max_value] = 7
+    if args.file_watermask:
+        # water
+        markers[inputBuffer[2][0] == 1] = 6
+    '''
+         
+    
+    if args.remove_false_positive:
+        ground_truth = inputBuffer[5][0]
+        # mark as false positive pixels with high confidence but not covered by dilated ground truth
+        # TODO : check if we can reduce radius for dilation
+        false_positive = np.logical_and(binary_dilation(ground_truth, disk(10)) == 0, inputBuffer[0][2] > args.confidence_threshold)
+        markers[false_positive] = 3
+        del ground_truth, false_positive
+    
+    
+    # watershed segmentation
+
+    # seg[np.where(seg>3, True, False)] = 0 
+    #markers[np.where(markers > 3)] = 0
+    seg = segmentation.watershed(edges, markers)
+
+
+    seg[np.where(seg > 3, True, False)] = 0
+    seg[np.where(seg == 2, True, False)] = 1
+    
+    # TODO : check if we can remove/reduce this opening
+
+    
+    seg[binary_closing(seg == 1, disk(args.binary_closing))] = 1
+    
+    seg[binary_opening(seg == 1, disk(args.binary_closing))] = 1
+
+    #markers[binary_opening(inputBuffer[4][0] == 2, disk(10))] = 8
+
+    if args.remove_small_holes:
+        res = remove_small_holes(
+            seg.astype(bool), args.remove_small_holes, connectivity=2
+        ).astype(np.uint8)
+        seg = np.multiply(res, seg)
+
+    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
+    #args.remove_small_objects = False
+    if args.remove_small_objects:
+        res = remove_small_objects(seg.astype(bool), args.remove_small_objects, connectivity=2).astype(np.uint8)
+        # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
+        seg = np.multiply(res, seg)
+
+    return seg, markers, edges
+
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -835,6 +876,14 @@ def getarguments():
         help="Shadowmask filename : big shadow areas will be marked as background"
     )
 
+    parser.add_argument(
+        "-post_process",
+        default=False,
+        required=False,
+        action="store_true",
+        dest="post_process",
+        help="Post-process urban mask : apply morphological operations and regularize building shapes (watershed regularization)"
+    )
     parser.add_argument(
         "-cloud_gml",
         required=False,
@@ -959,16 +1008,6 @@ def getarguments():
     )
     
     parser.add_argument(
-        "-margin",
-        type=int,
-        default=0,
-        required=False,
-        action="store",
-        dest="margin",
-        help="Margin for the regularization (clean and watershed)"
-    )
-
-    parser.add_argument(
         "-random_seed",
         type=int,
         default=712,
@@ -1050,7 +1089,7 @@ def main():
         try:
             
             t0 = time.time()
-            
+
             ################ Build stack with all layers #######
             
             # Band positions in PHR image
@@ -1240,53 +1279,17 @@ def main():
                                                                filter_desc= "RF prediction processing...")             
                 time_random_forest = time.time()
 
-                ######### Post_processing  ################  
-
-                key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]],   
-                                                               image_filter = post_process,
-                                                               filter_parameters= args,
-                                                               generate_output_profiles = post_process_profile,
-                                                               stable_margin= 20,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "Post processing...")
-
-
-                # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.get_array(key_post_process[0])[0]
+                final_predict = eoscale_manager.get_array(key_predict[0])
                 save_image(
-                    final_classif,
-                    args.file_classif,
-                    args.crs,
-                    args.transform,
-                    255,
-                    args.rpc,
-                    dtype=np.dtype(np.uint8),
-                    tags=args.__dict__,
-                )
-                save_image(
-                        eoscale_manager.get_array(key_post_process[0])[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
+                        final_predict[2],
+                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba.tif")),
                         args.crs,
                         args.transform,
                         255,
                         args.rpc,
-                        dtype=np.dtype(np.uint8),
                         tags=args.__dict__,
                 )
                 if args.save_mode == "debug":
-                    # Save auxilliary results : raw prediction, markers
-                    save_image(
-                        eoscale_manager.get_array(key_post_process[0])[1],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        dtype=np.dtype(np.uint8),
-                        tags=args.__dict__,
-                    )
-                    final_predict = eoscale_manager.get_array(key_predict[0])
                     save_image(
                         final_predict[0],
                         join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_raw_predict.tif")),
@@ -1295,16 +1298,55 @@ def main():
                         255,
                         args.rpc,
                         tags=args.__dict__,
-                    )
+                )
+
+
+                ######### Post_processing  ################  
+                if args.post_process == True:
+                    key_post_process = eoexe.n_images_to_m_images_filter([key_predict[0],key_phr, key_watermask, key_vegmask, key_shadowmask, gt_key, valid_stack_key[0]],   
+                                                                         image_filter = post_process,
+                                                                         filter_parameters= args,
+                                                                         generate_output_profiles = post_process_profile,
+                                                                         stable_margin= 20,
+                                                                         context_manager = eoscale_manager,
+                                                                         multiproc_context= "fork",
+                                                                         filter_desc= "Post processing...")
+                
+                    # Save final mask (prediction + post-processing)
+                    final_classif = eoscale_manager.get_array(key_post_process[0])[0]
                     save_image(
-                        final_predict[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_proba_urban.tif")),
+                        final_classif,
+                        args.file_classif,
                         args.crs,
                         args.transform,
                         255,
                         args.rpc,
+                        dtype=np.dtype(np.uint8),
                         tags=args.__dict__,
                     )
+                    save_image(
+                        eoscale_manager.get_array(key_post_process[0])[2],
+                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_clean.tif")),
+                        args.crs,
+                        args.transform,
+                        255,
+                        args.rpc,
+                        dtype=np.dtype(np.uint8),
+                        tags=args.__dict__,
+                    )
+                    if args.save_mode == "debug":
+                    # Save auxilliary results : raw prediction, markers
+                        save_image(
+                            eoscale_manager.get_array(key_post_process[0])[1],
+                            join(dirname(args.file_classif), basename(args.file_classif).replace(".tif","_markers.tif")),
+                            args.crs,
+                            args.transform,
+                            255,
+                            args.rpc,
+                            dtype=np.dtype(np.uint8),
+                            tags=args.__dict__,
+                        )
+                        
                 end_time = time.time()
 
                 print("**** Urban mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
@@ -1312,7 +1354,8 @@ def main():
                 print("- Build_stack           :\t"+convert_time(time_stack-t0))
                 print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
                 print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
-                print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+                if args.post_process == True:
+                    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
                 print("***")    
             elif args.nb_valid_built_pixels > 0:
                 #### Corner case : no "non building pixels"
@@ -1322,13 +1365,13 @@ def main():
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
                 final_classif_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=final_classif_key).fill(1)
+                eoscale_manager.get_array(key=final_classif_key).fill(100)
                 
                 # Save final mask (prediction + post-processing)
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
                 save_image(
                     final_classif,
-                    args.file_classif,
+                    args.file_classif.replace(".tif","_proba.tif"),
                     args.crs,
                     args.transform,
                     255,
@@ -1351,7 +1394,7 @@ def main():
                 final_classif = eoscale_manager.get_array(final_classif_key)[0]
                 save_image(
                     final_classif,
-                    args.file_classif,
+                    args.file_classif.replace(".tif","_proba.tif"),
                     args.crs,
                     args.transform,
                     255,

@@ -448,13 +448,7 @@ def clean_task(input_buffers: list,
         ).astype(np.uint8)
         im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, high_veg_binary == 1)] = UNDEFINED_TEXTURE_CLASS
 
-
     low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, True, False)
-    if args.binary_dilation:
-        low_veg_binary = binary_dilation(
-            low_veg_binary, disk(args.binary_dilation)
-        ).astype(np.uint8)
-        im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
 
     if args.remove_small_holes:
         low_veg_binary = remove_small_holes(
@@ -462,8 +456,13 @@ def clean_task(input_buffers: list,
         ).astype(np.uint8)
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
 
-    return im_classif
+    if args.binary_dilation:
+        low_veg_binary = binary_dilation(
+            low_veg_binary, disk(args.binary_dilation)
+        ).astype(np.uint8)
+        im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
 
+    return im_classif
 
 
 ############## MAIN FUNCTION ###############

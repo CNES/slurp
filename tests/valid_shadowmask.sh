@@ -12,11 +12,11 @@
 # Example of command to lauch the script :
 # sbatch valid_watermask.sh
 
-CMD_MASK="slum_urbanmask"
+CMD_MASK="slum_shadowmask"
 
-RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Urban/"
+RES_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Shadow/"
 
-DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images/urban"
+DATA_DIR="/work/CAMPUS/etudes/Masques_CO3D/ValidationTests/Images/shadow"
 
 # Start
 echo "Launch SLUM from `pwd`"
@@ -29,13 +29,13 @@ function compute_mask() {
     echo "Options : $*"
     # default options
     #options="-remove_false_positive -remove_small_objects 100 -remove_small_holes 50 -binary_closing 3 -save debug"
-    options=" -binary_closing 3 -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 -binary_closing 3 -binary_opening 3 -save debug"
+    options="-binary_opening 2 -remove_small_objects 100 -th_rgb 0.2 -th_nir 0.2"
     # in order to pass all other options to the script
-    ${CMD_MASK} $options $* $image ${RES_DIR}/urbanmask_${image_name}
+    ${CMD_MASK} $options $* $image ${RES_DIR}/shadowmask_${image_name}
 }
 
 function build_ref() {
-    prefix="urbanmask"
+    prefix="shadowmask"
     image=`basename $1`
     mask=${RES_DIR}/${prefix}_${image}
     mask_ref=${RES_DIR}/ref_${prefix}_${image}
@@ -43,7 +43,7 @@ function build_ref() {
 }
 
 function check_ref() {
-    prefix="urbanmask"
+    prefix="shadowmask"
     image=`basename $1`
     mask=${RES_DIR}/${prefix}_${image}
     mask_ref=${RES_DIR}/ref_${prefix}_${image}
@@ -63,9 +63,9 @@ function check_ref() {
 }
 
 function help() {
-    echo "Watermask unitary tests"
+    echo "Shadowmask unitary tests"
     echo "-h : display this help"
-    echo "-r : compute watermask and build ref"
+    echo "-r : compute shadowmask and build ref"
     echo "-f <image> : launch only on <image>"
 }
 

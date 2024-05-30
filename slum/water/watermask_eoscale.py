@@ -572,7 +572,9 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     _, rows, cols = np.where(valid_samples)
 
     if len(rows) >= nb_samples and nb_samples >= 1:
-        indices = np.arange(0, len(rows), len(rows)/nb_samples).astype(np.uint16)
+        # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
+        # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
+        indices = np.arange(0, len(rows)-1, len(rows)/nb_samples).astype(np.uint16)
 
         s_rows = rows[indices]
         s_cols = cols[indices]
@@ -687,8 +689,13 @@ def build_samples(inputBuffer: list,
     """Build samples."""
     # inputBuffer :[ mask_pekel,valid_stack, mask_hand, im_phr, im_ndvi, im_ndwi]
     # Retrieve number of pixels for each class
+    
     nb_valid_subset = np.count_nonzero(inputBuffer[1])
-    nb_water_subset = np.count_nonzero(np.logical_and(inputBuffer[0], inputBuffer[1]))
+
+    valid_water_pixels = np.logical_and(inputBuffer[0], inputBuffer[5] > args.ndwi_threshold)
+    
+    nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, inputBuffer[1]))
+    
     nb_other_subset = nb_valid_subset - nb_water_subset
     # Ratio of pixel class compare to the full image ratio
     water_ratio = nb_water_subset/args.nb_valid_water_pixels
@@ -728,9 +735,9 @@ def build_samples(inputBuffer: list,
     if args.samples_method == "grid":
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples,
                                                             inputBuffer[1],
-                                                            inputBuffer[0])
+                                                            valid_water_pixels[0])
         
-        # Hand samples, always random (currently)
+        # Hand samples
         rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples,
                                                               inputBuffer[1],
                                                               inputBuffer[2])
@@ -1338,17 +1345,19 @@ def main():
                                                            filter_desc= "Pekel valid mask processing...")
 
             
+            # If user wants a simple threshold on NDWI values, we don't select samples and launch learning/prediction step
+            select_samples = not(args.simple_ndwi_threshold)
+            
             ### Check pekel mask
-            select_samples = True
             # - if there are too few values : we threshold NDWI to detect water areas 
             # - if there are even no "supposed water areas" : stop machine learning process (flag select_samples=False)
             local_mask_pekel = eoscale_manager.get_array(mask_pekel[0])
-            
             if np.count_nonzero(local_mask_pekel) < 2000:
                 # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
                 # Alternative would be to select samples in a thresholded NDWI..
                 select_samples = False
 
+            
             ### Image HAND (numpy array, first band)
             if not args.file_hand:
                 args.file_hand = join(dirname(args.file_classif), "hand.tif")
