@@ -101,14 +101,18 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     
     # We set markers by reverse order of confidence
     eroded_bare_ground = binary_erosion(vegmask[0] == 11, disk(params.building_erosion))
-    #print(f"DBG> {eroded_bare_ground.shape=} {markers.shape=}")
     markers[0][eroded_bare_ground] = BARE_GROUND
     
     ground_truth_eroded = binary_erosion(wsf[0]==255, disk(params.building_erosion)) 
+
+    # Bonus for pixels above ground truth
+    urban_proba[0][ground_truth_eroded] += 30
+    # Malus for pixels in shadow areas
+    urban_proba[0][shadowmask[0]==2] -= 30
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params.building_threshold)
     probable_buildings = binary_erosion(probable_buildings, disk(params.building_erosion))
     
-    false_positive = np.logical_and(binary_dilation(wsf[0], disk(10)) == 0, urban_proba[0] > params.building_threshold)
+    false_positive = np.logical_and(binary_dilation(wsf[0]==255, disk(10)) == 0, urban_proba[0] > params.building_threshold)
     
     markers[0][probable_buildings] = BUILDINGS
     markers[0][false_positive] = BUILDINGS_FALSE_POSITIVE
