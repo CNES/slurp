@@ -117,12 +117,6 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     markers[0][probable_buildings] = BUILDINGS
     markers[0][false_positive] = BUILDINGS_FALSE_POSITIVE
 
-    """
-    markers[vegmask == 21] = LOW_VEG
-    markers[vegmask == 22] = HIGH_VEG
-    markers[vegmask == 23] = HIGH_VEG
-    """
-    
     markers[0][binary_erosion(vegmask[0] == 21,disk(params.building_erosion))] = LOW_VEG
     markers[0][binary_erosion(vegmask[0] == 22,disk(params.building_erosion))] = HIGH_VEG
     markers[0][binary_erosion(vegmask[0] == 23,disk(params.building_erosion))] = HIGH_VEG
@@ -132,7 +126,6 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     
     markers[watermask == 1] = BACKGROUND
 
-    #print(f"DBG {markers[0]}")
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
     
     return seg, markers
@@ -182,22 +175,24 @@ def post_process(inputBuffer: list,
     stack = np.zeros((3,input_image.shape[1],input_image.shape[2]))
 
     # Improve buildings detection using a watershed / markers regularization
-    segmented_buildings, markers = watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params)
+    segmentation, markers = watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params)
 
-    clean_bare_ground = morpho_clean(vegmask[0] == 11, params) == 1
+    clean_bare_ground = morpho_clean(segmentation==BARE_GROUND, params) == 1
     stack[0][clean_bare_ground] = BARE_GROUND
 
-    clean_buildings = morpho_clean(segmented_buildings==BUILDINGS, params)==1
+    clean_buildings = morpho_clean(segmentation==BUILDINGS, params)==1
     stack[0][clean_buildings] = BUILDINGS
 
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
     stack[0][watermask[0] == 1] = WATER
 
-    low_veg = vegmask[0] == 21
-    stack[0][low_veg] = LOW_VEG
+    low_veg = segmentation == LOW_VEG
+    clean_low_veg = morpho_clean(low_veg, params) == 1
+    stack[0][clean_low_veg] = LOW_VEG
 
-    high_veg = np.logical_or(vegmask[0] == 22, vegmask[0] == 23)
-    stack[0][high_veg] = HIGH_VEG
+    high_veg = segmentation == HIGH_VEG
+    clean_high_veg = morpho_clean(high_veg, params) == 1
+    stack[0][clean_high_veg] = HIGH_VEG
 
     # Apply NODATA
     stack[0][np.logical_not(valid_stack[0])] = NODATA
@@ -217,9 +212,8 @@ def post_process(inputBuffer: list,
     
     stack[1][np.logical_not(valid_stack[0])] = NODATA
 
-    # Debug
-    stack[1] = markers
-    stack[2] = segmented_buildings
+    # Markers
+    stack[2] = markers
     stack[2][np.logical_not(valid_stack[0])] = NODATA
     
 
