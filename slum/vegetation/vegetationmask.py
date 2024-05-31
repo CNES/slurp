@@ -219,14 +219,16 @@ def apply_clustering(args, stats, nb_polys):
     clustering = np.zeros(nb_polys)
     
     # Note : the seed for random generator is fixed to obtain reproductible results
-    print(f"K-Means on radiometric indices ({nb_polys} elements")
+    if args.debug:
+        print(f"K-Means on radiometric indices ({nb_polys} elements")
     kmeans_rad_indices = KMeans(n_clusters=9,
                                  init="k-means++",
                                  n_init=5,
                                  verbose=0,
                                  random_state=712)
     pred_veg = kmeans_rad_indices.fit_predict(np.stack((stats[0:nb_polys],stats[nb_polys:2*nb_polys]),axis=1))
-    print(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
+    if args.debug:
+        print(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
     
     list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
     list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
@@ -287,7 +289,8 @@ def apply_clustering(args, stats, nb_polys):
         mean_texture = stats[2*nb_polys:]
         texture_values = np.nan_to_num(mean_texture[np.where(clustering >= UNDEFINED_VEG)])
         threshold_max = np.percentile(texture_values, args.filter_texture)
-        print("threshold_texture_max", threshold_max)
+        if args.debug:
+            print("threshold_texture_max", threshold_max)
 
         # Save histograms
         if args.texture_mode == "debug" or args.save_mode == "debug":
@@ -305,14 +308,16 @@ def apply_clustering(args, stats, nb_polys):
         # Clustering
         data_textures = np.transpose(texture_values)
         data_textures[data_textures > threshold_max] = threshold_max
-        print("K-Means on texture : "+str(len(data_textures))+" elements")
+        if args.debug:
+            print("K-Means on texture : "+str(len(data_textures))+" elements")
         kmeans_texture = KMeans(n_clusters=9,
                                 init="k-means++",
                                 n_init=5,
                                 verbose=0,
                                 random_state=712)
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1,1))
-        print(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
+        if args.debug:
+            print(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
 
         list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
         list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=True).index
@@ -411,7 +416,7 @@ def clean_task(input_buffers: list,
                         
 ############## MAIN FUNCTION ###############                        
                         
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("im", help="input image (reflectances TOA)")
     parser.add_argument("file_classif", help="Output classification filename")
@@ -456,7 +461,10 @@ def main():
     #multiprocessing arguments
     parser.add_argument("-n_workers", "--nb_workers", type=int, default=8, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
-    args = parser.parse_args()
+    #Debug argument
+    parser.add_argument('--debug', action='store_true', help='Debug flag')
+
+    args = parser.parse_args(args)
     print("DBG > arguments parsed "+str(args))
                         
     ds_phr = rasterio.open(args.im)
@@ -574,7 +582,8 @@ def main():
             
         # Recover number total of segments
         nb_polys= np.max(eoscale_manager.get_array(future_seg[0])[0]) #len(np.unique(eoscale_manager.get_array(future_seg[0])[0]))
-        print("Number of different segments detected : "+ str(nb_polys))
+        if args.debug:
+            print("Number of different segments detected : "+ str(nb_polys))
             
         #Stats calculation
         t5_stats = time.time()
@@ -638,18 +647,19 @@ def main():
         # Write output mask
         eoscale_manager.write(key = final_seg[0], img_path = args.file_classif)
         t_write = time.time()
-        
-        print(f">>> Total time = {t_final - t0:.2f}")
-        print(f">>> \tNDVI = {t_NDVI - t0:.2f}")
-        print(f">>> \tNDWI = {t_NDWI - t_NDVI:.2f}")
-        print(f">>> \tTexture = {t_texture - t_NDWI:.2f}")
-        print(f">>> \tSegmentation = {t_seg - t_texture:.2f}")
-        print(f">>> \tStats = {t_stats - t_texture:.2f}")
-        print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
-        print(f">>> \tFinalize Cython = {t_final - t_cluster:.2f}")
-        print(f">>> \tPost-processing (clean) = {t_closing - t_final:.2f}")
-        print(f">>> \tWrite final image = {t_write - t_closing:.2f}")
-        print(f">>> **********************************")
+
+        if args.debug:
+            print(f">>> Total time = {t_final - t0:.2f}")
+            print(f">>> \tNDVI = {t_NDVI - t0:.2f}")
+            print(f">>> \tNDWI = {t_NDWI - t_NDVI:.2f}")
+            print(f">>> \tTexture = {t_texture - t_NDWI:.2f}")
+            print(f">>> \tSegmentation = {t_seg - t_texture:.2f}")
+            print(f">>> \tStats = {t_stats - t_texture:.2f}")
+            print(f">>> \tClustering = {t_cluster - t_stats:.2f}")
+            print(f">>> \tFinalize Cython = {t_final - t_cluster:.2f}")
+            print(f">>> \tPost-processing (clean) = {t_closing - t_final:.2f}")
+            print(f">>> \tWrite final image = {t_write - t_closing:.2f}")
+            print(f">>> **********************************")
         
         
         
