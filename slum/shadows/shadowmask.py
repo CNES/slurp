@@ -8,13 +8,12 @@ This script stacks existing masks
 import argparse
 import rasterio
 import numpy as np
-import argparse
 import os
 import traceback
 
 from skimage.morphology import binary_closing, binary_opening, binary_erosion, remove_small_objects, disk, remove_small_holes
 
-
+from slum.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -57,15 +56,6 @@ def compute_mask(input_buffers: list,
     final_shadow_mask[np.logical_not(input_buffers[1][0])] = NO_DATA
     
     return final_shadow_mask
-
-def single_uint8_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count']=1
-    profile['dtype']=np.uint8
-    profile["compress"] = "lzw"
-    profile["nodata"] = NO_DATA
-    
-    return profile
 
 def single_bool_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
@@ -155,7 +145,7 @@ def main():
             mask_shadow = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_valid_stack[0], key_watermask],
                                                            image_filter = compute_mask,
                                                            filter_parameters=params,
-                                                           generate_output_profiles = single_uint8_profile,
+                                                           generate_output_profiles = eoscale_utils.single_uint8_profile,
                                                            stable_margin= args.small_objects,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "Shadow mask processing...")          
