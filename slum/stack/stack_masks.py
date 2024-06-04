@@ -8,8 +8,8 @@ This script stacks existing masks
 import argparse
 import rasterio as rio
 import numpy as np
-import argparse
 import os
+from slum.tools import io_utils
 from skimage.morphology import (
     area_closing,
     binary_closing,
@@ -24,6 +24,7 @@ from skimage.morphology import (
 from skimage.filters import sobel
 from skimage import segmentation
 
+from slum.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 import time
@@ -67,30 +68,6 @@ def compute_valid_stack(inputBuffer: list,
     
     return valid_stack
 
-def post_process_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count'] = 3
-    profile['dtype'] =np.uint8
-    profile["compress"] = "lzw"
-    profile["nodata"] = 255
-
-    return profile
-
-def single_uint8_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile["count"]= 1
-    profile["dtype"]= np.uint8
-    profile["compress"] = "lzw"
-    profile["nodata"] = 255
-    
-    return profile
-def single_bool_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count']=1
-    profile['dtype']=bool
-    profile["compress"] = "lzw"
-
-    return profile
 
 def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params):
     # Compute mono image from RGB image
@@ -371,7 +348,7 @@ def main():
                         cloud_from_gml(args.file_cloud_gml, args.im)   
                     )
                     #save cloud mask
-                    save_image(cloud_mask_array,
+                    io_utils.save_image(cloud_mask_array,
                                join(dirname(args.mask), "nocloud.tif"),
                                args.crs,
                                args.transform,
@@ -392,7 +369,7 @@ def main():
                 key_validstack = eoexe.n_images_to_m_images_filter(inputs = [key_image, mask_nocloud_key],
                                                                    image_filter = compute_valid_stack,   
                                                                    filter_parameters=args,
-                                                                   generate_output_profiles = single_bool_profile,
+                                                                   generate_output_profiles = eoscale_utils.single_bool_profile,
                                                                    stable_margin= 0,
                                                                    context_manager = eoscale_manager,
                                                                    multiproc_context= "fork",
@@ -403,7 +380,7 @@ def main():
                                                                [key_image, key_validstack[0], key_watermask, key_waterpred, key_vegmask, key_urban_proba, key_shadowmask, key_wsf],
                                                                image_filter = post_process,
                                                                filter_parameters= args,
-                                                               generate_output_profiles = post_process_profile,
+                                                               generate_output_profiles = eoscale_utils.three_uint8_profile,
                                                                stable_margin= 200,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
