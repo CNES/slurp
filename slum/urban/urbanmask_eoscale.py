@@ -364,7 +364,10 @@ def compute_valid_stack(inputBuffer: list,
     valid_stack = np.logical_and(valid_phr, inputBuffer[1])
     
     if args.file_vegetationmask != None:
-        valid_stack = np.logical_and(valid_stack, np.where(inputBuffer[2]<args.vegmask_max_value, True, False))
+        non_veg = np.where(inputBuffer[2]<args.vegmask_max_value, True, False)
+        # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
+        non_veg_dilated = binary_dilation(non_veg[0], disk(args.binary_dilation))
+        valid_stack = np.logical_and(valid_stack, [non_veg_dilated])
 
     if args.file_watermask != None:
         valid_stack = np.logical_and(valid_stack, np.where(inputBuffer[3] == 0, True, False))
@@ -518,7 +521,8 @@ def build_samples(inputBuffer: list,
     #inputBuffer=[valid_stack_key[0], key_gt, key_phr, key_ndvi[0], key_ndwi[0]]+ files_layers 
 
     # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
-    mask_building = np.where(inputBuffer[1]==args.value_classif,True,False)
+    mask_building_before_erosion = np.where(inputBuffer[1]==args.value_classif,True,False)
+    mask_building = [binary_erosion(mask_building_before_erosion[0], disk(args.binary_closing))]
     mask_non_building = np.where(inputBuffer[1]==0,True,False)
     
     # Retrieve number of pixels for each class
@@ -1024,7 +1028,7 @@ def getarguments():
         required=False,
         action="store",
         dest="binary_closing",
-        help="Size of square structuring element"
+        help="Size of disk structuring element (erode GT before picking-up samples)"
     )
 
     parser.add_argument(
@@ -1036,7 +1040,17 @@ def getarguments():
         dest="binary_opening",
         help="Size of square structuring element"
     )
-    
+
+    parser.add_argument(
+        "-binary_dilation",
+        type=int,
+        default=0,
+        required=False,
+        action="store",
+        dest="binary_dilation",
+        help="Size of disk structuring element (dilate non vegetated areas)"
+    )
+                                                        
     parser.add_argument(
         "-remove_small_objects",
         type=int,

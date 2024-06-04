@@ -106,9 +106,9 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     ground_truth_eroded = binary_erosion(wsf[0]==255, disk(params.building_erosion)) 
 
     # Bonus for pixels above ground truth
-    urban_proba[0][ground_truth_eroded] += 30
+    urban_proba[0][ground_truth_eroded] += params.bonus_gt
     # Malus for pixels in shadow areas
-    urban_proba[0][shadowmask[0]==2] -= 30
+    urban_proba[0][shadowmask[0]==2] -= params.malus_shadow
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params.building_threshold)
     probable_buildings = binary_erosion(probable_buildings, disk(params.building_erosion))
     
@@ -286,6 +286,27 @@ def getarguments():
          help="Supposed buildings will be eroded by this size in the marker step"
      )
      
+     parser.add_argument(
+         "-bonus_gt",
+         type=int,
+         default=0,
+         required=False,
+         action="store",
+         dest="bonus_gt",
+         help="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)"
+     )
+
+     parser.add_argument(
+         "-malus_shadow",
+         type=int,
+         default=0,
+         required=False,
+         action="store",
+         dest="malus_shadow",
+         help="Malus for pixels in shadow, in the watershed regularization step"
+     )
+     
+      
      parser.add_argument(
          "-remove_small_objects",
          type=int,

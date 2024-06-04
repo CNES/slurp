@@ -44,7 +44,7 @@ slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_openi
 
 
 # Urbanmask (without post-processing)
-slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 100 -remove_small_holes 100 -remove_false_positive -confidence_threshold 70 -shadowmask shadows/shadowmask.tif -save debug  ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000 
+slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 5 -binary_opening 2 -shadowmask shadows/shadowmask.tif ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000 -binary_dilation 5 
 
 # Stack
 slum_stackmasks ${TMPDIR}/image/${filename} stack/stack_simple.tif -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -waterpred water/watermask.tif -urban_proba urban/urbanmask_proba.tif  -shadow shadows/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 500 -binary_closing 3 -binary_opening 3 -remove_small_holes 500 -building_erosion 2
