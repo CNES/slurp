@@ -65,6 +65,8 @@ cd <EOScale source folder>
 pip install .
 cd <SLUM source folder>
 pip install .
+# for validation tests
+pip install pytest
 ```
 Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
 
@@ -155,6 +157,16 @@ Type `slum_scores -h` for complete list of options :
 - selection of a window (-startx, -starty, -sizex, -sizey),
 - detection of the buildings (-polygonize) and iou score (-polygonize.union) with some parameters (-polygonize.area, -polygonize.unit, etc.),
 - saving of intermediate files (-save)
+
+## Tests
+
+The project comes with a suite of unit and functional tests. All the tests are available in tests/ directory.
+
+To run them, launch the command `pytest` in the root of the slum project. To run tests on a specific mask, execute `pytest tests/<file_name>"`.
+
+By default, the tests generate the masks and then validate them by comparing them with a reference. You can choose to only compute the masks with `pytest -m computation` or validate them with `pytest -m validation`
+
+You can change the default configuration for the tests by modifying the JSON file "tests/config\_tests". 
 
 
 ## Documentation
