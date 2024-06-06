@@ -13,10 +13,8 @@
 # Example of command to lauch the script :
 # sbatch --export="PHR_IM=path_to_VHR_uint16_image.tif,OUTPUT_DIR=path_to_outputmasks_directory,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2" compute_all_masks.sh
 
-. /home/qt/tanguyy/bin/init_slum.sh
-#module load otb/8.1.2-python3.8.4
-#. /work/scratch/env/tanguyy/venv/slum_vre/bin/activate
 
+. /work/CAMPUS/users/tanguyy/PLUTO/init_slurp.sh
 module load monitoring/1.0
 start_monitoring.sh --name SLURP_all_masks
 
