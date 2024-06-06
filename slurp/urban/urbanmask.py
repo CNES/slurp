@@ -33,14 +33,14 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text
 import random
-from slum.tools import io_utils
+from slurp.tools import io_utils
 import otbApplication as otb
 
 from multiprocessing import shared_memory, get_context
 import concurrent.futures
 import sys
 
-from slum.tools import eoscale_utils
+from slurp.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 

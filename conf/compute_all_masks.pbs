@@ -1,5 +1,5 @@
 #!/bin/sh
-#PBS -N SLUM
+#PBS -N SLURP
 #PBS -l select=1:ncpus=8:mem=30gb
 #PBS -l walltime=01:30:00
 
@@ -23,22 +23,22 @@ cp ${PHR_IM} ${TMPDIR}/image
 filename="$(basename ${PHR_IM})"
 
 # Start
-echo "Launch SLUM from `pwd`"
+echo "Launch SLURP from `pwd`"
 
 # Watermask
-slum_watermask -use_rgb_layers ${TMPDIR}/image/${filename} water/watermask.tif -remove_small_holes 200 -save prim
+slurp_watermask -use_rgb_layers ${TMPDIR}/image/${filename} water/watermask.tif -remove_small_holes 200 -save prim
 
 # Vegetationmask
-slum_vegetationmask -slic True ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif -min_ndvi_veg 0.35 -max_ndvi_noveg 0 -non_veg_clusters -buffer 1000
+slurp_vegetationmask -slic True ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif -min_ndvi_veg 0.35 -max_ndvi_noveg 0 -non_veg_clusters -buffer 1000
 
 # Shadowmask
-slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif
+slurp_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif
 
 # Urbanmask
-slum_urbanmask -use_rgb_layers ${TMPDIR}/image/${filename} urban/urbanmask.tif -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif -ndvi water/ndvi.tif -ndwi water/ndwi.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 400 -remove_false_positive -save aux
+slurp_urbanmask -use_rgb_layers ${TMPDIR}/image/${filename} urban/urbanmask.tif -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif -ndvi water/ndvi.tif -ndwi water/ndwi.tif -binary_closing 2 -binary_opening 2 -remove_small_objects 400 -remove_false_positive -save aux
 
 # Stack
-slum_stackmasks -vegetation vegetation/vegetationmask.tif -water water/watermask.tif -water_pred water/predict.tif -urban urban/urbanmask_seg.tif -shadow shadows/shadowmask.tif stack/stack_simple.tif
+slurp_stackmasks -vegetation vegetation/vegetationmask.tif -water water/watermask.tif -water_pred water/predict.tif -urban urban/urbanmask_seg.tif -shadow shadows/shadowmask.tif stack/stack_simple.tif
 
 tar cf ${OUTPUT_DIR}/masks.tar water urban vegetation shadows stack
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=SLUM
+#SBATCH --job-name=SLURP
 #SBATCH -N 1 # number of nodes
 #SBATCH -n 8 # number of cores
 #SBATCH --mem=30G # memory pool for all cores
@@ -18,7 +18,7 @@
 #. /work/scratch/env/tanguyy/venv/slum_vre/bin/activate
 
 module load monitoring/1.0
-start_monitoring.sh --name SLUM_all_masks
+start_monitoring.sh --name SLURP_all_masks
 
 echo ${PHR_IM}
 
@@ -31,25 +31,25 @@ cp ${PHR_IM} ${TMPDIR}/image
 filename="$(basename ${PHR_IM})"
 
 # Start
-echo "Launch SLUM from `pwd`"
+echo "Launch SLURP from `pwd`"
 
 # Watermask
-slum_watermask -remove_small_holes 100 -binary_closing 2 -save prim ${TMPDIR}/image/${filename} water/watermask.tif 
+slurp_watermask -remove_small_holes 100 -binary_closing 2 -save prim ${TMPDIR}/image/${filename} water/watermask.tif 
 
 # Vegetationmask
-slum_vegetationmask -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -non_veg_clusters -remove_small_objects 100 -binary_dilation 2 -remove_small_holes 100 -nbclusters ${CLUSTERS_VEG} -nbclusters_low ${CLUSTERS_LOW_VEG} ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif 
+slurp_vegetationmask -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -non_veg_clusters -remove_small_objects 100 -binary_dilation 2 -remove_small_holes 100 -nbclusters ${CLUSTERS_VEG} -nbclusters_low ${CLUSTERS_LOW_VEG} ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif 
 
 # Shadowmask
-slum_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_opening 2 -remove_small_objects 100 -th_rgb 0.2 -th_nir 0.2 -watermask water/watermask.tif 
+slurp_shadowmask ${TMPDIR}/image/${filename} shadows/shadowmask.tif -binary_opening 2 -remove_small_objects 100 -th_rgb 0.2 -th_nir 0.2 -watermask water/watermask.tif 
 
 
 # Urbanmask (without post-processing)
-slum_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 5 -binary_opening 2 -shadowmask shadows/shadowmask.tif ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000 -binary_dilation 5 
+slurp_urbanmask  -watermask water/watermask.tif -vegetationmask vegetation/vegetationmask.tif  -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -binary_closing 5 -binary_opening 2 -shadowmask shadows/shadowmask.tif ${TMPDIR}/image/${filename} urban/urbanmask.tif -nb_samples_urban 10000 -nb_samples_other 10000 -binary_dilation 5 
 
 # Stack
-slum_stackmasks ${TMPDIR}/image/${filename} stack/stack_simple.tif -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -waterpred water/watermask.tif -urban_proba urban/urbanmask_proba.tif  -shadow shadows/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 300 -binary_closing 3 -binary_opening 3 -remove_small_holes 300 -building_erosion 2 -bonus_gt 10 -malus_shadow 10
+slurp_stackmasks ${TMPDIR}/image/${filename} stack/stack_simple.tif -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -waterpred water/watermask.tif -urban_proba urban/urbanmask_proba.tif  -shadow shadows/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 300 -binary_closing 3 -binary_opening 3 -remove_small_holes 300 -building_erosion 2 -bonus_gt 10 -malus_shadow 10
 
-stop_monitoring.sh --name SLUM_all_masks
+stop_monitoring.sh --name SLURP_all_masks
 
 current_date=`date +%F`
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-#PBS -N score-SLUM
+#PBS -N score-SLURP
 #PBS -l select=1:ncpus=8:mem=30gb
 #PBS -l walltime=01:00:00
 
@@ -11,9 +11,9 @@
 # qsub -v "MASK_TAR=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Tests/Toulouse/masks.tar,OSM=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/OSM/toulouse.tif,OUTPUT_DIR=/work/OT/siaa/Work/Masque_CO3D/WORK/Tests_Céline/Tests/Toulouse" scores_from_tar.pbs
 
 module load otb/8.1-python3.8.4
-. /softs/projets/pluto/slum_env_v2/bin/activate
+. /softs/projets/pluto/slurp_env_v2/bin/activate
 
-echo "SCORES SLUM"
+echo "SCORES SLURP"
 echo ${MASK_TAR}
 
 cd $TMPDIR
@@ -21,9 +21,9 @@ mkdir -p $OUTPUT_DIR
 tar -C $TMPDIR/ -xvf $MASK_TAR urban
 
 # Start
-echo "Launch SLUM from `pwd`"
+echo "Launch SLURP from `pwd`"
 
-slum_scores -im $TMPDIR/urban/urbanmask_seg.tif -gt $OSM -out compare_OSM_pred.tif
+slurp_scores -im $TMPDIR/urban/urbanmask_seg.tif -gt $OSM -out compare_OSM_pred.tif
 
 cp compare_OSM_pred.tif ${OUTPUT_DIR}/
 

@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# coding: utf8
+slum# coding: utf8
 #
 # Copyright (C) 2022 CNES
 #
@@ -14,7 +13,7 @@ from importlib.metadata import version
 
 # version through setuptools_scm when python3 > 3.8
 try:
-    __version__ = version("slum")
+    __version__ = version("slurp")
 except Exception:  # pylint: disable=broad-except
     __version__ = "unknown"
 

@@ -31,9 +31,9 @@ import concurrent.futures
 from multiprocessing import shared_memory, get_context
 from pylab import *
 import uuid
-from slum.tools import io_utils
+from slurp.tools import io_utils
 
-from slum.tools import eoscale_utils
+from slurp.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
