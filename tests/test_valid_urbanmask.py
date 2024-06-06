@@ -20,11 +20,12 @@ input_files = get_files_to_process("urban")
 predict_images = glob.glob(os.path.join(pytest.output_dir + "/urbanmask*_proba.tif"))
 
 
-def compute_urbanmask(file):
+def compute_urbanmask(file, nb_workers):
     output_image = get_output_path(file, "urbanmask")
     proba_image = output_image.replace(".tif", "_proba.tif")
     remove_file(proba_image)
-    os.system(f"slum_urbanmask {file} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 -binary_closing 3 -binary_opening 3 {output_image}")
+    os.system(f"slum_urbanmask {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
+              f"-binary_closing 3 -binary_opening 3 {output_image}")
     assert os.path.exists(proba_image) 
     return proba_image
 
@@ -32,7 +33,7 @@ def compute_urbanmask(file):
 @pytest.mark.computation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_urbanmask(file):
-    output_image = compute_urbanmask(file)
+    output_image = compute_urbanmask(file, 1)
 
 
 @pytest.mark.validation
@@ -44,5 +45,5 @@ def test_validation_urbanmask(predict_file):
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_urbanmask(file):
-    output_image = compute_urbanmask(file)
+    output_image = compute_urbanmask(file, 1)
     validate_mask(output_image, "Urban", valid_pixels=False)

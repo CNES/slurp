@@ -19,29 +19,9 @@ def compare_datasets(ds_new_mask, ds_ref_mask):
     assert ds_new_mask.bounds == ds_ref_mask.bounds
     assert ds_new_mask.colorinterp == ds_ref_mask.colorinterp
     assert ds_new_mask.tag_namespaces() == ds_ref_mask.tag_namespaces()
-    
-
-def compare_pixels(ds_new_mask, ds_ref_mask, tolerance=False):
-    new_count_values = np.unique(ds_new_mask.read(1), return_counts=True)
-    ref_count_values = np.unique(ds_ref_mask.read(1), return_counts=True)
-    
-    print("new", new_count_values)
-    print("ref", ref_count_values)
-
-    # check if same unique values
-    assert np.array_equal(new_count_values[0], ref_count_values[0])
-
-    if tolerance:
-        # check pixels with tolerance threshold
-        difference = np.absolute(new_count_values[1] - ref_count_values[1])
-        accepted_difference = difference, 0.2 * ref_count_values[1]
-        assert np.all(np.less_equal(difference, accepted_difference)), f"Too many differences. Tolerated diff pixel nb for each class : {accepted_difference}, calculated diff pixel nb : {difference}"
-    else:
-        # check equality of each pixel
-        assert np.array_equal(new_count_values[1], ref_count_values[1])
 
 
-def validate_mask(new_file, key, valid_pixels=True, tolerance=False):
+def validate_mask(new_file, key, valid_pixels=True):
     filename = os.path.basename(new_file)
     ref_file = os.path.join(pytest.ref_dir, key, "ref_" + filename)
     assert os.path.exists(ref_file)
@@ -54,10 +34,8 @@ def validate_mask(new_file, key, valid_pixels=True, tolerance=False):
     
     # Pixels comparison
     if valid_pixels:
-        compare_pixels(ds_new_mask, ds_ref_mask, tolerance)
+        assert np.array_equal(ds_new_mask.read(1), ds_ref_mask.read(1))
             
     ds_new_mask.close()
     ds_ref_mask.close()
 
-    
-    
