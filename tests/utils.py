@@ -31,3 +31,4 @@ def get_output_path(file, key):
 def remove_file(file):
     with contextlib.suppress(FileNotFoundError):
         os.remove(file)
+        

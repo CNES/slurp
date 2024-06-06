@@ -20,10 +20,10 @@ input_files = get_files_to_process("water")
 predict_images = glob.glob(os.path.join(pytest.output_dir + "/watermask*.tif"))
 
 
-def compute_watermask(file):
+def compute_watermask(file, nb_workers):
     output_image = get_output_path(file, "watermask")
     remove_file(output_image)
-    os.system(f"slum_watermask {file} -binary_closing 3 -remove_small_holes 50 {output_image}") 
+    os.system(f"slum_watermask {file} -n_workers {nb_workers} -binary_closing 3 -remove_small_holes 50 {output_image}") 
     assert os.path.exists(output_image) 
     return output_image
 
@@ -31,17 +31,17 @@ def compute_watermask(file):
 @pytest.mark.computation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_watermask(file):
-    output_image = compute_watermask(file)
+    output_image = compute_watermask(file, 1)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("predict_file", predict_images)
 def test_validation_watermask(predict_file):
-    validate_mask(predict_file, "Water", tolerance=True)
+    validate_mask(predict_file, "Water")
 
     
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_watermask(file):
-    output_image = compute_watermask(file)
-    validate_mask(output_image, "Water", tolerance=True)
+    output_image = compute_watermask(file, 1)
+    validate_mask(output_image, "Water")
