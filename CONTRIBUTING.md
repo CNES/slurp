@@ -1,4 +1,4 @@
-# **slum** **Contributing guide**.
+# **slurp** **Contributing guide**.
 
 Contributions are welcome, and they are greatly appreciated! Every little bit
 helps, and credit will always be given.
@@ -12,7 +12,7 @@ helps, and credit will always be given.
 
 # Bug report
 
-Any proven or suspected malfunction should be traced in a bug report, the latter being an issue in the slum repository.
+Any proven or suspected malfunction should be traced in a bug report, the latter being an issue in the slurp repository.
 
 **Don't hesitate to do so: It is best to open a bug report and quickly resolve it than to let a problem remains in the project.**
 **Notifying the potential bugs is the first way for contributing to a software.**
@@ -47,7 +47,7 @@ Classical workflow is :
 
 # Contribution license agreement
 
-slum requires that contributors sign out a [Contributor License
+slurp requires that contributors sign out a [Contributor License
 Agreement](https://en.wikipedia.org/wiki/Contributor_License_Agreement). The
 purpose of this CLA is to ensure that the project has the necessary ownership or
 grants of rights over all contributions to allow them to distribute under the

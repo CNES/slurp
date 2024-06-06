@@ -1,4 +1,4 @@
-Welcome to slum's documentation!
+Welcome to slurp's documentation!
 =============================================================================
 
 .. toctree::
