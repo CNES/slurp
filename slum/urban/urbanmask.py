@@ -1142,11 +1142,12 @@ def main():
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
+                profile["nodata"] = 255
                 final_classif_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=final_classif_key).fill(1)
                 
                 # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.write(key=final_classif_key[0],img_path= args.file_classif)
+                final_classif = eoscale_manager.write(key=final_classif_key,img_path= args.file_classif)
                 
             else:
                 #### Corner case : no "building pixels" --> void mask (0)
@@ -1155,11 +1156,12 @@ def main():
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
                 profile["dtype"] = np.uint8
+                profile["nodata"] = 255
                 final_classif_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=final_classif_key).fill(0)
                 
                 # Save final mask (prediction + post-processing)
-                final_classif = eoscale_manager.write(key=final_classif_key[0],img_path= args.file_classif)
+                final_classif = eoscale_manager.write(key=final_classif_key,img_path= args.file_classif)
       
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
