@@ -1,7 +1,7 @@
 <div align="center">
-  <a href="https://gitlab.cnes.fr/pluto/slum"><img src="docs/source/images/logo_SLUM_256.png" alt="SLUM" title="SLUM"  width="20%"></a>
+  <a href="https://gitlab.cnes.fr/pluto/slurp"><img src="docs/source/images/logo_SLURP_256.png" alt="SLURP" title="SLURP"  width="20%"></a>
 
-<h4>slum</h4>
+<h4>slurp</h4>
 
 [![Python](https://img.shields.io/badge/python-v3.6+-blue.svg)](https://www.python.org/downloads/release/python-360/)
 
@@ -18,9 +18,9 @@
 
 ## Overview
 
-**SLUM** : **S**mart **L**and **U**se **M**asks
+**SLURP** : **S**mart **L**and **U**se **M**asks
 
-SLUM proposes different algorithms to perform Land Use/Land Cover masks, with few data. Several algorithms perform binary mask (water, vegetation, building, etc.) and some methods are then applied to regularize and merge masks into a single multiclass mask.
+SLURP proposes different algorithms to perform Land Use/Land Cover masks, with few data. Several algorithms perform binary mask (water, vegetation, building, etc.) and some methods are then applied to regularize and merge masks into a single multiclass mask.
 <table border="0">
 <tr>
 <td>
@@ -39,11 +39,11 @@ SLUM proposes different algorithms to perform Land Use/Land Cover masks, with fe
 </table>
 
 ## Install
-You need to clone the repository and pip install SLUM.
+You need to clone the repository and pip install SLURP.
 ```
-git clone git@gitlab.cnes.fr:pluto/slum.git
+git clone git@gitlab.cnes.fr:pluto/slurp.git
 ```
-To install SLUM, you need OTB, [EOScale](https://gitlab.cnes.fr/pluto/eoscale) and some libraries already installed on VRE OT.
+To install SLURP, you need OTB, [EOScale](https://gitlab.cnes.fr/pluto/eoscale) and some libraries already installed on VRE OT.
 
 Otherwise, if you are are connected to TREX, or working on your personal computer (Linux), 
 you may set the environment as mentioned below.
@@ -53,33 +53,33 @@ On TREX, connect to a computing node to create & compile the virtual environment
 unset SLURM_JOB_ID ; srun -A cnes_level2 -N 1 -n 8 --time=02:00:00 --mem=64G --x11 --pty bash
 ```
 Load OTB and create a virtual env with some Python libraries. 
-Compile and install EOScale and then SLUM
+Compile and install EOScale and then SLURP
 ```
 module load otb/9.0.0-python3.8
 # Creates a virtual env base on Python 3.8.13
-python -m venv slum_env
-. slum_env/bin/activate
+python -m venv slurp_env
+. slurp_env/bin/activate
 # upgrade pip and install several libraries
 pip install pip --upgrade
 cd <EOScale source folder>
 pip install .
-cd <SLUM source folder>
+cd <SLURP source folder>
 pip install .
 # for validation tests
 pip install pytest
 ```
-Your environment is ready, you can compute SLUM masks with slum_watermask, slum_urbanmask, etc.
+Your environment is ready, you can compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
 
-## Use SLUM on TREX
-On TREX, you can directly use SLUM by sourcing the following environment.
+## Use SLURP on TREX
+On TREX, you can directly use SLURP by sourcing the following environment.
 ```
-source /work/CAMPUS/users/tanguyy/PLUTO/slum_demo/init_slum.sh
+source /work/CAMPUS/users/tanguyy/PLUTO/slurp_demo/init_slurp.sh
 ```
 This will load OTB 9.0 and all Python dependencies
 
 You can also use a .pbs script to launch different masks algorithms on your images.
 ```
-qsub -v "PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/" /softs/projets/pluto/demo_slum/compute_all_masks.pbs
+qsub -v "PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/" /softs/projets/pluto/demo_slurp/compute_all_masks.pbs
 ```
 Two scripts (to calculate all the masks and the scores) are available in conf/ directory.
 
@@ -90,9 +90,9 @@ Two scripts (to calculate all the masks and the scores) are available in conf/ d
 Water model is learned from Peckel (Global Surface Water) reference data and is based on NDVI/NDWI2 indices. 
 Then the predicted mask is cleaned with Peckel, possibly with HAND maps and post-processed to clean artefacts.
 ```
-slum_watermask <VHR input image> <your watermask.tif>
+slurp_watermask <VHR input image> <your watermask.tif>
 ```
-Type `slum_watermask -h` for complete list of options :
+Type `slurp_watermask -h` for complete list of options :
 
 - bands identification (-red <1/3>), 
 - add other raster features (-layers layer1 [layer 2 ..]), 
@@ -105,9 +105,9 @@ Vegetation mask are computed with an unsupervised clustering algorithm. First so
 Then a segmentation is processed (SLIC) and segments are dispatched in several clusters depending on their features.
 A final labellisation affects a class to each segment (ie : high NDVI and low texture denotes for low vegetation).
 ```
-slum_vegetationmask <VHR input image> <your vegetation mask.tif>
+slurp_vegetationmask <VHR input image> <your vegetation mask.tif>
 ```
-Type `slum_vegetationmask -h` for complete list of options : 
+Type `slurp_vegetationmask -h` for complete list of options : 
 
 - red/NIR bands
 - segmentation mode and parameter for SLIC algorithms
@@ -120,9 +120,9 @@ Type `slum_vegetationmask -h` for complete list of options :
 An urban model (building) is learned from WSF reference map. The algorithm can take into account water and vegetation masks in order to improve samples selection (non building pixels will be chosen outside WSF and outside water/vegetation masks). 
 The output is a "building probability" layer ([0..100]) that can be used by the stack algorithm.
 ```
-slum_urbanmask <VHR input image> <your urban mask>
+slurp_urbanmask <VHR input image> <your urban mask>
 ```
-Type `slum_urbanmask -h` for complete list of options :
+Type `slurp_urbanmask -h` for complete list of options :
 
 - bands identification (-red <1/3>), 
 - elimination of pixels identified as water or vegetation (-watermask <your watermask.tif>, -vegetationmask <your vegetationmask.tif>),
@@ -133,14 +133,14 @@ Shadow mask detects dark areas (supposed shadows), based on two thresholds (RGB,
 A post-processing step removes small shadows, holes, etc. The resulting mask is a three-classes mask (no shadow, small shadow, big shadows). 
 The big shadows can be used in the stack algorithm in the regularization step.
 ```
-slum_shadowmask <VHR input image> <your shadow mask>
+slurp_shadowmask <VHR input image> <your shadow mask>
 ```
 
 ### Stack and regularize buildings
 The stack algorithm take into account all previous masks to produce a 6 classes mask (water, low vegetation, high vegetation, building, bare soil, other) and an auxilliary height layer (low / high / unknown). 
 The algorithm can regularize urban mask with a watershed algorithm based on building probability and context of surrounding areas. This algorithm first computes a gradient on the image and fills a marker layer with known classes. Then a watershed step helps to adjust contours along gradient image, thus regularizing buildings shapes.
 ```
-slum_stackmasks <VHR input image> <your stack image> -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -urbanmask urban/urbanmask_proba.tif  -shadow shadow/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 500 -binary_closing 3
+slurp_stackmasks <VHR input image> <your stack image> -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -urbanmask urban/urbanmask_proba.tif  -shadow shadow/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 500 -binary_closing 3
 ```
 
 ### Quantify the quality of a mask
@@ -149,10 +149,10 @@ The predicted mask is compared to a given raster ground truth and some metrics s
 The analysis can be performed on a window of the input files.
 
 ```
-slum_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
+slurp_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
 ```
 
-Type `slum_scores -h` for complete list of options :
+Type `slurp_scores -h` for complete list of options :
 
 - selection of a window (-startx, -starty, -sizex, -sizey),
 - detection of the buildings (-polygonize) and iou score (-polygonize.union) with some parameters (-polygonize.area, -polygonize.unit, etc.),
@@ -162,7 +162,7 @@ Type `slum_scores -h` for complete list of options :
 
 The project comes with a suite of unit and functional tests. All the tests are available in tests/ directory.
 
-To run them, launch the command `pytest` in the root of the slum project. To run tests on a specific mask, execute `pytest tests/<file_name>"`.
+To run them, launch the command `pytest` in the root of the slurp project. To run tests on a specific mask, execute `pytest tests/<file_name>"`.
 
 By default, the tests generate the masks and then validate them by comparing them with a reference. You can choose to only compute the masks with `pytest -m computation` or validate them with `pytest -m validation`
 

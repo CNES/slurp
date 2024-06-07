@@ -15,5 +15,5 @@ A new section Unreleased is opened then for next dev phase.
 ## 0.1.0 First Official Release (2022-09-06)
 
 ### Added
-- Add slum features
+- Add slurp features
 - Detail the release !!

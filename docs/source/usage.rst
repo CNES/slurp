@@ -7,10 +7,10 @@ By default, a fake command line is deployed with argparse:
 To use it:
 .. code-block:: console
 
-    $ slum -h
+    $ slurp -h
     
 
-To use slum in a project::
+To use slurp in a project::
 
-    import slum
+    import slurp
 
