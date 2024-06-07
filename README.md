@@ -34,11 +34,25 @@ Data preparation can be achieved with Orfeo ToolBox or other tools, in order to 
 <img src="docs/source/images/example_step1_watermask.png" alt="Water mask" title="Water mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation mask" title="Low/High vegetation mask"  width="80%">
+<img src="docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation and bare ground mask" title="Low/High vegetation mask"  width="80%">
+</td>
+<td>
+<img src="docs/source/images/example_step3_shadowmask.png" alt="Shadow mask" title="Shadow mask"  width="80%">
+</td>
+<td>
+<img src="docs/source/images/example_step4_urbanproba.png" alt="Urban probability" title="Urban probability"  width="80%">
 </td>
 <td>
 <img src="docs/source/images/example_step5_stack_regul.png" alt="Final mask" title="Final mask"  width="80%">
 </td>
+</tr>
+<tr>
+<td>Bring your own VHR 4 bands (R/G/B/NIR) image (Pleiades, WorldView, PNEO, CO3D,...)</td>
+<td>Learn 'Pekel' water occurrence and predict water mask</td>
+<td>Use an unsupervised clustering algorithm to detect low/high vegetation and bare ground</td>
+<td>Learn 'WSF" urban mask and compute building probability</td>
+<td>Detect large shadows (but avoid water confusion)</td>
+<td>Stack and regularize building and vegetated areas contours</td>
 </tr>
 </table>
 
