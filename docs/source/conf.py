@@ -28,16 +28,16 @@ sys.setrecursionlimit(1500)
 # -- Project information -----------------------------------------------------
 
 # General information about the project.
-project = "slum"
+project = "slurp"
 copyright = "2022, Y T[3~[D"
 author = "Y T[3~[D"
 
 
 try:
-    version = get_distribution("slum").version
+    version = get_distribution("slurp").version
     release = version
 except Exception as error:
-    print("WARNING: cannot find slum version")
+    print("WARNING: cannot find slurp version")
     version = "Unknown"
     release = version
 
@@ -85,8 +85,8 @@ pygments_style = "sphinx"
 html_theme = "sphinx_rtd_theme"
 
 # Title
-html_title = "slum Documentation"
-html_short_title = "slum Documentation"
+html_title = "slurp Documentation"
+html_short_title = "slurp Documentation"
 
 # Logo
 # html_logo = "images/picto_transparent_mini.png"
@@ -130,8 +130,8 @@ numfig = True
 latex_documents = [
     (
         master_doc,
-        "slum.tex",
-        "slum documentation",
+        "slurp.tex",
+        "slurp documentation",
         "TODO",
         "manual",
     ),

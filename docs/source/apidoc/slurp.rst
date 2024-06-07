@@ -1,21 +1,21 @@
-slum package
+slurp package
 ============
 
 Submodules
 ----------
 
-slum.cli module
+slurp.cli module
 ---------------
 
-.. automodule:: slum.cli
+.. automodule:: slup.cli
    :members:
    :undoc-members:
    :show-inheritance:
 
-slum.slum module
+slurp.slurp module
 ----------------
 
-.. automodule:: slum.slum
+.. automodule:: slurp.slurp
    :members:
    :undoc-members:
    :show-inheritance:
@@ -23,7 +23,7 @@ slum.slum module
 Module contents
 ---------------
 
-.. automodule:: slum
+.. automodule:: slurp
    :members:
    :undoc-members:
    :show-inheritance:

@@ -3,18 +3,18 @@
 #
 # Copyright (C) 2022 CNES
 #
-# This file is part of slum
+# This file is part of slurp
 #
 
 """
-Top-level package for slum.
+Top-level package for slurp.
 """
 
 from importlib.metadata import version
 
 # version through setuptools_scm when python3 > 3.8
 try:
-    __version__ = version("slum")
+    __version__ = version("slurp")
 except Exception:  # pylint: disable=broad-except
     __version__ = "unknown"
 

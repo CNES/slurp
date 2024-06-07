@@ -7,7 +7,7 @@
 #
 
 """
-Console script for slum.
+Console script for slurp.
 """
 
 import argparse

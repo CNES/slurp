@@ -9,7 +9,7 @@ import argparse
 import rasterio as rio
 import numpy as np
 import os
-from slum.tools import io_utils
+from slurp.tools import io_utils
 from skimage.morphology import (
     area_closing,
     binary_closing,
@@ -24,7 +24,7 @@ from skimage.morphology import (
 from skimage.filters import sobel
 from skimage import segmentation
 
-from slum.tools import eoscale_utils
+from slurp.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 import time

@@ -13,7 +13,7 @@ import traceback
 
 from skimage.morphology import binary_closing, binary_opening, binary_erosion, remove_small_objects, disk, remove_small_holes
 
-from slum.tools import eoscale_utils
+from slurp.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
