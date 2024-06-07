@@ -1,7 +1,7 @@
-slum
+slurp
 ====
 
 .. toctree::
    :maxdepth: 4
 
-   slum
+   slurp

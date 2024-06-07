@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 CNES.
 #
-# This file is part of slum
+# This file is part of slurp
 #
 
 """
@@ -15,7 +15,7 @@ from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
 extensions = [
-    Extension("stats", ["slum/stats/cysrc/stats.pyx"])
+    Extension("stats", ["slurp/stats/cysrc/stats.pyx"])
 ]
 
 compiler_directives = { "language_level": 3, "embedsignature": True}

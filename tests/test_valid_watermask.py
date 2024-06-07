@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 Y T[3~[D.
 #
-# This file is part of slum
+# This file is part of slurp
 #
 """Tests for watermask generation."""
 
@@ -23,7 +23,7 @@ predict_images = glob.glob(os.path.join(pytest.output_dir + "/watermask*.tif"))
 def compute_watermask(file, nb_workers):
     output_image = get_output_path(file, "watermask")
     remove_file(output_image)
-    os.system(f"slum_watermask {file} -n_workers {nb_workers} -binary_closing 3 -remove_small_holes 50 {output_image}") 
+    os.system(f"slurp_watermask {file} -n_workers {nb_workers} -binary_closing 3 -remove_small_holes 50 {output_image}") 
     assert os.path.exists(output_image) 
     return output_image
 

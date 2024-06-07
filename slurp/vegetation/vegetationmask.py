@@ -11,10 +11,10 @@ from skimage.segmentation import slic
 from skimage.segmentation import felzenszwalb
 from skimage.morphology import binary_dilation, remove_small_objects, square, disk, remove_small_holes
 import scipy
-from slum.tools import io_utils
+from slurp.tools import io_utils
 from math import sqrt, ceil
 
-from slum.tools import eoscale_utils
+from slurp.tools import eoscale_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 

@@ -14,7 +14,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import shape
 import numpy as np
-from slum.tools import io_utils
+from slurp.tools import io_utils
 
 
 def generate_polygons_in_gdf(im, crs, transform):

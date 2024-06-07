@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 LABEL maintainer="Y.TANGUY"
 
-## slum installation Dockerfile example
+## slurp installation Dockerfile example
 ## Hack it !
 
 # Avoid apt install interactive questions.
@@ -17,15 +17,15 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-#  Install slum
-WORKDIR /slum
-COPY . /slum
+#  Install slurp
+WORKDIR /slurp
+COPY . /slurp
 
 # Version will be automatic with git versioning and tags
-RUN python3 -m pip --no-cache-dir install /slum/. \
+RUN python3 -m pip --no-cache-dir install /slurp/. \
   # # Auto args completion
-  && register-python-argcomplete slum >> ~/.bashrc
+  && register-python-argcomplete slurp >> ~/.bashrc
 
 # launch demcompare
-ENTRYPOINT ["slum"]
+ENTRYPOINT ["slurp"]
 CMD ["-h"]

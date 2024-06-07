@@ -50,13 +50,13 @@ venv: ## create virtualenv in "venv" dir if not exists
 
 .PHONY: install
 install: venv git  ## install the package in dev mode in virtualenv
-	@test -f ${VENV}/bin/slum || echo "Install slum package from local directory"
-	@test -f ${VENV}/bin/slum || ${VENV}/bin/python -m pip install -e .[dev,docs]
+	@test -f ${VENV}/bin/slurp || echo "Install slurp package from local directory"
+	@test -f ${VENV}/bin/slurp || ${VENV}/bin/python -m pip install -e .[dev,docs]
 	@test -f .git/hooks/pre-commit || echo "Install pre-commit"
 	@test -f .git/hooks/pre-commit || ${VENV}/bin/pre-commit install -t pre-commit
 	@chmod +x ${VENV}/bin/register-python-argcomplete
-	@echo "slum ${VERSION} installed in dev mode in virtualenv ${VENV} with documentation"
-	@echo " slum venv usage : source ${VENV}/bin/activate; slum -h"
+	@echo "slurp ${VERSION} installed in dev mode in virtualenv ${VENV} with documentation"
+	@echo " slurp venv usage : source ${VENV}/bin/activate; slurp -h"
 
 ## Test section
 	
@@ -70,7 +70,7 @@ test-all: install ## run tests on every Python version with tox
 	
 .PHONY: coverage
 coverage: install ## check code coverage quickly with the default Python
-	@${VENV}/bin/coverage run --source slum -m pytest
+	@${VENV}/bin/coverage run --source slurp -m pytest
 	@${VENV}/bin/coverage report -m
 	@${VENV}/bin/coverage html
 	$(BROWSER) htmlcov/index.html
@@ -85,12 +85,12 @@ format: install format/isort format/black  ## run black and isort formatting (de
 .PHONY: format/isort
 format/isort: install  ## run isort formatting (depends install)
 	@echo "+ $@"
-	@${VENV}/bin/isort slum tests
+	@${VENV}/bin/isort slurp tests
 
 .PHONY: format/black
 format/black: install  ## run black formatting (depends install)
 	@echo "+ $@"
-	@${VENV}/bin/black slum tests
+	@${VENV}/bin/black slurp tests
 
 ### Check code quality and linting : isort, black, flake8, pylint
 
@@ -100,29 +100,29 @@ lint: install lint/isort lint/black lint/flake8 lint/pylint ## check code qualit
 .PHONY: lint/isort
 lint/isort: ## check imports style with isort
 	@echo "+ $@"
-	@${VENV}/bin/isort --check slum tests
+	@${VENV}/bin/isort --check slurp tests
 	
 .PHONY: lint/black
 lint/black: ## check global style with black
 	@echo "+ $@"
-	@${VENV}/bin/black --check slum tests
+	@${VENV}/bin/black --check slurp tests
 
 .PHONY: lint/flake8
 lint/flake8: ## check linting with flake8
 	@echo "+ $@"
-	@${VENV}/bin/flake8 slum tests
+	@${VENV}/bin/flake8 slurp tests
 
 .PHONY: lint/pylint
 lint/pylint: ## check linting with pylint
 	@echo "+ $@"
-	@set -o pipefail; ${VENV}/bin/pylint slum tests --rcfile=.pylintrc --output-format=parseable | tee pylint-report.txt # pipefail to propagate pylint exit code in bash
+	@set -o pipefail; ${VENV}/bin/pylint slurp tests --rcfile=.pylintrc --output-format=parseable | tee pylint-report.txt # pipefail to propagate pylint exit code in bash
 	
 ## Documentation section
 
 .PHONY: docs
 docs: install ## generate Sphinx HTML documentation, including API docs
 	@${VENV}/bin/sphinx-build -M clean docs/source/ docs/build
-	@${VENV}/bin/sphinx-apidoc -o docs/source/apidoc/ slum
+	@${VENV}/bin/sphinx-apidoc -o docs/source/apidoc/ slurp
 	@${VENV}/bin/sphinx-build -M html docs/source/ docs/build
 	$(BROWSER) docs/build/html/index.html
 
@@ -130,7 +130,7 @@ docs: install ## generate Sphinx HTML documentation, including API docs
 
 notebook: install ## Install Jupyter notebook kernel with venv
 	@echo "\nInstall Jupyter Kernel and launch Jupyter notebooks environment"
-	@${VENV}/bin/python -m ipykernel install --sys-prefix --name=slum$(VENV) --display-name=slum$(VERSION)
+	@${VENV}/bin/python -m ipykernel install --sys-prefix --name=slurp$(VENV) --display-name=slurp$(VERSION)
 	@echo "\n --> After virtualenv activation, please use following command to launch local jupyter notebook to open Notebooks:"
 	@echo "jupyter notebook"
 
@@ -145,8 +145,8 @@ docker: git ## Build docker image (and check Dockerfile)
 	@echo "Check Dockerfile with hadolint"
 	@docker pull hadolint/hadolint
 	@docker run --rm -i hadolint/hadolint < Dockerfile
-	@echo "Build Docker image slum ${VERSION_MIN}"
-	@docker build -t y t[3~[d/slum:${VERSION_MIN} -t y t[3~[d/slum:latest .
+	@echo "Build Docker image slurp ${VERSION_MIN}"
+	@docker build -t y t[3~[d/slurp:${VERSION_MIN} -t y t[3~[d/slurp:latest .
 
 ## Release section
 	
@@ -210,6 +210,6 @@ clean-docs:
 .PHONY: clean-docker
 clean-docker:
 		@echo "+ $@"
-		@echo "Clean Docker image slum ${VERSION_MIN}"
-		@docker image rm y t[3~[d/slum:${VERSION_MIN}
-		@docker image rm y t[3~[d/slum:latest
+		@echo "Clean Docker image slurp ${VERSION_MIN}"
+		@docker image rm y t[3~[d/slurp:${VERSION_MIN}
+		@docker image rm y t[3~[d/slurp:latest

@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 Y T[3~[D.
 #
-# This file is part of slum
+# This file is part of slurp
 #
 """Tests for urbanmask generation."""
 
@@ -24,7 +24,7 @@ def compute_urbanmask(file, nb_workers):
     output_image = get_output_path(file, "urbanmask")
     proba_image = output_image.replace(".tif", "_proba.tif")
     remove_file(proba_image)
-    os.system(f"slum_urbanmask {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
+    os.system(f"slurp_urbanmask {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
               f"-binary_closing 3 -binary_opening 3 {output_image}")
     assert os.path.exists(proba_image) 
     return proba_image
