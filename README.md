@@ -3,7 +3,7 @@
 
 <h4>slurp</h4>
 
-[![Python](https://img.shields.io/badge/python-v3.6+-blue.svg)](https://www.python.org/downloads/release/python-360/)
+[![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)](https://www.python.org/downloads/release/python-380/)
 
 
 <p>
@@ -18,9 +18,13 @@
 
 ## Overview
 
-**SLURP** : **S**mart **L**and **U**se **M**asks
+**SLURP** : **S**mart **L**and **U**se **R**econstruction **P**ipeline
 
-SLURP proposes different algorithms to perform Land Use/Land Cover masks, with few data. Several algorithms perform binary mask (water, vegetation, building, etc.) and some methods are then applied to regularize and merge masks into a single multiclass mask.
+SLURP is your companion to compute a simple land-use/land-cover mask from VHR images. It proposes different few or unsupervised learning algorithms that produce *one-versus-all* masks (water, vegetation, shadow, urban). Then a final algorithm stacks them all together and regularize them to obtain into a single multiclass mask.
+
+SLURP uses some global data, such as Global Surface Water (Pekel) for water detection or World Settlement Footprint (WSF) for building detection. 
+
+Data preparation can be achieved with Orfeo ToolBox or other tools, in order to bring all necessary data in the same projection. You can either build your mask step by step, or use a batch script to launch and build the final mask automatically.
 <table border="0">
 <tr>
 <td>
