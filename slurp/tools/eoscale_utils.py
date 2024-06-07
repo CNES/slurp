@@ -72,16 +72,14 @@ def three_int32_profile(input_profiles: list, map_params):
     
     return profile
     
-def multiple_single_float_profile(input_profiles: list, map_params):
+def double_int_profile(input_profiles: list, map_params):
     profile1 = input_profiles[0]
     profile1['count']=1
-    profile1['dtype']=np.float32
+    profile1['dtype']=np.uint8
+    profile1['nodata'] = 255
     profile1["compress"] = "deflate"
     
     # avoid to modify profile1
     profile2 = copy.deepcopy(profile1)
-    profile2['count']=1
-    profile2['dtype']=np.float32
-    profile2["compress"] = "deflate"
-    
+       
     return [profile1, profile2] 
