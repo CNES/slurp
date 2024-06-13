@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 CNES
 #
-# This file is part of slum
+# This file is part of slurp
 #
 
 """
@@ -15,13 +15,13 @@ import sys
 
 
 def main():
-    """Console script for slum."""
+    """Console script for slurp."""
     parser = argparse.ArgumentParser()
     parser.add_argument("_", nargs="*")
     args = parser.parse_args()
 
     print("Arguments: " + str(args._))
-    print("Replace this message by putting your code into " "slum.cli.main")
+    print("Replace this message by putting your code into " "slurp.cli.main")
     return 0
 
 

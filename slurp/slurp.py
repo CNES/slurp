@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 CNES
 #
-# This file is part of slum
+# This file is part of slurp
 #
 
 """

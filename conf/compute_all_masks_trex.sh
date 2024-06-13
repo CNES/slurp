@@ -55,8 +55,8 @@ tar cf ${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.t
 
 ln -s $PHR_IM ${OUTPUT_DIR}/link_to_VHR_image.tif
 
-# sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,vegetationmask.tif,vegetationmask_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tif," | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
-sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slum/conf/template_project.qgs | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
+# sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slurp/conf/template_project.qgs | sed "s,vegetationmask.tif,vegetationmask_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}.tif," | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
+sed "s,PATH_TO_TAR,${OUTPUT_DIR}/masks_${CLUSTERS_VEG}_${CLUSTERS_LOW_VEG}_${current_date}.tar," ~/SRC/slurp/conf/template_project.qgs | sed "s,LINK_TO_THR,${OUTPUT_DIR}/link_to_VHR_image.tif," > ${OUTPUT_DIR}/my_project.qgs
 
 echo "QGIS project available : check the geographical extent (Apply image CRS to other layers), check the image THR layer (fix percentiles to 2/98) and enjoy !"
 # End

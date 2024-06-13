@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2022 Y T[3~[D.
 #
-# This file is part of slum
+# This file is part of slurp
 #
 """Fixtures definitions"""
 
