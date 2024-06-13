@@ -24,7 +24,7 @@ def compute_shadowmask(file, nb_workers):
     output_image = get_output_path(file, "shadowmask")
     remove_file(output_image)
     os.system(f"slurp_shadowmask {file} -n_workers {nb_workers} -binary_opening 2 -remove_small_objects 100 -th_rgb 0.2 -th_nir 0.2 {output_image}") 
-    assert os.path.exists(output_image) 
+    assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during shadowmask computation ?"
     return output_image
 
 
