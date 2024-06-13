@@ -8,20 +8,22 @@ This script stacks existing masks
 import argparse
 import rasterio
 import numpy as np
-import os
 import traceback
 
 from skimage.morphology import binary_closing, binary_opening, binary_erosion, remove_small_objects, disk, remove_small_holes
 
-from slurp.tools import eoscale_utils
+from slurp.tools import eoscale_utils, utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
 NO_DATA=255
 
-def compute_mask(input_buffers: list, 
-                 input_profiles: list, 
-                 params: dict) -> np.ndarray :
+def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
+    """
+    Compute shadow mask
+
+
+    """
     
     """
     input_buffers : 
@@ -107,6 +109,7 @@ def main():
 
             ds_phr = rasterio.open(args.image)
             nodata = ds_phr.profile["nodata"]
+            ds_phr.close()
             
             # Compute threshold for each band
             th_bands = np.zeros(4)
@@ -134,7 +137,7 @@ def main():
 
             
             key_valid_stack = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                                image_filter = compute_valid_stack,   
+                                                                image_filter = utils.compute_valid_stack,
                                                                 filter_parameters=params,
                                                                 generate_output_profiles = single_bool_profile,
                                                                 stable_margin= 0,
