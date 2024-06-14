@@ -6,7 +6,7 @@ This script stacks existing masks
 """
 
 import argparse
-import rasterio
+import rasterio as rio
 import numpy as np
 import traceback
 
@@ -93,7 +93,7 @@ def main():
             key_phr = eoscale_manager.open_raster(raster_path=args.image)
             local_phr = eoscale_manager.get_array(key_phr)
 
-            ds_phr = rasterio.open(args.image)
+            ds_phr = rio.open(args.image)
             nodata = ds_phr.profile["nodata"]
             ds_phr.close()
             
