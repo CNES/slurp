@@ -21,8 +21,8 @@ def get_files_to_process(key):
 
 
 def get_output_path(file, key):
-    assert os.path.exists(file)
-    assert os.path.exists(pytest.output_dir)
+    assert os.path.exists(file), f"The file {file} doesn't exist"
+    assert os.path.exists(pytest.output_dir), f"The file {pytest.output_dir} doesn't exist"
     filename = os.path.basename(file)
     output_image = os.path.join(pytest.output_dir, key + "_" + filename)
     return output_image

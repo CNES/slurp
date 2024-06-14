@@ -24,7 +24,7 @@ def compute_watermask(file, nb_workers):
     output_image = get_output_path(file, "watermask")
     remove_file(output_image)
     os.system(f"slurp_watermask {file} -n_workers {nb_workers} -binary_closing 3 -remove_small_holes 50 {output_image}") 
-    assert os.path.exists(output_image) 
+    assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during watermask computation ?"
     return output_image
 
 

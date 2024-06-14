@@ -26,7 +26,7 @@ def compute_urbanmask(file, nb_workers):
     remove_file(proba_image)
     os.system(f"slurp_urbanmask {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
               f"-binary_closing 3 -binary_opening 3 {output_image}")
-    assert os.path.exists(proba_image) 
+    assert os.path.exists(proba_image), f"The file {proba_image} has not been created. Error during urbanmask computation ?"
     return proba_image
 
 
