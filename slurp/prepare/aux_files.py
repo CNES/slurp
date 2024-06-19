@@ -3,6 +3,7 @@
 
 import numpy as np
 import otbApplication as otb
+import scipy
 import time
 
 from slurp.prepare import geometry
@@ -135,3 +136,50 @@ def wsf_recovery(file_ref: str, file_out: str, write=False) -> np.ndarray:
     )
 
     return wsf_image.transpose(2, 0, 1)[0]
+
+
+def std_convoluted(im: np.ndarray, N: int, min_value: float, max_value: float) -> np.ndarray:
+    """
+    Calculate the std of each pixel
+    Based on a convolution with a kernel of 1 (size of the kernel given)
+
+    :param np.ndarray im: input image
+    :param int N: radius of kernel
+    :param float min_value: min value of the input image
+    :param float max_value: max value of the input image
+    :returns: texture image
+    """
+    im2 = im ** 2
+    kernel = np.ones((2 * N + 1, 2 * N + 1))
+    ns = kernel.size * np.ones(im.shape)
+
+    # Local mean with convolution
+    s = scipy.signal.convolve2d(im, kernel, mode="same", boundary="symm")
+    # local mean of the squared image with convolution
+    s2 = scipy.signal.convolve2d(im2, kernel, mode="same", boundary="symm")
+
+    # Invalid values will be handled later
+    np.seterr(divide="ignore", invalid="ignore")
+    res = np.sqrt((s2 - s ** 2 / ns) / ns)  # std calculation
+
+    # Normalization
+    res = 1000 * res / (max_value - min_value)
+
+    res = np.where(np.isnan(res), 0, res)
+
+    return res
+
+
+def texture_task(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
+    """
+    Compute textures
+
+    :param list input_buffers: [im_vhr, valid_stack]
+    :param list input_profiles: image profile (not used but necessary for eoscale)
+    :param dict params: dictionary of arguments, must contain the keys "nir", "texture_rad", "min_value" and "max_value"
+    :returns: texture image
+    """
+    masked_band = np.ma.array(input_buffers[0][params["nir"] - 1], mask=np.logical_not(input_buffers[1]))
+    texture = std_convoluted(masked_band.astype(float), params["texture_rad"], params["min_value"], params["max_value"])
+
+    return texture

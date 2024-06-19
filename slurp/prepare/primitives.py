@@ -19,7 +19,7 @@ def compute_ndvi(input_buffer: list, input_profiles: list, params: dict) -> np.n
     im_ndvi = 1000.0 - (2000.0 * np.float32(input_buffer[0][params["red"] - 1])) / (
             np.float32(input_buffer[0][params["nir"] - 1]) + np.float32(input_buffer[0][params["red"] - 1]))
     im_ndvi[np.logical_or(im_ndvi < -1000.0, im_ndvi > 1000.0)] = np.nan
-    if len(input_buffer) > 1:  # for urbanmask computation
+    if len(input_buffer) > 1:  # for urbanmask or vegmask computation
         im_ndvi[np.logical_not(input_buffer[1][0])] = np.nan
     np.nan_to_num(im_ndvi, copy=False, nan=32767)
     im_ndvi = np.int16(im_ndvi)
@@ -42,7 +42,7 @@ def compute_ndwi(input_buffer: list, input_profiles: list,  params: dict) -> np.
     im_ndwi = 1000.0 - (2000.0 * np.float32(input_buffer[0][params["nir"] - 1])) / (
         np.float32(input_buffer[0][params["green"] - 1]) + np.float32(input_buffer[0][params["nir"] - 1]))
     im_ndwi[np.logical_or(im_ndwi < -1000.0, im_ndwi > 1000.0)] = np.nan
-    if len(input_buffer) > 1:  # for urbanmask computation
+    if len(input_buffer) > 1:  # for urbanmask or vegmask computation
         im_ndwi[np.logical_not(input_buffer[1][0])] = np.nan
     np.nan_to_num(im_ndwi, copy=False, nan=32767)
     im_ndwi = np.int16(im_ndwi)
