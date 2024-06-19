@@ -102,18 +102,36 @@ def cloud_from_gml(file_cloud: str, file_ref: str) -> np.ndarray:
     :param str file_ref: path to the input reference image
     :returns: cloud mask
     """
-    start_time = time.time()
-    app = otb.Registry.CreateApplication("Rasterization")
-    app.SetParameterString("in", file_cloud)
-    app.SetParameterString("im", file_ref)
-    app.SetParameterFloat("background", 0)
-    app.SetParameterString("mode", "binary")
-    app.SetParameterFloat("mode.binary.foreground", 1)
-    app.Execute()
-
-    mask_cloud = app.GetImageAsNumpyArray(
-        "out", otb.ImagePixelType_uint8
-    ).astype(np.uint8)
-    print("Rasterize clouds in", time.time() - start_time, "seconds.")
+    mask_cloud = geometry.rasterization(
+        file_cloud,
+        file_ref,
+        "",
+        otb.ImagePixelType_uint8,
+        write=False
+    )
 
     return mask_cloud
+
+
+def wsf_recovery(file_ref: str, file_out: str, write=False) -> np.ndarray:
+    """
+    Recover WSF image in uint16
+
+    :param str file_ref: path to the input reference image
+    :param str file_out: path for the recovered WSF image
+    :param bool write: write the output image if True, else keep the image in memory
+    :returns: WSF image recovered
+    """
+    if write:
+        print("Recover WSF file to", file_out)
+    else:
+        print("Recover WSF file")
+    wsf_image = geometry.superimpose(
+        "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
+        file_ref,
+        file_out,
+        otb.ImagePixelType_uint16,
+        write
+    )
+
+    return wsf_image.transpose(2, 0, 1)[0]

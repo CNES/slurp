@@ -299,11 +299,6 @@ def print_feature_importance(classifier, feature_names):
             "  %4s (%f) (std=%f)"
             % (feature_names[idx], importances[idx], std[idx])
         )
-
-
-def concatenate_samples(output_scalars, chunk_output_scalars, tile):
-    
-    output_scalars.append(chunk_output_scalars[0])
    
         
 def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
@@ -833,7 +828,7 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension)
             ds_phr = rio.open(args.file_phr)
             io_utils.print_dataset_infos(ds_phr, "PHR")
-            args.nodata = ds_phr.nodata
+            args.nodata_phr = ds_phr.nodata
            
             # Save crs, transform and rpc in args
             args.shape = ds_phr.shape
@@ -882,7 +877,7 @@ def main():
                 cloud_mask_array = np.logical_not(
                     aux.cloud_from_gml(args.file_cloud_gml, args.file_phr)
                 )
-                #save cloud mask
+                # save cloud mask
                 io_utils.save_image(
                     cloud_mask_array,
                     join(dirname(args.file_classif), "nocloud.tif"),
@@ -1030,7 +1025,7 @@ def main():
                                                       filter_parameters=vars(args),
                                                       nb_output_scalars=args.nb_samples_water+args.nb_samples_other,
                                                       context_manager=eoscale_manager,
-                                                      concatenate_filter=concatenate_samples,
+                                                      concatenate_filter=utils.concatenate_samples,
                                                       output_scalars=[],
                                                       multiproc_context="fork",
                                                       filter_desc="Samples building processing...")
