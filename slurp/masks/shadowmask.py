@@ -64,29 +64,22 @@ def getarguments():
     parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
     parser.add_argument("-shadowmask", help="Final mask")
-    parser.add_argument("-th_rgb",  type=float, action="store", help="Relative shadow threshold for RGB bands (default 0.3)")
-    parser.add_argument("-th_nir",  type=float, action="store", help="Relative shadow threshold for NIR band (default 0.3)")
-    parser.add_argument("-percentile",  help="Percentile value to cut histogram and estimate shadow threshold")
-    parser.add_argument("-binary_opening","--binary_opening", type=int, required=False,  action="store", help="Size of ball structuring element")
-    parser.add_argument("-remove_small_objects","--remove_small_objects", type=int, required=False, action="store",
-                        help="The maximum area, in pixels, of a contiguous object that will be removed")
- 
-    parser.add_argument("-n_workers",type=int, required=False, action="store", dest="n_workers", help="Nb of CPU")
-    parser.add_argument("-watermask",required=False,action="store", dest="watermask",
-                        help="Watermask filename : shadow mask will exclude water areas")
+
     # computation params
-    parser.add_argument("-th_rgb", default=0.3, type=float, action="store",
+    parser.add_argument("-th_rgb", type=float, action="store",
                         help="Relative shadow threshold for RGB bands (default 0.3)")
-    parser.add_argument("-th_nir", default=0.3, type=float, action="store",
+    parser.add_argument("-th_nir", type=float, action="store",
                         help="Relative shadow threshold for NIR band (default 0.3)")
-    parser.add_argument("-percentile", default=2, help="Percentile value to cut histogram and estimate shadow threshold")
-    parser.add_argument("-binary_opening", "--binary_opening", type=int, required=False, default=0, action="store",
+    parser.add_argument("-percentile", help="Percentile value to cut histogram and estimate shadow threshold")
+    parser.add_argument("-binary_opening", "--binary_opening", type=int, required=False, action="store",
                         help="Size of ball structuring element")
-    parser.add_argument("-remove_small_objects", "--small_objects", type=int, required=False, default=0, action="store",
+    parser.add_argument("-remove_small_objects", "--remove_small_objects", type=int, required=False, action="store",
                         help="The maximum area, in pixels, of a contiguous object that will be removed")
+    parser.add_argument("-watermask", required=False, action="store", dest="watermask",
+                        help="Watermask filename : shadow mask will exclude water areas")
+
     # perfo params
-    parser.add_argument("-n_workers", type=int, default=8, required=False, action="store", dest="nb_workers",
-                        help="Nb of CPU")
+    parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
 
     args = parser.parse_args()
 
@@ -140,14 +133,14 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
     
-    with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
         try:
 
             # Store image in shared memory
-            key_phr = eoscale_manager.open_raster(raster_path=args.image)
+            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             local_phr = eoscale_manager.get_array(key_phr)
 
-            ds_phr = rio.open(args.image)
+            ds_phr = rio.open(args.file_vhr)
             nodata = ds_phr.profile["nodata"]
             ds_phr.close()
             
@@ -186,7 +179,7 @@ def main():
             mask_shadow = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_valid_stack[0], key_watermask],
                                                            image_filter = compute_mask,
                                                            filter_parameters=params,
-                                                           generate_output_profiles = eoscale_utils.single_uint8_profile,
+                                                           generate_output_profiles = eo_utils.single_uint8_profile,
                                                            stable_margin= args.remove_small_objects,
                                                            context_manager = eoscale_manager,
                                                            filter_desc= "Shadow mask processing...")          

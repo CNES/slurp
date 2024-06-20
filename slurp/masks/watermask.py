@@ -854,8 +854,8 @@ def main():
             if not args.file_ndvi :
                 key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndvi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               filter_parameters=vars(args),
+                                                               generate_output_profiles = eo_utils.single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -869,8 +869,8 @@ def main():
             if not args.file_ndwi :
                 key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndwi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               filter_parameters=vars(args),
+                                                               generate_output_profiles = eo_utils.single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -931,7 +931,7 @@ def main():
                         f"has_observations{args.pekel_month}.tif",
                     )
                     args.extracted_pekel = args.file_data_pekel
-                    im_pekel = pekel_month_recovery(
+                    im_pekel = aux.pekel_month_recovery(
                         args.file_vhr,
                         args.pekel_month,
                         args.file_data_pekel,
@@ -940,7 +940,7 @@ def main():
                     )
                 else:
                     args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
-                    im_pekel = pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
+                    im_pekel = aux.pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
                 
                 pekel_nodata = 255.0 
                 
@@ -980,7 +980,7 @@ def main():
             ### Image HAND (numpy array, first band)
             if not args.file_hand:
                 args.file_hand = join(dirname(args.watermask), "hand.tif")
-                im_hand = hand_recovery(args.file_vhr, args.file_hand, write=True)  
+                im_hand = aux.hand_recovery(args.file_vhr, args.file_hand, write=True)  
                 hand_nodata = -9999.0    
                 
 
