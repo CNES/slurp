@@ -883,7 +883,7 @@ def main():
             # Get cloud mask if any
             if args.file_cloud_gml:
                 cloud_mask_array = np.logical_not(
-                    cloud_from_gml(args.file_cloud_gml, args.file_vhr)   
+                    aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
                 )
                 #save cloud mask
                 io_utils.save_image(cloud_mask_array,
