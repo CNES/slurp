@@ -224,8 +224,8 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                 
     clustering = apply_map(pred_veg, map_centroid)
 
-    figure_name = splitext(params["file_classif"])[0] + "_centroids_veg.png"
-    if params["save_mode"] == "debug":
+    figure_name = splitext(args.vegetationmask)[0] + "_centroids_veg.png"
+    if args.save_mode == "debug":
         display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
     
     # Analysis texture
@@ -242,11 +242,11 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
             plt.plot(bins_center, values, color="blue")
-            plt.savefig(f"{splitext(params['file_classif'])[0]}_histogram_texture.png")
+            plt.savefig(splitext(args.vegetationmask)[0] + "_histogram_texture.png")   
             plt.close()    
             index_max = np.argmax(bins_center > threshold_max) + 1
             plt.plot(bins_center[:index_max], values[:index_max], color="blue")
-            plt.savefig(f"{splitext(params['file_classif'])[0]}_histogram_texture_cut{params['filter_texture']}.png")
+            plt.savefig(splitext(args.vegetationmask)[0] + "_histogram_texture_cut" + str(args.filter_texture) + ".png")   
             plt.close()
 
         # Clustering
@@ -289,9 +289,9 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                 else:
                     map_centroid.append(MIDDLE_TEXTURE_CODE)
                     
-        figure_name = splitext(params["file_classif"])[0] + "_centroids_texture.png"
-        if params["save_mode"] == "debug":
-            if params["texture_mode"] == "debug":
+        figure_name = splitext(args.vegetationmask)[0] + "_centroids_texture.png"
+        if args.save_mode == "debug":
+            if args.texture_mode == "debug":
                 display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
             else:
                 display_clusters(list_clusters, "mean_texture", "mean_texture", params["nb_clusters_low_veg"],
@@ -367,8 +367,8 @@ def clean_task(input_buffers: list, input_profiles: list, params: dict) -> np.nd
                         
 def main(args=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("im", help="input image (reflectances TOA)")
-    parser.add_argument("file_classif", help="Output classification filename")
+    parser.add_argument("-file_vhr", help="input image (reflectances TOA)")
+    parser.add_argument("-vegetationmask", help="Output classification filename")
     
     # primitives and texture arguments
     parser.add_argument("-red", "--red_band", dest="red", type=int, nargs="?", default=1, help="Red band index")
@@ -438,8 +438,8 @@ def main(args=None):
     args.nodata_phr = ds_phr.nodata
     ds_phr.close()
         
-    with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
-        input_img = eoscale_manager.open_raster(raster_path=args.im)
+    with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
+        input_img = eoscale_manager.open_raster(raster_path = args.file_vhr)
         t0 = time.time()
         
         # Get cloud mask if any
@@ -447,17 +447,16 @@ def main(args=None):
             cloud_mask_array = np.logical_not(
                 aux.cloud_from_gml(args.file_cloud_gml, args.file_phr)
             )
-            # save cloud mask
-            io_utils.save_image(
-                cloud_mask_array,
-                join(dirname(args.file_classif), "nocloud.tif"),
-                args.crs,
-                args.transform,
-                None,
-                args.rpc,
-                tags=args.__dict__,
+            #save cloud mask
+            io_utils.save_image(cloud_mask_array,
+                    join(dirname(args.vegetationmask), "nocloud.tif"),
+                    args.crs,
+                    args.transform,
+                    None,
+                    args.rpc,
+                    tags=args.__dict__,
             )
-            mask_nocloud_key = eoscale_manager.open_raster(raster_path=join(dirname(args.file_classif), "nocloud.tif"))
+            mask_nocloud_key = eoscale_manager.open_raster(raster_path = join(dirname(args.vegetationmask), "nocloud.tif"))   
                 
         else:
             # Get profile from im_phr
@@ -488,7 +487,7 @@ def main(args=None):
                                                      multiproc_context="fork",
                                                      filter_desc="NDVI processing...")
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-                eoscale_manager.write(key=ndvi[0], img_path=args.file_classif.replace(".tif", "_NDVI.tif"))
+                eoscale_manager.write(key = ndvi[0], img_path = args.vegetationmask.replace(".tif","_NDVI.tif"))
         else:
             ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
         
@@ -505,7 +504,7 @@ def main(args=None):
                                                      multiproc_context="fork",
                                                      filter_desc="NDWI processing...")
             if args.save_mode == "all" or args.save_mode == "prim" or args.save_mode == "debug":
-                eoscale_manager.write(key=ndwi[0], img_path=args.file_classif.replace(".tif", "_NDWI.tif"))
+                eoscale_manager.write(key = ndwi[0], img_path = args.vegetationmask.replace(".tif","_NDWI.tif"))
         else:
             ndwi = [eoscale_manager.open_raster(raster_path=args.file_ndwi)]
         
@@ -526,7 +525,7 @@ def main(args=None):
                                                         multiproc_context="fork",
                                                         filter_desc="Texture processing...")
             if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
-                eoscale_manager.write(key=texture[0], img_path=args.file_classif.replace(".tif", "_texture.tif"))
+                eoscale_manager.write(key = texture[0], img_path = args.vegetationmask.replace(".tif","_texture.tif"))
         else:
             texture = [eoscale_manager.open_raster(raster_path=args.file_texture)]
   
@@ -544,7 +543,7 @@ def main(args=None):
                                                        filter_desc="Segmentation processing...")
     
         if args.save_mode == "all" or args.save_mode == "aux" or args.save_mode == "debug":
-            eoscale_manager.write(key=future_seg[0], img_path=args.file_classif.replace(".tif", "_slic.tif"))
+            eoscale_manager.write(key = future_seg[0], img_path = args.vegetationmask.replace(".tif","_slic.tif"))
           
         t_seg = time.time()  
             
@@ -593,7 +592,7 @@ def main(args=None):
                                                       filter_desc="Finalize processing (Cython)...")
         
         if args.save_mode == "debug":
-            eoscale_manager.write(key=final_seg[0], img_path=args.file_classif.replace(".tif", "_before_clean.tif"))
+            eoscale_manager.write(key = final_seg[0], img_path = args.vegetationmask.replace(".tif","_before_clean.tif"))
         
         t_final = time.time()
 
@@ -613,7 +612,7 @@ def main(args=None):
         t_closing = time.time()
         
         # Write output mask
-        eoscale_manager.write(key=final_seg[0], img_path=args.file_classif)
+        eoscale_manager.write(key = final_seg[0], img_path = args.vegetationmask)
         t_write = time.time()
 
         if args.debug:

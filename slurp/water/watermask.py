@@ -9,6 +9,8 @@ import gc
 import time
 import traceback
 from os.path import dirname, join
+from subprocess import call
+import json
 
 import numpy as np
 import rasterio as rio
@@ -447,21 +449,21 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
 
     # Input files
-    group1.add_argument("file_phr", help="PHR filename")
+    group1.add_argument("main_config", help="First JSON file, load basis arguments")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="PHR filename")
 
     group1.add_argument(
         "-pekel",
-        default=None,
         required=False,
         action="store",
-        dest="file_pekel",
+        dest="extracted_pekel",
         help="Pekel filename (computed if missing option)",
     )
 
     group1.add_argument(
         "-thresh_pekel",
         type=float,
-        default=50,
         required=False,
         action="store",
         dest="thresh_pekel",
@@ -471,7 +473,6 @@ def getarguments():
     group1.add_argument(
         "-pekel_month",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="pekel_month",
@@ -480,7 +481,6 @@ def getarguments():
 
     group1.add_argument(
         "-hand",
-        default=None,
         required=False,
         action="store",
         dest="file_hand",
@@ -490,7 +490,6 @@ def getarguments():
     group1.add_argument(
         "-thresh_hand",
         type=int,
-        default=25,
         required=False,
         action="store",
         dest="thresh_hand",
@@ -499,7 +498,6 @@ def getarguments():
 
     group1.add_argument(
         "-ndvi",
-        default=None,
         required=False,
         action="store",
         dest="file_ndvi",
@@ -508,7 +506,6 @@ def getarguments():
 
     group1.add_argument(
         "-ndwi",
-        default=None,
         required=False,
         action="store",
         dest="file_ndwi",
@@ -518,7 +515,6 @@ def getarguments():
     group1.add_argument(
         "-layers",
         nargs="+",
-        default=[],
         required=False,
         action="store",
         dest="files_layers",
@@ -537,7 +533,6 @@ def getarguments():
     group1.add_argument(
         "-filters",
         nargs="+",
-        default=[],
         required=False,
         action="store",
         dest="file_filters",
@@ -548,10 +543,10 @@ def getarguments():
     group2.add_argument("-red", default=1, help="Red band index")
     group2.add_argument("-nir", default=4, help="NIR band index")
     group2.add_argument("-green", default=2, help="green band index")
+
     
     group2.add_argument(
         "-hand_strict",
-        default=False,
         required=False,
         action="store_true",
         dest="hand_strict",
@@ -561,24 +556,15 @@ def getarguments():
     group2.add_argument(
         "-strict_thresh",
         type=float,
-        default=50,
         required=False,
         action="store",
         dest="strict_thresh",
         help="Pekel Threshold float (default is 50)",
     )
-
-    group2.add_argument(
-        "-display",
-        required=False,
-        action="store_true",
-        help="Display images while running",
-    )
     
     group2.add_argument(
-        "-save",
+        "-save_mode",
         choices=["none", "prim", "aux", "all", "debug"],
-        default="none",
         required=False,
         action="store",
         dest="save_mode",
@@ -587,19 +573,17 @@ def getarguments():
 
     group2.add_argument(
         "-simple_ndwi_threshold",
-        default=False,
-        required=False,
-        action="store_true",
+        required = False,
+        action = "store_true",
         dest="simple_ndwi_threshold",
         help="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel"
     )
 
     group2.add_argument(
         "-ndwi_threshold",
-        default=0.1,
-        required=False,
-        type=float,
-        action="store",
+        required = False,
+        type = float,
+        action = "store",
         dest="ndwi_threshold",
         help="Threshold used when Pekel is empty in the area"
     )
@@ -608,7 +592,6 @@ def getarguments():
     group3.add_argument(
         "-samples_method",
         choices=["smart", "grid", "random"],
-        default="grid",
         required=False,
         action="store",
         dest="samples_method",
@@ -618,7 +601,6 @@ def getarguments():
     group3.add_argument(
         "-nb_samples_water",
         type=int,
-        default=2000,
         required=False,
         action="store",
         dest="nb_samples_water",
@@ -628,7 +610,6 @@ def getarguments():
     group3.add_argument(
         "-nb_samples_other",
         type=int,
-        default=10000,
         required=False,
         action="store",
         dest="nb_samples_other",
@@ -637,7 +618,6 @@ def getarguments():
 
     group3.add_argument(
         "-nb_samples_auto",
-        default=False,
         required=False,
         action="store_true",
         dest="nb_samples_auto",
@@ -647,7 +627,6 @@ def getarguments():
     group3.add_argument(
         "-auto_pct",
         type=float,
-        default=0.0002,
         required=False,
         action="store",
         dest="auto_pct",
@@ -657,7 +636,6 @@ def getarguments():
     group3.add_argument(
         "-smart_area_pct",
         type=int,
-        default=50,
         required=False,
         action="store",
         dest="smart_area_pct",
@@ -667,7 +645,6 @@ def getarguments():
     group3.add_argument(
         "-smart_minimum",
         type=int,
-        default=10,
         required=False,
         action="store",
         dest="smart_minimum",
@@ -677,7 +654,6 @@ def getarguments():
     group3.add_argument(
         "-grid_spacing",
         type=int,
-        default=40,
         required=False,
         action="store",
         dest="grid_spacing",
@@ -687,7 +663,6 @@ def getarguments():
     group3.add_argument(
         "-max_depth",
         type=int,
-        default=8,
         required=False,
         action="store",
         dest="max_depth",
@@ -697,7 +672,6 @@ def getarguments():
     group3.add_argument(
         "-nb_estimators",
         type=int,
-        default=100,
         required=False,
         action="store",
         dest="nb_estimators",
@@ -707,7 +681,6 @@ def getarguments():
     group3.add_argument(
         "-n_jobs",
         type=int,
-        default=1,
         required=False,
         action="store",
         dest="nb_jobs",
@@ -717,7 +690,6 @@ def getarguments():
     # Post processing
     group4.add_argument(
         "-no_pekel_filter",
-        default=False,
         required=False,
         action="store_true",
         dest="no_pekel_filter",
@@ -743,15 +715,6 @@ def getarguments():
     )
 
     group4.add_argument(
-        "-diameter_closing",
-        type=int,
-        required=False,
-        action="store",
-        dest="diameter_closing",
-        help="The maximal extension parameter (number of pixels)",
-    )
-
-    group4.add_argument(
         "-area_closing",
         type=int,
         required=False,
@@ -770,12 +733,11 @@ def getarguments():
     )
 
     # Output
-    group5.add_argument("file_classif", help="Output classification filename")
+    group5.add_argument("-watermask", help="Output classification filename")
 
     group5.add_argument(
         "-value_classif",
         type=int,
-        default=1,
         required=False,
         action="store",
         dest="value_classif",
@@ -786,7 +748,6 @@ def getarguments():
     group6.add_argument(
         "-max_mem",
         type=int,
-        default=25,
         required=False,
         action="store",
         dest="max_memory",
@@ -796,10 +757,9 @@ def getarguments():
     group6.add_argument(
         "-n_workers",
         type=int,
-        default=8,
         required=False,
         action="store",
-        dest="nb_workers",
+        dest="n_workers",
         help="Nb of CPU"
     )
 
@@ -809,12 +769,59 @@ def getarguments():
 
 
 def main():
+   
+    argparse_dict = vars(getarguments())
+    # Get the input file path from the command line argument
+    arg_file_path_1 = argparse_dict["main_config"]
 
-    args = getarguments()
-    print(args)    
-    with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
-        try:
+    # Read the JSON data from the input file
+    try:
+        with open(arg_file_path_1, 'r') as json_file1:
+            full_args=json.load(json_file1)
+            argsdict = full_args['input']
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
+            argsdict.update(full_args['water'])
             
+            # a effacer après migration du pre-processing:
+            argsdict.update(full_args['pre_process'])
+
+    except FileNotFoundError:
+        print(f"File {arg_file_path} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
+
+    if argparse_dict["user_config"] :   
+    # Get the input file path from the command line argument
+        arg_file_path_2 = argparse_dict["user_config"]
+
+        # Read the JSON data from the input file
+        try:
+            with open(arg_file_path_2, 'r') as json_file2:
+                full_args=json.load(json_file2)
+                for k in full_args.keys():
+                    if k in ['input','aux_layers','masks','ressources', 'water']:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {arg_file_path} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
+
+    print("JSON data loaded:")
+    print(argsdict)
+    args = argparse.Namespace(**argsdict)  
+    
+    with eom.EOContextManager(nb_workers = args.n_workers, tile_mode = True) as eoscale_manager:
+       
+        try:
+
             t0 = time.time()
             
             ################ Build stack with all layers #######
@@ -825,8 +832,9 @@ def main():
             else:
                 names_stack = ["B", "G", "R", "NIR", "NDVI", "NDWI"]
             
-            # Image PHR (numpy array, 4 bands, band number is first dimension)
-            ds_phr = rio.open(args.file_phr)
+            # Image PHR (numpy array, 4 bands, band number is first dimension),
+            ds_phr = rio.open(args.file_vhr)
+            ds_phr_profile=ds_phr.profile
             io_utils.print_dataset_infos(ds_phr, "PHR")
             args.nodata_phr = ds_phr.nodata
            
@@ -840,54 +848,53 @@ def main():
             del ds_phr
             
             # Store image in shared memmory
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_phr)
+            key_phr = eoscale_manager.open_raster(raster_path = args.file_vhr)
             
             ### Compute NDVI 
-            if args.file_ndvi is None:
-                key_ndvi = eoexe.n_images_to_m_images_filter(inputs=[key_phr],
-                                                             image_filter=compute_ndvi,
-                                                             filter_parameters=vars(args),
-                                                             generate_output_profiles=eo_utils.single_int16_profile,
-                                                             stable_margin=0,
-                                                             context_manager=eoscale_manager,
-                                                             multiproc_context="fork",
-                                                             filter_desc="NDVI processing...")
-                if args.save_mode != "none" and args.save_mode != "aux":
-                    eoscale_manager.write(key=key_ndvi[0], img_path=args.file_classif.replace(".tif", "_NDVI.tif"))
+            if not args.file_ndvi :
+                key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
+                                                               image_filter = compute_ndvi,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDVI processing...")
+                if (args.save_mode != "none" and args.save_mode != "aux"):
+                    eoscale_manager.write(key = key_ndvi[0], img_path = args.watermask.replace(".tif","_NDVI.tif"))
             else:
                 key_ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
             
             ### Compute NDWI        
-            if args.file_ndwi is None:
-                key_ndwi = eoexe.n_images_to_m_images_filter(inputs=[key_phr],
-                                                             image_filter=compute_ndwi,
-                                                             filter_parameters=vars(args),
-                                                             generate_output_profiles=eo_utils.single_int16_profile,
-                                                             stable_margin=0,
-                                                             context_manager=eoscale_manager,
-                                                             multiproc_context="fork",
-                                                             filter_desc="NDWI processing...")
-                if args.save_mode != "none" and args.save_mode != "aux":
-                    eoscale_manager.write(key=key_ndwi[0], img_path=args.file_classif.replace(".tif", "_NDWI.tif"))
+            if not args.file_ndwi :
+                key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
+                                                               image_filter = compute_ndwi,
+                                                               filter_parameters=args,
+                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               stable_margin= 0,
+                                                               context_manager = eoscale_manager,
+                                                               multiproc_context= "fork",
+                                                               filter_desc= "NDWI processing...")         
+                if (args.save_mode != "none" and args.save_mode != "aux"):
+                    eoscale_manager.write(key = key_ndwi[0], img_path = args.watermask.replace(".tif","_NDWI.tif"))
             else:
                 key_ndwi = [eoscale_manager.open_raster(raster_path =args.file_ndwi)]
             
             # Get cloud mask if any
             if args.file_cloud_gml:
                 cloud_mask_array = np.logical_not(
-                    aux.cloud_from_gml(args.file_cloud_gml, args.file_phr)
+                    cloud_from_gml(args.file_cloud_gml, args.file_vhr)   
                 )
-                # save cloud mask
-                io_utils.save_image(
-                    cloud_mask_array,
-                    join(dirname(args.file_classif), "nocloud.tif"),
+                #save cloud mask
+                io_utils.save_image(cloud_mask_array,
+                    join(dirname(args.watermask), "nocloud.tif"),
                     args.crs,
                     args.transform,
                     None,
                     args.rpc,
                     tags=args.__dict__,
                 )
-                mask_nocloud_key = eoscale_manager.open_raster(raster_path=join(dirname(args.file_classif), "nocloud.tif"))
+                mask_nocloud_key = eoscale_manager.open_raster(raster_path = join(dirname(args.watermask), "nocloud.tif"))   
                 
             else:
                 # Get profile from im_phr
@@ -914,33 +921,35 @@ def main():
             write = False if (args.save_mode == "none" or args.save_mode == "prim") else True
     
             #### Image Pekel recovery (numpy array, first band)
-            if not args.file_pekel:
+            if not args.extracted_pekel:
                 if 1 <= args.pekel_month <= 12:
                     args.file_data_pekel = join(
-                        dirname(args.file_classif), f"pekel{args.pekel_month}.tif"
+                        dirname(args.watermask), f"pekel{args.pekel_month}.tif"
                     )
                     args.file_mask_pekel = join(
-                        dirname(args.file_classif),
+                        dirname(args.watermask),
                         f"has_observations{args.pekel_month}.tif",
                     )
-                    args.file_pekel = args.file_data_pekel
-                    im_pekel = aux.pekel_month_recovery(
-                        args.file_phr,
+                    args.extracted_pekel = args.file_data_pekel
+                    im_pekel = pekel_month_recovery(
+                        args.file_vhr,
                         args.pekel_month,
                         args.file_data_pekel,
                         args.file_mask_pekel,
                         write=True,
                     )
                 else:
-                    args.file_pekel = join(dirname(args.file_classif), "pekel.tif")
-                    im_pekel = aux.pekel_recovery(args.file_phr, args.file_pekel, write=True)
+                    args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
+                    im_pekel = pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
+                
+                pekel_nodata = 255.0 
                 
                 pekel_nodata = 255.0
                 
-            ds_ref = rio.open(args.file_pekel)
+            ds_ref = rio.open(args.extracted_pekel)
             io_utils.print_dataset_infos(ds_ref, "PEKEL")
             pekel_nodata = ds_ref.nodata  # contradiction
-            key_pekel = eoscale_manager.open_raster(raster_path=args.file_pekel)
+            key_pekel=eoscale_manager.open_raster(raster_path =args.extracted_pekel)
             ds_ref.close()
             del ds_ref
         
@@ -970,9 +979,10 @@ def main():
             
             ### Image HAND (numpy array, first band)
             if not args.file_hand:
-                args.file_hand = join(dirname(args.file_classif), "hand.tif")
-                im_hand = aux.hand_recovery(args.file_phr, args.file_hand, write=True)
-                hand_nodata = -9999.0
+                args.file_hand = join(dirname(args.watermask), "hand.tif")
+                im_hand = hand_recovery(args.file_vhr, args.file_hand, write=True)  
+                hand_nodata = -9999.0    
+                
 
             ds_hand = rio.open(args.file_hand)
             io_utils.print_dataset_infos(ds_hand, "HAND")
@@ -1074,19 +1084,19 @@ def main():
                                                            filter_desc="Post processing...")
 
             # Save predict and classif image
-            final_predict = eoscale_manager.write(key=im_classif[0], img_path=join(dirname(args.file_classif), "predict.tif"))
-            final_classif = eoscale_manager.write(key=im_classif[1], img_path=args.file_classif)
+            final_predict = eoscale_manager.write(key=im_classif[0], img_path = join(dirname(args.watermask), "predict.tif"))
+            final_classif = eoscale_manager.write(key=im_classif[1], img_path = args.watermask)
 
             end_time = time.time()
 
-            print("**** Water mask for "+str(args.file_phr)+" (saved as "+str(args.file_classif)+") ****")
+            print("**** Water mask for "+str(args.file_vhr)+" (saved as "+str(args.watermask)+") ****")
             print("Total time (user)       :\t"+convert_time(end_time-t0))
             print("- Build_stack           :\t"+convert_time(time_stack-t0))
             print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
             print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
             print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
             print("***")
-            print("Max workers used for parallel tasks "+str(args.nb_workers))        
+            print("Max workers used for parallel tasks "+str(args.n_workers))        
               
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

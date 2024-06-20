@@ -9,6 +9,8 @@ import argparse
 import rasterio as rio
 import numpy as np
 import traceback
+import sys
+import json
 
 from skimage.morphology import binary_opening, remove_small_objects, disk
 
@@ -58,11 +60,19 @@ def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.
 
 def getarguments():
     parser = argparse.ArgumentParser()
-    # inputs and outputs
-    parser.add_argument("image", help="Input 4 bands VHR image")
-    parser.add_argument("mask", help="Final mask")
-    # facultative files
-    parser.add_argument("-watermask", default=None, required=False, action="store", dest="file_watermask",
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    parser.add_argument("-shadowmask", help="Final mask")
+    parser.add_argument("-th_rgb",  type=float, action="store", help="Relative shadow threshold for RGB bands (default 0.3)")
+    parser.add_argument("-th_nir",  type=float, action="store", help="Relative shadow threshold for NIR band (default 0.3)")
+    parser.add_argument("-percentile",  help="Percentile value to cut histogram and estimate shadow threshold")
+    parser.add_argument("-binary_opening","--binary_opening", type=int, required=False,  action="store", help="Size of ball structuring element")
+    parser.add_argument("-remove_small_objects","--remove_small_objects", type=int, required=False, action="store",
+                        help="The maximum area, in pixels, of a contiguous object that will be removed")
+ 
+    parser.add_argument("-n_workers",type=int, required=False, action="store", dest="n_workers", help="Nb of CPU")
+    parser.add_argument("-watermask",required=False,action="store", dest="watermask",
                         help="Watermask filename : shadow mask will exclude water areas")
     # computation params
     parser.add_argument("-th_rgb", default=0.3, type=float, action="store",
@@ -84,7 +94,51 @@ def getarguments():
 
 
 def main():
-    args = getarguments()
+   
+    argparse_dict = vars(getarguments())
+    # Get the input file path from the command line argument
+    arg_file_path_1 = argparse_dict["main_config"]
+
+    # Read the JSON data from the input file
+    try:
+        with open(arg_file_path_1, 'r') as json_file1:
+            full_args=json.load(json_file1)
+            argsdict = full_args['input']
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
+            argsdict.update(full_args['shadows'])
+
+    except FileNotFoundError:
+        print(f"File {arg_file_path} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
+
+    if argparse_dict["user_config"] :   
+    # Get the input file path from the command line argument
+        arg_file_path_2 = argparse_dict["user_config"]
+
+        # Read the JSON data from the input file
+        try:
+            with open(arg_file_path_2, 'r') as json_file2:
+                full_args=json.load(json_file2)
+                for k in full_args.keys():
+                    if k in ['input','aux_layers','masks','ressources', 'shadows']:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {arg_file_path} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
+
+    print("JSON data loaded:")
+    print(argsdict)
+    args = argparse.Namespace(**argsdict)
     
     with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
         try:
@@ -109,15 +163,10 @@ def main():
             max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
             th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
             
-            params = {
-                "thresholds": th_bands,
-                "binary_opening": args.binary_opening,
-                "small_objects": args.small_objects,
-                "nodata": nodata
-            }
+            params = {"thresholds":th_bands, "binary_opening":args.binary_opening, "small_objects":args.remove_small_objects, "nodata":nodata}
 
-            if args.file_watermask:
-                key_watermask = eoscale_manager.open_raster(raster_path=args.file_watermask)
+            if args.watermask:
+                key_watermask= eoscale_manager.open_raster(raster_path =args.watermask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -134,15 +183,15 @@ def main():
                                                                 multiproc_context="fork",
                                                                 filter_desc="Valid stack processing...")
             
-            mask_shadow = eoexe.n_images_to_m_images_filter(inputs=[key_phr, key_valid_stack[0], key_watermask],
-                                                            image_filter=compute_mask,
-                                                            filter_parameters=params,
-                                                            generate_output_profiles=eo_utils.single_uint8_profile,
-                                                            stable_margin=args.small_objects,
-                                                            context_manager=eoscale_manager,
-                                                            filter_desc="Shadow mask processing...")
+            mask_shadow = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_valid_stack[0], key_watermask],
+                                                           image_filter = compute_mask,
+                                                           filter_parameters=params,
+                                                           generate_output_profiles = eoscale_utils.single_uint8_profile,
+                                                           stable_margin= args.remove_small_objects,
+                                                           context_manager = eoscale_manager,
+                                                           filter_desc= "Shadow mask processing...")          
 
-            eoscale_manager.write(key=mask_shadow[0], img_path=args.mask)
+            eoscale_manager.write(key = mask_shadow[0], img_path = args.shadowmask)
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
