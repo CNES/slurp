@@ -1,0 +1,28 @@
+{"input":
+	{
+    "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Demo/xt_PHR.tif",
+	"pekel" : "original_file_path.tiff"
+	},
+	
+"aux_layers":
+	{
+	"extracted_pekel" : false,
+	"file_ndvi": false, 
+	"file_ndwi":false, 
+	"valid_stack":false,
+	"file_cloud_gml": false,
+	"texture":false,
+    "file_hand":false
+    },
+"masks":
+     {
+	"watermask": "../out_slurp/watermask.tif",
+	"urbanmask": false,
+	"vegetationmask":false ,
+	"shadowmask":"../out_slurp/shadowmask.tif"
+	},
+ "shadows":
+	{
+     "watermask":false
+    }
+}
