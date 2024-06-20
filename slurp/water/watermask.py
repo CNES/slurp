@@ -639,8 +639,8 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
 
     # Input files
-    group1.add_argument("basis_json", help="First JSON file, load basis arguments")
-    group1.add_argument("-overload_json", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("main_config", help="First JSON file, load basis arguments")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="PHR filename")
 
     group1.add_argument(
@@ -961,15 +961,16 @@ def main():
    
     argparse_dict = vars(getarguments())
     # Get the input file path from the command line argument
-    arg_file_path_1 = argparse_dict["basis_json"]
+    arg_file_path_1 = argparse_dict["main_config"]
 
     # Read the JSON data from the input file
     try:
         with open(arg_file_path_1, 'r') as json_file1:
             full_args=json.load(json_file1)
             argsdict = full_args['input']
-            argsdict.update(full_args['layers'])
-            argsdict.update(full_args['machine'])
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
             argsdict.update(full_args['water'])
             
             # a effacer après migration du pre-processing:
@@ -980,17 +981,16 @@ def main():
     except json.JSONDecodeError:
         print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
 
-    if argparse_dict["overload_json"] :   
+    if argparse_dict["user_config"] :   
     # Get the input file path from the command line argument
-        arg_file_path_2 = argparse_dict["overload_json"]
+        arg_file_path_2 = argparse_dict["user_config"]
 
         # Read the JSON data from the input file
         try:
             with open(arg_file_path_2, 'r') as json_file2:
                 full_args=json.load(json_file2)
                 for k in full_args.keys():
-                    if k in ['input','layers', 'machine', 'water']:
-                        print(k)
+                    if k in ['input','aux_layers','masks','ressources', 'water']:
                         argsdict.update(full_args[k])
 
         except FileNotFoundError:
@@ -998,9 +998,10 @@ def main():
         except json.JSONDecodeError:
             print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
 
-    #Overload with manually passed arguments
-    #print(argparse_dict)
-    #argsdict.update(argparse_dict)
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
 
     print("JSON data loaded:")
     print(argsdict)

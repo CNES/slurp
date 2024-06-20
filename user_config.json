@@ -4,7 +4,7 @@
 	"pekel" : "original_file_path.tiff"
 	},
 	
-"layers":
+"aux_layers":
 	{
 	"extracted_pekel" : false,
 	"file_ndvi": false, 
@@ -12,9 +12,17 @@
 	"valid_stack":false,
 	"file_cloud_gml": false,
 	"texture":false,
-    "file_hand":false,
-	"watermask": "out_slurp/watermask.tif",
+    "file_hand":false
+    },
+"masks":
+     {
+	"watermask": "../out_slurp/watermask.tif",
 	"urbanmask": false,
 	"vegetationmask":false ,
-	"shadowmask":"out_slurp/shadowmask.tif"
-	}
+	"shadowmask":"../out_slurp/shadowmask.tif"
+	},
+ "shadows":
+	{
+     "watermask":false
+    }
+}
