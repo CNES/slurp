@@ -113,3 +113,6 @@ ENV/
 
 # Swap file
 *.swp
+
+# validation tests
+out/
