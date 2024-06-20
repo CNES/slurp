@@ -126,10 +126,11 @@ def main():
         try:
             with open(arg_file_path_2, 'r') as json_file2:
                 full_args=json.load(json_file2)
-                argsdict.update(full_args['input'])
-                argsdict.update(full_args['layers'])
-                argsdict.update(full_args['machine'])
-                argsdict.update(full_args['shadows'])
+                for k in full_args.keys():
+                    if k in ['input','layers', 'machine', 'shadows']:
+                        print(k)
+                        argsdict.update(full_args[k])
+
 
         except FileNotFoundError:
             print(f"File {arg_file_path} not found.")
