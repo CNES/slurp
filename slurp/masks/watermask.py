@@ -769,7 +769,7 @@ def getarguments():
 
 
 def main():
-   
+
     argparse_dict = vars(getarguments())
     # Get the input file path from the command line argument
     arg_file_path_1 = argparse_dict["main_config"]
@@ -854,8 +854,8 @@ def main():
             if not args.file_ndvi :
                 key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndvi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               filter_parameters=vars(args),
+                                                               generate_output_profiles = eo_utils.single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -869,8 +869,8 @@ def main():
             if not args.file_ndwi :
                 key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndwi,
-                                                               filter_parameters=args,
-                                                               generate_output_profiles = eoscale_utils.single_int16_profile,
+                                                               filter_parameters=vars(args),
+                                                               generate_output_profiles = eo_utils.single_int16_profile,
                                                                stable_margin= 0,
                                                                context_manager = eoscale_manager,
                                                                multiproc_context= "fork",
@@ -883,7 +883,7 @@ def main():
             # Get cloud mask if any
             if args.file_cloud_gml:
                 cloud_mask_array = np.logical_not(
-                    cloud_from_gml(args.file_cloud_gml, args.file_vhr)   
+                    aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
                 )
                 #save cloud mask
                 io_utils.save_image(cloud_mask_array,
@@ -931,7 +931,7 @@ def main():
                         f"has_observations{args.pekel_month}.tif",
                     )
                     args.extracted_pekel = args.file_data_pekel
-                    im_pekel = pekel_month_recovery(
+                    im_pekel = aux.pekel_month_recovery(
                         args.file_vhr,
                         args.pekel_month,
                         args.file_data_pekel,
@@ -940,11 +940,9 @@ def main():
                     )
                 else:
                     args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
-                    im_pekel = pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
+                    im_pekel = aux.pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
                 
                 pekel_nodata = 255.0 
-                
-                pekel_nodata = 255.0
                 
             ds_ref = rio.open(args.extracted_pekel)
             io_utils.print_dataset_infos(ds_ref, "PEKEL")
@@ -966,21 +964,23 @@ def main():
                                                            filter_desc="Pekel valid mask processing...")
             
             # If user wants a simple threshold on NDWI values, we don't select samples and launch learning/prediction step
-            select_samples = not(args.simple_ndwi_threshold)
+            # If there are not enough water samples, we return a void mask
+            not_enough_water_samples = False
             
             ### Check pekel mask
             # - if there are too few values : we threshold NDWI to detect water areas 
             # - if there are even no "supposed water areas" : stop machine learning process (flag select_samples=False)
             local_mask_pekel = eoscale_manager.get_array(mask_pekel[0])
-            if np.count_nonzero(local_mask_pekel) < 2000:
+            if np.count_nonzero(local_mask_pekel) < args.nb_samples_water:
                 # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
                 # Alternative would be to select samples in a thresholded NDWI..
-                select_samples = False
-            
+                not_enough_water_samples = True
+                print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
+                
             ### Image HAND (numpy array, first band)
             if not args.file_hand:
                 args.file_hand = join(dirname(args.watermask), "hand.tif")
-                im_hand = hand_recovery(args.file_vhr, args.file_hand, write=True)  
+                im_hand = aux.hand_recovery(args.file_vhr, args.file_hand, write=True)  
                 hand_nodata = -9999.0    
                 
 
@@ -1002,24 +1002,39 @@ def main():
                                                           context_manager=eoscale_manager,
                                                           multiproc_context="fork",
                                                           filter_desc="Hand valid mask processing...")
-            
+
+            # Flag to command post-process
+            do_post_process = True
+
             ################ Build samples ##################
-            if not select_samples:
-                # Not enough supposed water areas : skip sample selection
-                # --> we force NDWI threshold and deactivate Pekel filter,
-                # otherwise it would remove afain supposed areas
-                args.simple_ndwi_threshold = True
-                args.no_pekel_filter = True
+            if args.simple_ndwi_threshold:
+                # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
                 print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi[0], valid_stack_key[0]],
                                                                 image_filter=utils.compute_mask_threshold,
                                                                 filter_parameters={"threshold": 1000 * args.ndwi_threshold},
                                                                 context_manager=eoscale_manager,
-                                                                generate_output_profiles=eo_utils.single_float_profile,
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 multiproc_context="fork",
                                                                 filter_desc="Simple NDWI threshold")
+
                 time_random_forest = time.time() 
-                time_samples = time_random_forest           
+                time_samples = time_random_forest
+                do_post_process = False
+                
+            elif not_enough_water_samples:
+                # We compute a void mask (0 every where, except for NO DATA values)
+                # Tips : we threshold NDWI > 1000 : no pixel should be detected.
+                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi[0], valid_stack_key[0]],
+                                                                image_filter=utils.compute_mask_threshold,
+                                                                filter_parameters={"threshold": 1000},
+                                                                context_manager=eoscale_manager,
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
+                                                                multiproc_context="fork",
+                                                                filter_desc="Void mask")
+
+                do_post_process = False
+                
             else:
                 # Nominal case : select samples, train, predict
                 #
@@ -1066,35 +1081,42 @@ def main():
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
-            
-            ######### Post_processing  ################
-            file_filters = [
-                eoscale_manager.open_raster(raster_path=args.file_filters[i])
-                for i in range(len(args.file_filters))
-            ]
 
-            inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], valid_stack_key[0]] + file_filters
-            im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
-                                                           image_filter=post_process,
-                                                           filter_parameters=vars(args),
-                                                           generate_output_profiles=eo_utils.double_int_profile,
-                                                           stable_margin=3,
-                                                           context_manager=eoscale_manager,
-                                                           multiproc_context="fork",
-                                                           filter_desc="Post processing...")
+            if do_post_process:
+                ######### Post_processing  ################
+                file_filters = [
+                    eoscale_manager.open_raster(raster_path=args.file_filters[i])
+                    for i in range(len(args.file_filters))
+                ]
 
-            # Save predict and classif image
-            final_predict = eoscale_manager.write(key=im_classif[0], img_path = join(dirname(args.watermask), "predict.tif"))
-            final_classif = eoscale_manager.write(key=im_classif[1], img_path = args.watermask)
+                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], valid_stack_key[0]] + file_filters
+                im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
+                                                               image_filter=post_process,
+                                                               filter_parameters=vars(args),
+                                                               generate_output_profiles=eo_utils.double_int_profile,
+                                                               stable_margin=3,
+                                                               context_manager=eoscale_manager,
+                                                               multiproc_context="fork",
+                                                               filter_desc="Post processing...")
 
+                # Save predict and classif image
+                final_predict = eoscale_manager.write(key=im_classif[0], img_path=join(dirname(args.watermask), "predict.tif"))
+                final_classif = eoscale_manager.write(key=im_classif[1], img_path=args.watermask)
+            else:
+                # no post-process : we save the same mask with two different names for compatibility purpose
+                final_predict = eoscale_manager.write(key=key_predict[0], img_path=join(dirname(args.watermask), "predict.tif"))
+                final_classif = eoscale_manager.write(key=key_predict[0], img_path=args.watermask)
+                
             end_time = time.time()
 
             print("**** Water mask for "+str(args.file_vhr)+" (saved as "+str(args.watermask)+") ****")
             print("Total time (user)       :\t"+convert_time(end_time-t0))
             print("- Build_stack           :\t"+convert_time(time_stack-t0))
-            print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
-            print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
-            print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+            if not(args.simple_ndwi_threshold) and not(not_enough_water_samples):
+                print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
+                print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+            if post_process:
+                print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
             print("***")
             print("Max workers used for parallel tasks "+str(args.n_workers))        
               
