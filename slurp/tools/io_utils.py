@@ -5,6 +5,7 @@ import rasterio as rio
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def print_dataset_infos(dataset, prefix=""):
     """Print information about rasterio dataset."""
 
@@ -114,6 +115,7 @@ def show_images(image1, title1, image2, title2, **kwargs):
     fig.tight_layout()
     plt.show()
 
+
 def show_histograms(image1, title1, image2, title2, **kwargs):
     """Compute and show 2 histograms with matplotlib."""
 
@@ -183,4 +185,3 @@ def show_histograms4(
     fig.tight_layout()
     plt.legend()
     plt.show()
-    

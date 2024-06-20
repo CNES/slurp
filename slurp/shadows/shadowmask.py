@@ -6,32 +6,30 @@ This script stacks existing masks
 """
 
 import argparse
-import rasterio
+import rasterio as rio
 import numpy as np
-import os
 import traceback
 import sys
 import json
 
-from skimage.morphology import binary_closing, binary_opening, binary_erosion, remove_small_objects, disk, remove_small_holes
+from skimage.morphology import binary_opening, remove_small_objects, disk
 
-from slurp.tools import eoscale_utils
+from slurp.tools import eoscale_utils as eo_utils, utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
-NO_DATA=255
+NO_DATA = 255
 
-def compute_mask(input_buffers: list, 
-                 input_profiles: list, 
-                 params: dict) -> np.ndarray :
-    
+
+def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
     """
-    input_buffers : 
-    0 -> image
-    1 -> valid_stack
-    2 -> watermask
+    Compute shadow mask
+
+    :param list input_buffers: 0 -> image, 1 -> valid_stack, 2 -> watermask
+    :param list input_profiles: image profiles (not used but necessary for eoscale)
+    :param dict params: must contain the keys "thresholds", "binary_opening" and "small_objects"
+    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    
     raw_shadow_mask = np.zeros(input_buffers[0][0].shape, dtype=int)
     raw_shadow_mask.fill(1)
     
@@ -48,8 +46,8 @@ def compute_mask(input_buffers: list,
     if params["small_objects"] > 0:
         final_shadow_mask = remove_small_objects(final_shadow_mask, params["small_objects"], connectivity=2)
         
-    raw_shadow_mask = np.where(raw_shadow_mask,1,0)
-    final_shadow_mask = np.where(final_shadow_mask,1,0)
+    raw_shadow_mask = np.where(raw_shadow_mask, 1, 0)
+    final_shadow_mask = np.where(final_shadow_mask, 1, 0)
 
     # Sum between raw shadows and refined shadows
     final_shadow_mask += raw_shadow_mask
@@ -59,22 +57,6 @@ def compute_mask(input_buffers: list,
     
     return final_shadow_mask
 
-def single_bool_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile['count']=1
-    profile['dtype']=bool
-    profile["compress"] = "lzw"
-    
-    return profile
-
-def compute_valid_stack(inputBuffer: list, 
-            input_profiles: list, 
-            args: dict) -> list:
-    #inputBuffer = [im_vhr]
-    # Valid_phr (boolean numpy array, True = valid data, False = no data)
-    valid_phr = np.logical_and.reduce(inputBuffer[0] != args["nodata"], axis=0)
-        
-    return valid_phr
 
 def getarguments():
     parser = argparse.ArgumentParser()
@@ -92,11 +74,24 @@ def getarguments():
     parser.add_argument("-n_workers",type=int, required=False, action="store", dest="n_workers", help="Nb of CPU")
     parser.add_argument("-watermask",required=False,action="store", dest="watermask",
                         help="Watermask filename : shadow mask will exclude water areas")
-    
+    # computation params
+    parser.add_argument("-th_rgb", default=0.3, type=float, action="store",
+                        help="Relative shadow threshold for RGB bands (default 0.3)")
+    parser.add_argument("-th_nir", default=0.3, type=float, action="store",
+                        help="Relative shadow threshold for NIR band (default 0.3)")
+    parser.add_argument("-percentile", default=2, help="Percentile value to cut histogram and estimate shadow threshold")
+    parser.add_argument("-binary_opening", "--binary_opening", type=int, required=False, default=0, action="store",
+                        help="Size of ball structuring element")
+    parser.add_argument("-remove_small_objects", "--small_objects", type=int, required=False, default=0, action="store",
+                        help="The maximum area, in pixels, of a contiguous object that will be removed")
+    # perfo params
+    parser.add_argument("-n_workers", type=int, default=8, required=False, action="store", dest="nb_workers",
+                        help="Nb of CPU")
 
     args = parser.parse_args()
 
     return args
+
 
 def main():
    
@@ -145,29 +140,27 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
     
-### Start processing    
-
-    with eom.EOContextManager(nb_workers = args.n_workers, tile_mode = True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
         try:
 
-            # Store image in shared memmory
-            key_phr = eoscale_manager.open_raster(raster_path = args.file_vhr)
+            # Store image in shared memory
+            key_phr = eoscale_manager.open_raster(raster_path=args.image)
             local_phr = eoscale_manager.get_array(key_phr)
 
-            ds_phr = rasterio.open(args.file_vhr)
+            ds_phr = rio.open(args.image)
             nodata = ds_phr.profile["nodata"]
+            ds_phr.close()
             
             # Compute threshold for each band
             th_bands = np.zeros(4)
             for cpt in range(3):
-                min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt]!=nodata)],args.percentile)
-                max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt]!=nodata)], 100-args.percentile)
+                min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
+                max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
                 th_bands[cpt]  = min_band + args.th_rgb * (max_percentile - min_band)
-            
 
             cpt = 3
-            min_nir = np.percentile(local_phr[cpt][np.where(local_phr[cpt]!=nodata)],args.percentile)
-            max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt]!=nodata)], 100-args.percentile)
+            min_nir = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
+            max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
             th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
             
             params = {"thresholds":th_bands, "binary_opening":args.binary_opening, "small_objects":args.remove_small_objects, "nodata":nodata}
@@ -180,16 +173,15 @@ def main():
                 profile["dtype"] = np.uint8
                 key_watermask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_watermask).fill(0)
-
             
-            key_valid_stack = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                                image_filter = compute_valid_stack,   
+            key_valid_stack = eoexe.n_images_to_m_images_filter(inputs=[key_phr],
+                                                                image_filter=utils.compute_valid_stack,
                                                                 filter_parameters=params,
-                                                                generate_output_profiles = single_bool_profile,
-                                                                stable_margin= 0,
-                                                                context_manager = eoscale_manager,
-                                                                multiproc_context= "fork",
-                                                                filter_desc= "Valid stack processing...")
+                                                                generate_output_profiles=eo_utils.single_bool_profile,
+                                                                stable_margin=0,
+                                                                context_manager=eoscale_manager,
+                                                                multiproc_context="fork",
+                                                                filter_desc="Valid stack processing...")
             
             mask_shadow = eoexe.n_images_to_m_images_filter(inputs = [key_phr, key_valid_stack[0], key_watermask],
                                                            image_filter = compute_mask,
@@ -220,5 +212,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
