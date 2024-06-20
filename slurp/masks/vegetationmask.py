@@ -224,8 +224,8 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                 
     clustering = apply_map(pred_veg, map_centroid)
 
-    figure_name = splitext(args.vegetationmask)[0] + "_centroids_veg.png"
-    if args.save_mode == "debug":
+    figure_name = splitext(params["vegetationmask"])[0] + "_centroids_veg.png"
+    if params["save_mode"] == "debug":
         display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9-nb_clusters_veg), figure_name)
     
     # Analysis texture
@@ -242,11 +242,11 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
             plt.plot(bins_center, values, color="blue")
-            plt.savefig(splitext(args.vegetationmask)[0] + "_histogram_texture.png")   
+            plt.savefig(splitext(params["vegetationmask"])[0] + "_histogram_texture.png")   
             plt.close()    
             index_max = np.argmax(bins_center > threshold_max) + 1
             plt.plot(bins_center[:index_max], values[:index_max], color="blue")
-            plt.savefig(splitext(args.vegetationmask)[0] + "_histogram_texture_cut" + str(args.filter_texture) + ".png")   
+            plt.savefig(splitext(params["vegetationmask"])[0] + "_histogram_texture_cut" + str(params["filter_texture"]) + ".png")   
             plt.close()
 
         # Clustering
@@ -289,9 +289,10 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                 else:
                     map_centroid.append(MIDDLE_TEXTURE_CODE)
                     
-        figure_name = splitext(args.vegetationmask)[0] + "_centroids_texture.png"
-        if args.save_mode == "debug":
-            if args.texture_mode == "debug":
+
+        figure_name = splitext(params["vegetationmask"])[0] + "_centroids_texture.png"
+        if params["save_mode"] == "debug":
+            if params["texture_mode"] == "debug":
                 display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
             else:
                 display_clusters(list_clusters, "mean_texture", "mean_texture", params["nb_clusters_low_veg"],
@@ -434,7 +435,7 @@ def main(args=None):
     args = parser.parse_args(args)
     print("DBG > arguments parsed " + str(args))
                         
-    ds_phr = rio.open(args.im)
+    ds_phr = rio.open(args.file_vhr)
     args.nodata_phr = ds_phr.nodata
     ds_phr.close()
         

@@ -1,25 +1,25 @@
 {"input":
 	{
     "file_vhr": "absolute_path_to_image.tif",
-	"pekel" : "original_file_path.tif"
+	"pekel" : null
 	},
 	
 "aux_layers":
 	{
-	"extracted_pekel":"file_pre_processed_used_in_mask.tif",
-	"file_ndvi": "file_pre_processed_used_in_mask.tif", 
-	"file_ndwi":"file_pre_processed_used_in_mask.tif", 
-	"valid_stack":"file_pre_processed_used_in_mask.tif",
-	"file_cloud_gml":"file_pre_processed_used_in_mask.tif",
-	"file_texture":"file_pre_processed_used_in_mask.tif",
-    "file_hand":"file_pre_processed_used_in_mask.tif"
+	"extracted_pekel": null,
+	"file_ndvi": null, 
+	"file_ndwi": null, 
+	"valid_stack": null,
+	"file_cloud_gml": null,
+	"file_texture": null,
+    "file_hand": null
 	},
 "masks":
  {
-	"watermask":"out_slurp/watermask.tif",
-	"urbanmask": "out_slurp/urbanmask.tif",
-	"vegetationmask":"out_slurp/vegetationmask.tif" ,
-	"shadowmask":"out_slurp/shadowmask.tif" 
+	"watermask": null,
+	"urbanmask": null,
+	"vegetationmask": null,
+	"shadowmask": null 
  },
 "ressources":
 	{
@@ -44,11 +44,11 @@
 	},
 "shadows":
 	{
-	    "th_rgb":0.3,
-	    "th_nir":0.3,
+	    "th_rgb":0.2,
+	    "th_nir":0.2,
 	    "percentile":2,
-	    "binary_opening":0,
-	    "remove_small_objects":0,
+	    "binary_opening":2,
+	    "remove_small_objects":100,
 	    "absolute_threshold":false
 	},
 "urban":
@@ -87,9 +87,9 @@
     "nb_estimators":100,
     "no_pekel_filter":false,
     "hand_filter": false,
-    "binary_closing":false,
+    "binary_closing": 3,
     "area_closing":false,
-    "remove_small_holes":false,
+    "remove_small_holes": 50,
     "value_classif":1 
         },
 "stack":
