@@ -683,7 +683,7 @@ def getarguments():
         type=int,
         required=False,
         action="store",
-        dest="nb_jobs",
+        dest="n_jobs",
         help="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)"
     )
     
@@ -940,7 +940,7 @@ def main():
                     )
                 else:
                     args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
-                    im_pekel = aux.pekel_recovery(args.file_vhr, args.extracted_pekel, write=True)   
+                    im_pekel = aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel, write=True)   
                 
                 pekel_nodata = 255.0 
                 
@@ -1060,7 +1060,7 @@ def main():
 
                 ################ Train classifier from samples ########
                 classifier = RandomForestClassifier(
-                    n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=712, n_jobs=args.nb_jobs
+                    n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=712, n_jobs=1
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])  # A revoir si possible
@@ -1115,7 +1115,6 @@ def main():
             if not(args.simple_ndwi_threshold) and not(not_enough_water_samples):
                 print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
                 print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
-            if post_process:
                 print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
             print("***")
             print("Max workers used for parallel tasks "+str(args.n_workers))        
