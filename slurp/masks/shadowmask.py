@@ -146,7 +146,7 @@ def main():
             nodata = ds_phr.profile["nodata"]
             ds_phr.close()
 
-            if args.absolute_threshold == None:
+            if args.absolute_threshold == False:
                 # Compute threshold for each band
                 th_bands = np.zeros(4)
                 for cpt in range(3):
@@ -164,7 +164,7 @@ def main():
                 th_bands = np.zeros(4)
                 for i in range(4):
                     th_bands[i] = args.absolute_threshold
-                
+                    
             params = {
                 "thresholds": th_bands,
                 "binary_opening": args.binary_opening,
