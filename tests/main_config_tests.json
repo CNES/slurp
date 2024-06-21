@@ -1,12 +1,14 @@
 {"input":
 	{
 	    "file_vhr": "absolute_path_to_image.tif",
-	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt"
+	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt"
 	},
 	
  "aux_layers":
 	{
 	    "extracted_pekel": null,
+	    "urban_raster": null,
 	    "file_ndvi": null, 
 	    "file_ndwi": null, 
 	    "valid_stack": null,
@@ -39,7 +41,8 @@
 	    "hand_strict":false,
 	    "texture_mode":"yes",
 	    "texture_rad":5,
-	    "filter_texture":90
+	    "filter_texture":90,
+	    "binary_closing":2
 	},
 "shadows":
 	{
@@ -55,7 +58,11 @@
      "nb_samples_other":5000,
      "nb_samples_urban":1000,
      "n_workers":8,
-     "n_jobs":1
+     "n_jobs":1,
+     "files_layers": [],
+     "value_classif": 255,
+     "max_depth":8,
+     "nb_estimators":100
  },
  "vegetation":
         {

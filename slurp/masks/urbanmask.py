@@ -731,7 +731,7 @@ def main():
 
             else:
                 args.urban_raster = join(dirname(args.urbanmask), "wsf.tif")
-                im_gt = aux.wsf_recovery(args.file_vhr, args.urban_raster, True)
+                im_gt = aux.wsf_recovery(args.file_vhr, args.wsf, args.urban_raster, True)
                 gt_key = eoscale_manager.open_raster(raster_path=args.urban_raster)
             
             # Global validity mask construction
