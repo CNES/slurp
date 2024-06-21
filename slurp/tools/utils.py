@@ -39,19 +39,19 @@ def compute_valid_stack_masks(input_buffer: list, input_profiles: list, args: di
 
     :param list input_buffer: VHR input image [im_vhr, mask_nocloud, vegetationmask, watermask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain the keys "nodata", "file_vegetationmask" and "file_watermask"
+    :param dict args: dictionary of arguments, must contain the keys "nodata", "vegetationmask" and "watermask"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
     valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata_phr"], axis=0)
     valid_stack = np.logical_and(valid_phr, input_buffer[1])
 
-    if args["file_vegetationmask"] is not None:
+    if args["vegetationmask"] is not None:
         non_veg = np.where(input_buffer[2] < args["vegmask_max_value"], True, False)
         # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
         non_veg_dilated = binary_dilation(non_veg[0], disk(args["binary_dilation"]))
         valid_stack = np.logical_and(valid_stack, [non_veg_dilated])
 
-    if args["file_watermask"] is not None:
+    if args["watermask"] is not None:
         valid_stack = np.logical_and(valid_stack, np.where(input_buffer[3] == 0, True, False))
 
     return valid_stack

@@ -1,28 +1,42 @@
 {"input":
 	{
     "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Demo/xt_PHR.tif",
-	"pekel" : "original_file_path.tiff"
+	"pekel" : null
 	},
 	
 "aux_layers":
 	{
-	"extracted_pekel" : false,
-	"file_ndvi": false, 
-	"file_ndwi":false, 
-	"valid_stack":false,
-	"file_cloud_gml": false,
-	"texture":false,
-    "file_hand":false
+	"extracted_pekel" : null,
+	"file_ndvi": null, 
+	"file_ndwi":null, 
+	"valid_stack":null,
+	"file_cloud_gml": null,
+	"file_texture":null,
+    "file_hand":null,
+    "wsf" : null,
+    "mnh" : null 
     },
 "masks":
      {
 	"watermask": "../out_slurp/watermask.tif",
-	"urbanmask": false,
-	"vegetationmask":false ,
-	"shadowmask":"../out_slurp/shadowmask.tif"
-	},
- "shadows":
-	{
-     "watermask":false
-    }
+	"urbanmask":  "../out_slurp/urbanmask.tif",
+	"vegetationmask": "../out_slurp/vegetationmask.tif" ,
+	"shadowmask":"../out_slurp/shadowmask.tif",
+    "stackmask":"../out_slurp/stackmask.tif"
+	}, 
+"stack":
+    {
+    "vegmask_max_value":21,
+    "waterpred":"../out_slurp/watermask.tif",
+    "urban_proba":"../out_slurp/urbanmask_proba.tif",
+    "building_threshold":70,
+    "binary_closing":0,
+    "binary_opening":0,
+    "building_erosion":0,
+    "bonus_gt":0,
+    "malus_shadow":0,
+    "remove_small_objects":0,
+    "remove_small_holes":0
+        }
+
 }

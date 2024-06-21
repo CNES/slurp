@@ -5,6 +5,7 @@
 
 
 import argparse
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -366,87 +367,129 @@ def clean_task(input_buffers: list, input_profiles: list, params: dict) -> np.nd
                         
 ############## MAIN FUNCTION ###############                        
                         
-def main(args=None):
-    parser = argparse.ArgumentParser()
+def getarguments():
+    """Parse command line arguments."""
+
+    parser = argparse.ArgumentParser(description="Compute Vegetation Mask.")
+
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     parser.add_argument("-file_vhr", help="input image (reflectances TOA)")
     parser.add_argument("-vegetationmask", help="Output classification filename")
     
-    # primitives and texture arguments
-    parser.add_argument("-red", "--red_band", dest="red", type=int, nargs="?", default=1, help="Red band index")
-    parser.add_argument("-green", "--green_band", dest="green", type=int, nargs="?", default=2, help="Green band index")
-    parser.add_argument("-nir", "--nir_band", dest="nir", type=int, nargs="?", default=4,
-                        help="Near Infra-Red band index")
-    parser.add_argument("-ndvi", default=None, required=False, action="store", dest="file_ndvi",
-                        help="NDVI filename (computed if missing option)")
-    parser.add_argument("-ndwi", default=None, required=False, action="store", dest="file_ndwi",
-                        help="NDWI filename (computed if missing option)")
-    parser.add_argument("-texture", default=None, required=False, action="store", dest="file_texture",
-                        help="Texture filename (computed if missing option)")
-    parser.add_argument("-texture_mode", "--texture_mode", choices=["yes", "no", "debug"], default="yes",
-                        required=False, action="store",
-                        help="Labelize vegetation with (yes) or without (no) distinction low/high, "
-                             "or get all 9 vegetation clusters without distinction low/high (debug)")
-    parser.add_argument("-texture_rad", "--texture_rad", type=int, default=5,
-                        help="Radius for texture (std convolution) computation")
-    parser.add_argument("-filter_texture", "--filter_texture", type=int, default=90,
-                        help="Percentile for texture (between 1 and 99)")
-    parser.add_argument("-file_cloud_gml", "--file_cloud_gml", type=str, required=False, action="store",
-                        help="Cloud file in .GML format")
-    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"], default="none", required=False,
-                        action="store", dest="save_mode",
-                        help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux),"
-                             " primitives, texture and segmentation files (all) or only output mask (none)")
+    #primitives and texture arguments
+    parser.add_argument("-red", "--red_band", type=int, nargs="?",  help="Red band index")
+    parser.add_argument("-green", "--green_band", type=int, nargs="?",  help="Green band index")
+    parser.add_argument("-nir", "--nir_band", type=int, nargs="?",  help="Near Infra-Red band index")
+    parser.add_argument("-ndvi",  required=False, action="store", dest="file_ndvi", help="NDVI filename (computed if missing option)")
+    parser.add_argument("-ndwi", required=False, action="store", dest="file_ndwi", help="NDWI filename (computed if missing option)")
+    parser.add_argument("-texture",  required=False, action="store", dest="file_texture", help="Texture filename (computed if missing option)")
+    parser.add_argument("-texture_mode", "--texture_mode", choices=["yes", "no", "debug"], required=False, action="store", 
+                        help="Labelize vegetation with (yes) or without (no) distinction low/high, or get all 9 vegetation clusters without distinction low/high (debug)")
+    parser.add_argument("-texture_rad", "--texture_rad", type=int,  help="Radius for texture (std convolution) computation")
+    parser.add_argument("-filter_texture", "--filter_texture", type=int,  help="Percentile for texture (between 1 and 99)")
+    parser.add_argument("-file_cloud_gml" ,"--file_cloud_gml", type=str, required=False, action="store", help="Cloud file in .GML format")
+    parser.add_argument("-save", choices=["none", "prim", "aux", "all", "debug"],  required=False, action="store", dest="save_mode",
+                        help="Save all files (debug), only primitives (prim), only texture and segmentation files (aux), primitives, texture and segmentation files (all) or only output mask (none)")
     
-    # segmentation arguments
-    parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, default=100,
-                        help="Approximative segment size (100 by default)")
-    parser.add_argument("-slic_compactness", "--slic_compactness", type=float, default=0.1,
-                        help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
+    #segmentation arguments
+    parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int,  help="Approximative segment size (100 by default)")
+    parser.add_argument("-slic_compactness", "--slic_compactness", type=float, help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
     
-    # clustering arguments
-    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int, default=3,
-                        help="Nb of clusters considered as vegetation (1-9), default : 3")
-    parser.add_argument("-min_ndvi_veg", "--min_ndvi_veg", type=int,
-                        help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
-    parser.add_argument("-max_ndvi_noveg", "--max_ndvi_noveg", type=int,
-                        help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
-    parser.add_argument("-non_veg_clusters", "--non_veg_clusters", default=False, required=False, action="store_true",
+    #clustering arguments
+    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int,  help="Nb of clusters considered as vegetation (1-9), default : 3")
+    parser.add_argument("-min_ndvi_veg","--min_ndvi_veg", type=int, help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
+    parser.add_argument("-max_ndvi_noveg","--max_ndvi_noveg", type=int, help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
+    parser.add_argument("-non_veg_clusters","--non_veg_clusters", required=False, action="store_true", 
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
-    parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, default=3,
+    parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int, 
                         help="Nb of clusters considered as low vegetation (1-9), default : 3")
-    parser.add_argument("-max_low_veg", "--max_low_veg", type=int,
-                        help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
+    parser.add_argument("-max_low_veg","--max_low_veg", type=int, help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
     
     #post-processing arguments
-    parser.add_argument("-binary_dilation", "--binary_dilation", type=int, required=False, default=0, action="store",
+    parser.add_argument("-binary_dilation","--binary_dilation", type=int, required=False, action="store",
                         help="Size of square structuring element")
-    parser.add_argument("-remove_small_objects", "--remove_small_objects", type=int, required=False, default=0,
-                        action="store", help="The maximum area, in pixels, of a contiguous object that will be removed")
-    parser.add_argument("-remove_small_holes", "--remove_small_holes", type=int, required=False, default=0,
-                        action="store", help="The maximum area, in pixels, of a contiguous hole that will be filled")
+    parser.add_argument("-remove_small_objects","--remove_small_objects", type=int, required=False, action="store",
+                        help="The maximum area, in pixels, of a contiguous object that will be removed")
+    parser.add_argument("-remove_small_holes","--remove_small_holes", type=int, required=False, action="store",
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
     
-    # multiprocessing arguments
-    parser.add_argument("-n_workers", "--nb_workers", type=int, default=8,
-                        help="Number of workers for multiprocessed tasks (primitives+segmentation)")
+    #multiprocessing arguments
+    parser.add_argument("-n_workers", "--nb_workers", type=int, help="Number of workers for multiprocessed tasks (primitives+segmentation)")
 
-    # Debug argument
+    #Debug argument
     parser.add_argument('--debug', action='store_true', help='Debug flag')
+    
+    return parser.parse_args()
 
-    args = parser.parse_args(args)
-    print("DBG > arguments parsed " + str(args))
+
                         
+############## MAIN FUNCTION #################                        
+                        
+def main(args=None):
+    
+###################### Read arguments ######################
+    argparse_dict = vars(getarguments())
+    # Get the input file path from the command line argument
+    arg_file_path_1 = argparse_dict["main_config"]
+
+    # Read the JSON data from the input file
+    try:
+        with open(arg_file_path_1, 'r') as json_file1:
+            full_args=json.load(json_file1)
+            argsdict = full_args['input']
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
+            argsdict.update(full_args['vegetation'])
+
+            # a effacer après migration du pre-processing:
+            argsdict.update(full_args['pre_process'])
+
+    except FileNotFoundError:
+        print(f"File {arg_file_path} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
+
+    if argparse_dict["user_config"] :   
+    # Get the input file path from the command line argument
+        arg_file_path_2 = argparse_dict["user_config"]
+
+        # Read the JSON data from the input file
+        try:
+            with open(arg_file_path_2, 'r') as json_file2:
+                full_args=json.load(json_file2)
+                for k in full_args.keys():
+                    if k in ['input','aux_layers','masks','ressources', 'vegetation']:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {arg_file_path} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
+
+    print("JSON data loaded:")
+    print(argsdict)
+    args = argparse.Namespace(**argsdict) 
+    
     ds_phr = rio.open(args.file_vhr)
     args.nodata_phr = ds_phr.nodata
     ds_phr.close()
+
         
-    with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers = args.n_workers, tile_mode = True) as eoscale_manager:
         input_img = eoscale_manager.open_raster(raster_path = args.file_vhr)
-        t0 = time.time()
         
+        t0 = time.time()
         # Get cloud mask if any
         if args.file_cloud_gml:
             cloud_mask_array = np.logical_not(
-                aux.cloud_from_gml(args.file_cloud_gml, args.file_phr)
+                aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
             )
             #save cloud mask
             io_utils.save_image(cloud_mask_array,

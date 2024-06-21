@@ -3,6 +3,7 @@
 """ Compute building and road masks from VHR images thanks to OSM layers """
 
 import argparse
+import json
 import gc
 import numpy as np
 import otbApplication as otb
@@ -337,24 +338,19 @@ def getarguments():
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Water Mask.")
+    
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    parser.add_argument("-file_vhr", help="PHR filename")
 
-    parser.add_argument("file_phr", help="PHR filename")
+    parser.add_argument("-red", help="Red band index")
+    parser.add_argument("-nir", help="NIR band index")
+    parser.add_argument("-green",help="green band index")
 
-    parser.add_argument("-red", default=1, help="Red band index")
-    parser.add_argument("-nir", default=4, help="NIR band index")
-    parser.add_argument("-green", default=2, help="green band index")
-
-    parser.add_argument(
-        "-display",
-        required=False,
-        action="store_true",
-        help="Display images while running",
-    )
     
     parser.add_argument(
         "-save",
         choices=["none", "prim", "aux", "all", "debug"],
-        default="none",
         required=False,
         action="store",
         dest="save_mode",
@@ -363,7 +359,6 @@ def getarguments():
 
     parser.add_argument(
         "-ndvi",
-        default=None,
         required=False,
         action="store",
         dest="file_ndvi",
@@ -372,7 +367,6 @@ def getarguments():
 
     parser.add_argument(
         "-ndwi",
-        default=None,
         required=False,
         action="store",
         dest="file_ndwi",
@@ -381,19 +375,17 @@ def getarguments():
     
     parser.add_argument(
         "-watermask",
-        default=None,
         required=False,
         action="store",
-        dest="file_watermask",
+        dest="watermask",
         help="Watermask filename : urban mask will be learned & predicted, excepted on water areas"
     )
     
     parser.add_argument(
         "-vegetationmask",
-        default=None,
         required=False,
         action="store",
-        dest="file_vegetationmask",
+        dest="vegetationmask",
         help="Vegetation mask filename : urban mask will be learned & predicted, excepted on vegetated areas"
     )
 
@@ -401,7 +393,6 @@ def getarguments():
         "-vegmask_max_value",
         required=False,
         type=int,
-        default=21,
         action="store",
         dest="vegmask_max_value",
         help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted"
@@ -409,16 +400,14 @@ def getarguments():
 
     parser.add_argument(
         "-shadowmask",
-        default=None,
         required=False,
         action="store",
-        dest="file_shadowmask",
+        dest="shadowmask",
         help="Shadowmask filename : big shadow areas will be marked as background"
     )
 
     parser.add_argument(
         "-post_process",
-        default=False,
         required=False,
         action="store_true",
         dest="post_process",
@@ -435,7 +424,6 @@ def getarguments():
     parser.add_argument(
         "-layers",
         nargs="+",
-        default=[],
         required=False,
         action="store",
         dest="files_layers",
@@ -445,7 +433,6 @@ def getarguments():
     
     parser.add_argument(
         "-urban_raster",
-        default=None,
         required=False,
         action="store",
         dest="urban_raster",
@@ -454,7 +441,6 @@ def getarguments():
     
     parser.add_argument(
         "-nb_classes",
-        default=1,
         type=int,
         required=False,
         action="store",
@@ -463,14 +449,13 @@ def getarguments():
     )
 
     parser.add_argument(
-        "file_classif",
+        "-urbanmask",
         help="Output classification filename (default is classif.tif)",
     )
 
     parser.add_argument(
         "-value_classif",
         type=int,
-        default=255,
         required=False,
         action="store",
         dest="value_classif",
@@ -480,7 +465,6 @@ def getarguments():
     parser.add_argument(
         "-nb_samples_urban",
         type=int,
-        default=1000,
         required=False,
         action="store",
         dest="nb_samples_urban",
@@ -490,7 +474,6 @@ def getarguments():
     parser.add_argument(
         "-nb_samples_other",
         type=int,
-        default=5000,
         required=False,
         action="store",
         dest="nb_samples_other",
@@ -500,7 +483,6 @@ def getarguments():
     parser.add_argument(
         "-max_depth",
         type=int,
-        default=8,
         required=False,
         action="store",
         dest="max_depth",
@@ -510,7 +492,6 @@ def getarguments():
     parser.add_argument(
         "-nb_estimators",
         type=int,
-        default=100,
         required=False,
         action="store",
         dest="nb_estimators",
@@ -520,37 +501,24 @@ def getarguments():
     parser.add_argument(
         "-n_jobs",
         type=int,
-        default=1,
         required=False,
         action="store",
-        dest="nb_jobs",
+        dest="n_jobs",
         help="Nb of parallel jobs for Random Forest"
-    )
-    
-    parser.add_argument(
-        "-max_mem",
-        type=int,
-        default=25,
-        required=False,
-        action="store",
-        dest="max_memory",
-        help="Max memory permitted for the prediction of the Random Forest (in Gb)"
     )
     
     parser.add_argument(
         "-n_workers",
         type=int,
-        default=8,
         required=False,
         action="store",
-        dest="nb_workers",
+        dest="n_workers",
         help="Nb of CPU"
     )
     
     parser.add_argument(
         "-random_seed",
         type=int,
-        default=712,
         required=False,
         action="store",
         dest="random_seed",
@@ -560,7 +528,6 @@ def getarguments():
     parser.add_argument(
         "-binary_closing",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="binary_closing",
@@ -570,7 +537,6 @@ def getarguments():
     parser.add_argument(
         "-binary_opening",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="binary_opening",
@@ -580,7 +546,6 @@ def getarguments():
     parser.add_argument(
         "-binary_dilation",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="binary_dilation",
@@ -590,7 +555,6 @@ def getarguments():
     parser.add_argument(
         "-remove_small_objects",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="remove_small_objects",
@@ -600,7 +564,6 @@ def getarguments():
     parser.add_argument(
         "-remove_small_holes",
         type=int,
-        default=0,
         required=False,
         action="store",
         dest="remove_small_holes",
@@ -609,7 +572,6 @@ def getarguments():
     
     parser.add_argument(
         "-remove_false_positive",
-        default=False,
         required=False,
         action="store_true",
         dest="remove_false_positive",
@@ -619,20 +581,67 @@ def getarguments():
     parser.add_argument(
         "-confidence_threshold",
         type=int,
-        default=85,
         required=False,
         action="store",
         dest="confidence_threshold",
-        help="Confidence threshold to consider true positive in regularization step (85 by default)",
+        help="Confidence threshold to consider true positive in regularization step (85 by default)"
     )
     
     return parser.parse_args()
 
 
 def main():
-    args = getarguments()
-    print(args)    
-    with eom.EOContextManager(nb_workers=args.nb_workers, tile_mode=True) as eoscale_manager:
+
+    argparse_dict = vars(getarguments())
+    # Get the input file path from the command line argument
+    arg_file_path_1 = argparse_dict["main_config"]
+
+    # Read the JSON data from the input file
+    try:
+        with open(arg_file_path_1, 'r') as json_file1:
+            full_args=json.load(json_file1)
+            argsdict = full_args['input']
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
+            argsdict.update(full_args['urban'])
+
+            # a effacer après migration du pre-processing:
+            argsdict.update(full_args['pre_process'])
+
+    except FileNotFoundError:
+        print(f"File {arg_file_path_1} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
+
+    if argparse_dict["user_config"] :   
+    # Get the input file path from the command line argument
+        arg_file_path_2 = argparse_dict["user_config"]
+
+        # Read the JSON data from the input file
+        try:
+            with open(arg_file_path_2, 'r') as json_file2:
+                full_args=json.load(json_file2)
+                for k in full_args.keys():
+                    if k in ['input','aux_layers','masks','ressources', 'urban']:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {arg_file_path} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
+
+    print("JSON data loaded:")
+    print(argsdict)
+    args = argparse.Namespace(**argsdict) 
+    
+    
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
        
         try:
             
@@ -649,7 +658,7 @@ def main():
             names_stack += [basename(f) for f in args.files_layers]
             
             # Image PHR (numpy array, 4 bands, band number is first dimension),
-            ds_phr = rio.open(args.file_phr)
+            ds_phr = rio.open(args.file_vhr)
             io_utils.print_dataset_infos(ds_phr, "PHR")
             args.nodata_phr = ds_phr.nodata
            
@@ -663,24 +672,24 @@ def main():
             del ds_phr
             
             # Store image in shared memmory
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_phr)
+            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             
             # Get cloud mask if any
             if args.file_cloud_gml:
                 cloud_mask_array = np.logical_not(
-                    aux.cloud_from_gml(args.file_cloud_gml, args.file_phr)
+                    aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
                 )
                 # save cloud mask
                 io_utils.save_image(
                     cloud_mask_array,
-                    join(dirname(args.file_classif), "nocloud.tif"),
+                    join(dirname(args.urbanmask), "nocloud.tif"),
                     args.crs,
                     args.transform,
                     None,
                     args.rpc,
                     tags=args.__dict__,
                 )
-                mask_nocloud_key = eoscale_manager.open_raster(raster_path=join(dirname(args.file_classif), "nocloud.tif"))
+                mask_nocloud_key = eoscale_manager.open_raster(raster_path=join(dirname(args.urbanmask), "nocloud.tif"))
                 
             else:
                 # Get profile from im_phr
@@ -690,8 +699,8 @@ def main():
                 mask_nocloud_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
 
-            if args.file_watermask:
-                key_watermask = eoscale_manager.open_raster(raster_path=args.file_watermask)
+            if args.watermask:
+                key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -699,8 +708,8 @@ def main():
                 key_watermask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_watermask).fill(0)
 
-            if args.file_vegetationmask:
-                key_vegmask = eoscale_manager.open_raster(raster_path=args.file_vegetationmask)
+            if args.vegetationmask:
+                key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -708,8 +717,8 @@ def main():
                 key_vegmask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_vegmask).fill(0)
                 
-            if args.file_shadowmask:
-                key_shadowmask = eoscale_manager.open_raster(raster_path=args.file_shadowmask)
+            if args.shadowmask:
+                key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -721,8 +730,8 @@ def main():
                 gt_key = eoscale_manager.open_raster(raster_path=args.urban_raster)
 
             else:
-                args.urban_raster = join(dirname(args.file_classif), "wsf.tif")
-                im_gt = aux.wsf_recovery(args.file_phr, args.urban_raster, True)
+                args.urban_raster = join(dirname(args.urbanmask), "wsf.tif")
+                im_gt = aux.wsf_recovery(args.file_vhr, args.urban_raster, True)
                 gt_key = eoscale_manager.open_raster(raster_path=args.urban_raster)
             
             # Global validity mask construction
@@ -747,7 +756,7 @@ def main():
                                                              multiproc_context="fork",
                                                              filter_desc="NDVI processing...")
                 if args.save_mode != "none" and args.save_mode != "aux":
-                    eoscale_manager.write(key=key_ndvi[0], img_path=args.file_classif.replace(".tif", "_NDVI.tif"))
+                    eoscale_manager.write(key=key_ndvi[0], img_path=args.urbanmask.replace(".tif", "_NDVI.tif"))
             else:
                 key_ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
             
@@ -762,7 +771,7 @@ def main():
                                                              multiproc_context="fork",
                                                              filter_desc="NDWI processing...")
                 if args.save_mode != "none" and args.save_mode != "aux":
-                    eoscale_manager.write(key=key_ndwi[0], img_path=args.file_classif.replace(".tif", "_NDWI.tif"))
+                    eoscale_manager.write(key=key_ndwi[0], img_path=args.urbanmask.replace(".tif", "_NDWI.tif"))
             else:
                 key_ndwi = [eoscale_manager.open_raster(raster_path=args.file_ndwi)]
   
@@ -803,7 +812,7 @@ def main():
 
                 classifier = RandomForestClassifier(
                     n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced",
-                    random_state=0, n_jobs=args.nb_jobs
+                    random_state=0, n_jobs=args.n_jobs
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])
@@ -829,7 +838,7 @@ def main():
                 final_predict = eoscale_manager.get_array(key_predict[0])
                 io_utils.save_image(
                         final_predict[2],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif", "_proba.tif")),
+                        join(dirname(args.urbanmask), basename(args.urbanmask).replace(".tif", "_proba.tif")),
                         args.crs,
                         args.transform,
                         255,
@@ -839,7 +848,7 @@ def main():
                 if args.save_mode == "debug":
                     io_utils.save_image(
                         final_predict[0],
-                        join(dirname(args.file_classif), basename(args.file_classif).replace(".tif", "_raw_predict.tif")),
+                        join(dirname(args.urbanmask), basename(args.urbanmask).replace(".tif", "_raw_predict.tif")),
                         args.crs,
                         args.transform,
                         255,
@@ -868,12 +877,12 @@ def main():
                                                                          filter_desc="Post processing...")
                 
                     # Save final mask (prediction + post-processing)
-                    eoscale_manager.write(key=key_post_process[0][0], img_path=args.file_classif)
+                    eoscale_manager.write(key=key_post_process[0][0], img_path=args.urbanmask)
                     eoscale_manager.write(
                         key=key_post_process[0][2],
                         img_path=join(
-                            dirname(args.file_classif),
-                            basename(args.file_classif).replace(".tif", "_clean.tif")
+                            dirname(args.urbanmask),
+                            basename(args.urbanmask).replace(".tif", "_clean.tif")
                         )
                     )
                     
@@ -882,14 +891,14 @@ def main():
                         eoscale_manager.write(
                             key=key_post_process[0][1],
                             img_path=join(
-                                dirname(args.file_classif),
-                                basename(args.file_classif).replace(".tif", "_markers.tif")
+                                dirname(args.urbanmask),
+                                basename(args.urbanmask).replace(".tif", "_markers.tif")
                             )
                         )
 
                 end_time = time.time()
 
-                print(f"**** Urban mask for {args.file_phr} (saved as {args.file_classif}) ****")
+                print(f"**** Urban mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
                 print("Total time (user)       :\t"+convert_time(end_time-t0))
                 print("- Build_stack           :\t"+convert_time(time_stack-t0))
                 print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
@@ -900,7 +909,7 @@ def main():
                 
             elif args.nb_valid_built_pixels > 0:
                 #### Corner case : no "non building pixels"
-                print(f"**** Only urban areas in {args.file_phr} -> mask saved as {args.file_classif} ****")
+                print(f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****")
                 
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -913,14 +922,14 @@ def main():
                 eoscale_manager.write(
                     key=final_classif_key,
                     img_path=join(
-                        dirname(args.file_classif),
-                        basename(args.file_classif).replace(".tif", "_proba.tif")
+                        dirname(args.urbanmask),
+                        basename(args.urbanmask).replace(".tif", "_proba.tif")
                     )
                 )
                 
             else:
                 #### Corner case : no "building pixels" --> void mask (0)
-                print(f"**** No urban areas in {args.file_phr} -> void mask saved as {args.file_classif} ****")
+                print(f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****")
                 
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
@@ -933,8 +942,8 @@ def main():
                 eoscale_manager.write(
                     key=final_classif_key,
                     img_path=join(
-                        dirname(args.file_classif),
-                        basename(args.file_classif).replace(".tif", "_proba.tif")
+                        dirname(args.urbanmask),
+                        basename(args.urbanmask).replace(".tif", "_proba.tif")
                     )
                 )
 
