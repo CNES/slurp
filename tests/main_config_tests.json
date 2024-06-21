@@ -100,7 +100,12 @@
 	    "n_jobs":1
         },
 "stack":
-        {
-
-        }
+ {
+     "vegmask_max_value":21,
+     "building_erosion":3,
+     "building_threshold":70,
+     "bonus_gt":10,
+     "malus_shadow":10,
+     "remove_small_objects":50
+ }
 }
