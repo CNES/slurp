@@ -6,6 +6,8 @@ This script stacks existing masks
 """
 
 import argparse
+import json
+import traceback
 import rasterio as rio
 import numpy as np
 import os
@@ -198,45 +200,45 @@ def post_process(inputBuffer: list,
     
 
 
+
 def getarguments():
      parser = argparse.ArgumentParser()
-     parser.add_argument("im", help="VHR input image")
-     parser.add_argument("mask", help="Final mask")
-     parser.add_argument("-vegmask", default=None, help="Vegetation mask")
+     parser.add_argument("main_config", help="First JSON file, load basis arguments")
+     parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+     parser.add_argument("-file_vhr", help="VHR input image")
+     parser.add_argument("-stackmask", help="Final mask")
+     parser.add_argument("-vegetationmask", help="Vegetation mask")
      parser.add_argument(
         "-vegmask_max_value",
         required=False,
         type=int,
-        default=21,
         action="store",
         dest="vegmask_max_value",
         help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted"
     )
 
      parser.add_argument(
-         "-watermask", default=None, help="Water mask (filtered mask)"
+         "-watermask", help="Water mask (filtered mask)"
      )
      parser.add_argument(
-         "-waterpred", default=None, help="Water mask (prediction)"
+         "-waterpred", help="Water mask (prediction)"
      )
-     parser.add_argument("-urban_proba", default=None, help="Urban mask probabilities")
+     parser.add_argument("-urban_proba", help="Urban mask probabilities")
      parser.add_argument(
          "-building_threshold",
          type=int,
-         default=70,
          required=False,
          action="store",
          dest="building_threshold",
          help="Threshold to consider building as detected (70 by default)"
      )
-     parser.add_argument("-shadowmask", default=None, help="Shadow mask")
+     parser.add_argument("-shadowmask", help="Shadow mask")
      
-     parser.add_argument("-wsf", default="", help="World Settlement Footprint raster")
-     parser.add_argument("-mnh", default="", help="Height elevation model")
+     parser.add_argument("-wsf", help="World Settlement Footprint raster")
+     parser.add_argument("-mnh", help="Height elevation model")
      parser.add_argument(
          "-binary_closing",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="binary_closing",
@@ -246,7 +248,6 @@ def getarguments():
      parser.add_argument(
          "-binary_opening",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="binary_opening",
@@ -256,7 +257,6 @@ def getarguments():
      parser.add_argument(
          "-building_erosion",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="building_erosion",
@@ -266,7 +266,6 @@ def getarguments():
      parser.add_argument(
          "-bonus_gt",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="bonus_gt",
@@ -276,7 +275,6 @@ def getarguments():
      parser.add_argument(
          "-malus_shadow",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="malus_shadow",
@@ -287,7 +285,6 @@ def getarguments():
      parser.add_argument(
          "-remove_small_objects",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="remove_small_objects",
@@ -297,7 +294,6 @@ def getarguments():
      parser.add_argument(
          "-remove_small_holes",
          type=int,
-         default=0,
          required=False,
          action="store",
          dest="remove_small_holes",
@@ -307,10 +303,9 @@ def getarguments():
      parser.add_argument(
         "-n_workers",
         type=int,
-        default=8,
         required=False,
         action="store",
-        dest="nb_workers",
+        dest="n_workers",
         help="Nb of CPU"
      )
 
@@ -325,17 +320,64 @@ def getarguments():
 
 
 def main():
+    ########## Read argument ##############
+    argparse_dict = vars(getarguments())
+    # Get the input file path from the command line argument
+    arg_file_path_1 = argparse_dict["main_config"]
+
+    # Read the JSON data from the input file
     try:
-        args = getarguments()
-        print("args")
-        with eom.EOContextManager(nb_workers = args.nb_workers, tile_mode = True) as eoscale_manager:
+        with open(arg_file_path_1, 'r') as json_file1:
+            full_args=json.load(json_file1)
+            argsdict = full_args['input']
+            argsdict.update(full_args['aux_layers'])
+            argsdict.update(full_args['masks'])
+            argsdict.update(full_args['ressources'])
+            argsdict.update(full_args['stack'])
+
+            # a effacer après migration du pre-processing:
+            argsdict.update(full_args['pre_process'])
+
+    except FileNotFoundError:
+        print(f"File {arg_file_path} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
+
+    if argparse_dict["user_config"] :   
+    # Get the input file path from the command line argument
+        arg_file_path_2 = argparse_dict["user_config"]
+
+        # Read the JSON data from the input file
+        try:
+            with open(arg_file_path_2, 'r') as json_file2:
+                full_args=json.load(json_file2)
+                for k in full_args.keys():
+                    if k in ['input','aux_layers','masks','ressources', 'stack']:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {arg_file_path} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+
+    #Overload with manually passed arguments if not None
+    for key in argparse_dict.keys():
+        if argparse_dict[key] is not None :
+            argsdict[key]=argparse_dict[key]
+
+    print("JSON data loaded:")
+    print(argsdict)
+    args = argparse.Namespace(**argsdict) 
+    
+    
+    with eom.EOContextManager(nb_workers = args.n_workers, tile_mode = True) as eoscale_manager:
             try:
                 t0 = time.time()
-                key_image = eoscale_manager.open_raster(raster_path = args.im)
+                key_image = eoscale_manager.open_raster(raster_path = args.file_vhr)
 
                 key_watermask = eoscale_manager.open_raster(raster_path = args.watermask)
                 key_waterpred = eoscale_manager.open_raster(raster_path = args.waterpred)
-                key_vegmask = eoscale_manager.open_raster(raster_path = args.vegmask)
+                key_vegmask = eoscale_manager.open_raster(raster_path = args.vegetationmask)
                 key_urban_proba = eoscale_manager.open_raster(raster_path = args.urban_proba)
                 key_shadowmask = eoscale_manager.open_raster(raster_path = args.shadowmask)
                 key_wsf = eoscale_manager.open_raster(raster_path = args.wsf)
@@ -345,11 +387,11 @@ def main():
                 # Get cloud mask if any
                 if args.file_cloud_gml:
                     cloud_mask_array = np.logical_not(
-                        cloud_from_gml(args.file_cloud_gml, args.im)   
+                        cloud_from_gml(args.file_cloud_gml, args.file_vhr)   
                     )
                     #save cloud mask
                     io_utils.save_image(cloud_mask_array,
-                               join(dirname(args.mask), "nocloud.tif"),
+                               join(dirname(args.stackmask), "nocloud.tif"),
                                args.crs,
                                args.transform,
                                None,
@@ -386,7 +428,7 @@ def main():
                                                                multiproc_context= "fork",
                                                                filter_desc= "Post processing...")
                 
-                eoscale_manager.write(key = final_mask[0], img_path = args.mask)
+                eoscale_manager.write(key = final_mask[0], img_path = args.stackmask)
                 
                 t1 = time.time()
 
@@ -404,9 +446,9 @@ def main():
             except MemoryError as me_exception:
                 print("MemoryError", me_exception)
 
-    except Exception as exception:  # pylint: disable=broad-except
-        print("oups...", exception)
-        traceback.print_exc()
+            except Exception as exception:  # pylint: disable=broad-except
+                print("oups...", exception)
+                traceback.print_exc()
 
 
                 

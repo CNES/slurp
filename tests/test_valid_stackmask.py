@@ -33,9 +33,9 @@ def compute_stackmask(file, nb_workers):
     shadowmask = os.path.join(masks_folder, "shadowmask.tif")
     wsf = os.path.join(masks_folder, "wsf.tif")
         
-    os.system(f"slurp_stackmasks {file} -vegmask {vegetationmask} -watermask {watermask} -waterpred {watermask} -urban_proba {urbanmask_proba} -shadow {shadowmask} " \
+    os.system(f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -vegetationmask {vegetationmask} -watermask {watermask} -waterpred {watermask} -urban_proba {urbanmask_proba} -shadow {shadowmask} " \
               f"-wsf {wsf} -n_workers {nb_workers} -remove_small_objects 300  -binary_closing 3 -binary_opening 3 -remove_small_holes 300 -building_erosion 2 " \
-              f"-bonus_gt 10 -malus_shadow 10 {output_image}")
+              f"-bonus_gt 10 -malus_shadow 10 -stackmask {output_image}")
 
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during stackmask computation ?"
     return output_image

@@ -9,27 +9,26 @@ import time
 from slurp.prepare import geometry
 
 
-def pekel_recovery(file_ref: str, file_out: str, write: bool = False) -> np.ndarray:
+def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str, write: bool = False) -> np.ndarray:
     """
     Recover Occurrence Pekel image in uint8
 
     :param str file_ref: path to the input reference image
+    :param str pekel_ref: path to the input Pekel global image (tile or .vrt)
     :param str file_out: path for the recovered Pekel image
     :param bool write: write the output image if True, else keep the image in memory
     :returns: Pekel image recovered
     """
-    if write:
-        print("Recover Occurrence Pekel file to", file_out)
-    else:
-        print("Recover Occurrence Pekel file")
+    
+    print(f"Recover Occurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
     pekel_image = geometry.superimpose(
-        "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+        pekel_ref,
         file_ref,
         file_out,
         otb.ImagePixelType_uint8,
         write
     )
-
+    
     return pekel_image.transpose(2, 0, 1)[0]
 
 
@@ -114,11 +113,12 @@ def cloud_from_gml(file_cloud: str, file_ref: str) -> np.ndarray:
     return mask_cloud
 
 
-def wsf_recovery(file_ref: str, file_out: str, write=False) -> np.ndarray:
+def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str, write=False) -> np.ndarray:
     """
     Recover WSF image in uint16
 
     :param str file_ref: path to the input reference image
+    :param str wsf_ref: path to the global World Settlement Footprint vrt file
     :param str file_out: path for the recovered WSF image
     :param bool write: write the output image if True, else keep the image in memory
     :returns: WSF image recovered
@@ -128,7 +128,7 @@ def wsf_recovery(file_ref: str, file_out: str, write=False) -> np.ndarray:
     else:
         print("Recover WSF file")
     wsf_image = geometry.superimpose(
-        "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
+        wsf_ref,
         file_ref,
         file_out,
         otb.ImagePixelType_uint16,

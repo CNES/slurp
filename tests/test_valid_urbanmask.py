@@ -24,8 +24,8 @@ def compute_urbanmask(file, nb_workers):
     output_image = get_output_path(file, "urbanmask")
     proba_image = output_image.replace(".tif", "_proba.tif")
     remove_file(proba_image)
-    os.system(f"slurp_urbanmask {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
-              f"-binary_closing 3 -binary_opening 3 {output_image}")
+    os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
+              f"-binary_closing 3 -binary_opening 3 -urbanmask {output_image}")
     assert os.path.exists(proba_image), f"The file {proba_image} has not been created. Error during urbanmask computation ?"
     return proba_image
 

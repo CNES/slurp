@@ -12,14 +12,17 @@
 	"valid_stack":"file_pre_processed_used_in_mask.tif",
 	"file_cloud_gml":"file_pre_processed_used_in_mask.tif",
 	"file_texture":"file_pre_processed_used_in_mask.tif",
-    "file_hand":"file_pre_processed_used_in_mask.tif"
+    "file_hand":"file_pre_processed_used_in_mask.tif",
+    "wsf" : null,
+    "mnh" : null  
 	},
 "masks":
  {
 	"watermask":"out_slurp/watermask.tif",
 	"urbanmask": "out_slurp/urbanmask.tif",
 	"vegetationmask":"out_slurp/vegetationmask.tif" ,
-	"shadowmask":"out_slurp/shadowmask.tif" 
+	"shadowmask":"out_slurp/shadowmask.tif",
+    "stackmask":"out_slurp/stackmask.tif"
  },
 "ressources":
 	{
@@ -44,33 +47,50 @@
 	},
 "shadows":
 	{
-	    "th_rgb":0.3,
-	    "th_nir":0.3,
-	    "percentile":2,
-	    "binary_opening":0,
-	    "remove_small_objects":0,
-	    "absolute_threshold":false
+	"th_rgb":0.3,
+    "th_nir":0.3,
+    "percentile":2,
+    "binary_opening":0,
+    "remove_small_objects":0
 	},
 "urban":
-        {
+    {
+    "vegmask_max_value":21,
+    "post_process":false,
 	"nb_samples_other":5000,
 	"nb_samples_urban":1000,
-	"n_workers":8,
-	"n_jobs":1
-        },
+     "files_layers":[],
+     "urban_raster":null,
+     "nb_classes":1,
+     "value_classif":255,
+     "max_depth":8,
+     "nb_estimators":100,
+     "random_seed":712,
+     "binary_closing":0,
+     "binary_opening":0,
+     "binary_dilation":0,
+     "remove_small_objects":0,
+     "remove_small_holes":0,
+     "remove_false_positive":false,
+     "confidence_threshold":85    
+     },
 "vegetation":
         {
     "slic_seg_size":100,
     "slic_compactness":0.1,
-    "nbclusters":3,
+    "nb_clusters_veg":3,
     "min_ndvi_veg":false,
     "max_ndvi_noveg":false,
     "non_veg_clusters":false,
-    "nbclusters_low":3,
-    "max_low_veg":false
-        },
+    "nb_clusters_low_veg":3,
+    "max_low_veg":false,
+    "binary_dilation":0,
+    "remove_small_objects":0,
+    "remove_small_holes":0,
+    "debug":false
+    },
 "water":
-        {
+    {
     "layers":[],
     "file_filters":[],        
     "simple_ndwi_threshold":false,
@@ -89,11 +109,21 @@
     "hand_filter": false,
     "binary_closing":false,
     "area_closing":false,
-    "remove_small_holes":false,
+    "remove_small_holes":0,
     "value_classif":1 
         },
 "stack":
         {
-
+    "vegmask_max_value":21,
+    "waterpred":null,
+    "urban_proba":null,
+    "building_threshold":70,
+    "binary_closing":0,
+    "binary_opening":0,
+    "building_erosion":0,
+    "bonus_gt":0,
+    "malus_shadow":0,
+    "remove_small_objects":0,
+    "remove_small_holes":0
         }
 }
