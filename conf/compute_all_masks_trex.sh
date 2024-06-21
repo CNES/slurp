@@ -22,17 +22,19 @@ echo ${PHR_IM}
 
 cd $TMPDIR
 mkdir -p $OUTPUT_DIR
-mkdir -p $TMPDIR/water $TMPDIR/shadows $TMPDIR/urban $TMPDIR/vegetation $TMPDIR/stack $TMPDIR/image
+mkdir -p $TMPDIR/out/water $TMPDIR/out/shadows $TMPDIR/out/urban $TMPDIR/out/vegetation $TMPDIR/out/stack $TMPDIR/out/image
 
-cp ${PHR_IM} ${TMPDIR}/image
+cp ${PHR_IM} ${TMPDIR}/out/image
 
 filename="$(basename ${PHR_IM})"
+
+main_config="/home/qt/tanguyy/SRC/slurp/conf/main_config.json"
 
 # Start
 echo "Launch SLURP from `pwd`"
 
 # Watermask
-slurp_watermask -remove_small_holes 100 -binary_closing 2 -save prim ${TMPDIR}/image/${filename} water/watermask.tif 
+slurp_watermask ${main_config} -watermask water/watermask.tif -remove_small_holes 100 -binary_closing 2 -save prim -file_vhr ${TMPDIR}/image/${filename}  
 
 # Vegetationmask
 slurp_vegetationmask -ndvi water/watermask_NDVI.tif -ndwi water/watermask_NDWI.tif -non_veg_clusters -remove_small_objects 100 -binary_dilation 2 -remove_small_holes 100 -nbclusters ${CLUSTERS_VEG} -nbclusters_low ${CLUSTERS_LOW_VEG} ${TMPDIR}/image/${filename} vegetation/vegetationmask.tif 
