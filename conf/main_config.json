@@ -1,35 +1,37 @@
 {"input":
 	{
-    "file_vhr": "absolute_path_to_image.tif",
-	"pekel" : "original_file_path.tif"
+	    "file_vhr": "absolute_path_to_image.tif",
+	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+	    "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt"
 	},
 	
 "aux_layers":
 	{
-	"extracted_pekel":"file_pre_processed_used_in_mask.tif",
-	"file_ndvi": "file_pre_processed_used_in_mask.tif", 
-	"file_ndwi":"file_pre_processed_used_in_mask.tif", 
-	"valid_stack":"file_pre_processed_used_in_mask.tif",
-	"file_cloud_gml":"file_pre_processed_used_in_mask.tif",
-	"file_texture":"file_pre_processed_used_in_mask.tif",
-    "file_hand":"file_pre_processed_used_in_mask.tif",
-    "wsf" : null,
-    "mnh" : null  
+	    "extracted_pekel":"out/pekel.tif",
+	    "extracted_hand":"out/hand.tif",
+	    "file_ndvi":"out/ndvi.tif",
+	    "file_ndwi":"out/ndwi.tif", 
+	    "valid_stack":"out/valid_stack.tif",
+	    "file_cloud_gml":"out/cloud_mask.tif",
+	    "file_texture":"out/veg_texture.tif",
+	    "wsf" : "out/wsf.tif",
+	    "mnh" : null  
 	},
 "masks":
  {
-	"watermask":"out_slurp/watermask.tif",
-	"urbanmask": "out_slurp/urbanmask.tif",
-	"vegetationmask":"out_slurp/vegetationmask.tif" ,
-	"shadowmask":"out_slurp/shadowmask.tif",
-    "stackmask":"out_slurp/stackmask.tif"
+     "watermask":"out/watermask.tif",
+     "urbanmask": "out/urbanmask.tif",
+     "vegetationmask":"out/vegetationmask.tif" ,
+     "shadowmask":"out/shadowmask.tif",
+     "stackmask":"out/stackmask.tif"
  },
 "ressources":
 	{
-	"n_workers":8,
-    "n_jobs":1,
-    "max_mem":25,
-    "save_mode":"none"
+	    "n_workers":8,
+	    "n_jobs":1,
+	    "max_mem":25,
+	    "save_mode":"none"
 	},
 "pre_process":
 	{
@@ -37,7 +39,7 @@
     "nir":4,
     "green":2,
 	"thresh_pekel":50,
-    "pekel_month":1,
+	    "pekel_month":0,
     "thresh_hand":25,
     "strict_thresh":50,
     "hand_strict":false,
@@ -92,7 +94,8 @@
 "water":
     {
     "layers":[],
-    "file_filters":[],        
+	"file_filters":[],
+	"pekel_month":0,
     "simple_ndwi_threshold":false,
     "ndwi_threshold":0.1,
     "samples_method":"grid",

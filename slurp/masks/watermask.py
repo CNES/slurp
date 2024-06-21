@@ -8,7 +8,7 @@ import argparse
 import gc
 import time
 import traceback
-from os.path import dirname, join
+from os.path import dirname, join, isfile
 from subprocess import call
 import json
 
@@ -483,7 +483,7 @@ def getarguments():
         "-hand",
         required=False,
         action="store",
-        dest="file_hand",
+        dest="extracted_hand",
         help="Hand filename (computed if missing option)",
     )
 
@@ -850,8 +850,10 @@ def main():
             # Store image in shared memmory
             key_phr = eoscale_manager.open_raster(raster_path = args.file_vhr)
             
-            ### Compute NDVI 
-            if not args.file_ndvi :
+            ### Compute NDVI
+            if args.file_ndvi and isfile(args.file_ndvi):
+                key_ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
+            else:
                 key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndvi,
                                                                filter_parameters=vars(args),
@@ -862,11 +864,12 @@ def main():
                                                                filter_desc= "NDVI processing...")
                 if (args.save_mode != "none" and args.save_mode != "aux"):
                     eoscale_manager.write(key = key_ndvi[0], img_path = args.watermask.replace(".tif","_NDVI.tif"))
-            else:
-                key_ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
+                
             
             ### Compute NDWI        
-            if not args.file_ndwi :
+            if args.file_ndwi and isfile(args.file_ndwi):
+                key_ndwi = [eoscale_manager.open_raster(raster_path =args.file_ndwi)]
+            else:
                 key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
                                                                image_filter = compute_ndwi,
                                                                filter_parameters=vars(args),
@@ -877,11 +880,9 @@ def main():
                                                                filter_desc= "NDWI processing...")         
                 if (args.save_mode != "none" and args.save_mode != "aux"):
                     eoscale_manager.write(key = key_ndwi[0], img_path = args.watermask.replace(".tif","_NDWI.tif"))
-            else:
-                key_ndwi = [eoscale_manager.open_raster(raster_path =args.file_ndwi)]
             
             # Get cloud mask if any
-            if args.file_cloud_gml:
+            if args.file_cloud_gml and isfile(args.file_cloud_gml):
                 cloud_mask_array = np.logical_not(
                     aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
                 )
@@ -921,7 +922,7 @@ def main():
             write = False if (args.save_mode == "none" or args.save_mode == "prim") else True
     
             #### Image Pekel recovery (numpy array, first band)
-            if not args.extracted_pekel:
+            if not args.extracted_pekel or not(isfile(args.extracted_pekel)):
                 if 1 <= args.pekel_month <= 12:
                     args.file_data_pekel = join(
                         dirname(args.watermask), f"pekel{args.pekel_month}.tif"
@@ -978,16 +979,17 @@ def main():
                 print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
                 
             ### Image HAND (numpy array, first band)
-            if not args.file_hand:
-                args.file_hand = join(dirname(args.watermask), "hand.tif")
-                im_hand = aux.hand_recovery(args.file_vhr, args.file_hand, write=True)  
+            if not args.extracted_hand or not(isfile(args.extracted_hand)):
+                # TODO : gestion hand à revoir 
+                args.extracted_hand = join(dirname(args.watermask), "hand.tif")
+                im_hand = aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand, write=True)  
                 hand_nodata = -9999.0    
                 
 
-            ds_hand = rio.open(args.file_hand)
+            ds_hand = rio.open(args.extracted_hand)
             io_utils.print_dataset_infos(ds_hand, "HAND")
             hand_nodata = ds_hand.nodata
-            key_hand = eoscale_manager.open_raster(raster_path=args.file_hand)
+            key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
             ds_hand.close()
             del ds_hand    
                 

@@ -70,7 +70,7 @@ def pekel_month_recovery(file_ref: str, month: int, file_data_out: str, file_mas
     return pekel_image.transpose(2, 0, 1)[0]
 
 
-def hand_recovery(file_ref: str, file_out: str, write: bool = False) -> np.ndarray:
+def hand_recovery(file_ref: str, hand_ref: str, file_out: str, write: bool = False) -> np.ndarray:
     """
     Recover HAND image
 
@@ -79,12 +79,9 @@ def hand_recovery(file_ref: str, file_out: str, write: bool = False) -> np.ndarr
     :param bool write: write the output image if True, else keep the image in memory
     :returns: HAND image recovered
     """
-    if write:
-        print("Recover HAND file to", file_out)
-    else:
-        print("Recover HAND file")
+    print(f"Recover Occurrence Pekel file {hand_ref=} to {file_out=} onto {file_ref=} geometry")
     hand_image = geometry.superimpose(
-        "/work/datalake/static_aux/MASQUES/HAND_MERIT/" "hnd.vrt",
+        hand_ref,
         file_ref,
         file_out,
         otb.ImagePixelType_float,
