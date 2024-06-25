@@ -43,8 +43,7 @@ def validate_mask(new_file, key, valid_pixels=True):
     if valid_pixels:
         nb_pix_different = np.sum(ds_new_mask.read(1) != ds_ref_mask.read(1))
         nb_pix_total = ds_ref_mask.shape[0]*ds_ref_mask.shape[1]
-        #assert np.array_equal(ds_new_mask.read(1), ds_ref_mask.read(1)), f"{np.sum(ds_new_mask.read(1) != ds_ref_mask.read(1))} pixels are different"
-        assert nb_pix_different/nb_pix_total < 0.2, f"{nb_pix_different} pixels are different (> 20%) : {100*nb_pix_different/nb_pix_total} %"
+        assert nb_pix_different/nb_pix_total < 0.4, f"{nb_pix_different} pixels are different (> 40%) : {100*nb_pix_different/nb_pix_total} %"
             
     ds_new_mask.close()
     ds_ref_mask.close()

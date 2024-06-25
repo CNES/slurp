@@ -863,7 +863,7 @@ def main():
                                                                multiproc_context= "fork",
                                                                filter_desc= "NDVI processing...")
                 if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndvi[0], img_path = args.watermask.replace(".tif","_NDVI.tif"))
+                    eoscale_manager.write(key = key_ndvi[0], img_path = args.file_ndvi)
                 
             
             ### Compute NDWI        
@@ -879,7 +879,7 @@ def main():
                                                                multiproc_context= "fork",
                                                                filter_desc= "NDWI processing...")         
                 if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndwi[0], img_path = args.watermask.replace(".tif","_NDWI.tif"))
+                    eoscale_manager.write(key = key_ndwi[0], img_path = args.file_ndwi)
             
             # Get cloud mask if any
             if args.file_cloud_gml and isfile(args.file_cloud_gml):

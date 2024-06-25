@@ -234,7 +234,7 @@ def getarguments():
      )
      parser.add_argument("-shadowmask", help="Shadow mask")
      
-     parser.add_argument("-wsf", help="World Settlement Footprint raster")
+     parser.add_argument("-extracted_wsf", help="World Settlement Footprint raster")
      parser.add_argument("-mnh", help="Height elevation model")
      parser.add_argument(
          "-binary_closing",
@@ -374,16 +374,14 @@ def main():
             try:
                 t0 = time.time()
                 key_image = eoscale_manager.open_raster(raster_path = args.file_vhr)
-
                 key_watermask = eoscale_manager.open_raster(raster_path = args.watermask)
-                key_waterpred = eoscale_manager.open_raster(raster_path = args.waterpred)
+                key_waterpred = key_watermask #eoscale_manager.open_raster(raster_path = args.waterpred)
                 key_vegmask = eoscale_manager.open_raster(raster_path = args.vegetationmask)
                 key_urban_proba = eoscale_manager.open_raster(raster_path = args.urban_proba)
                 key_shadowmask = eoscale_manager.open_raster(raster_path = args.shadowmask)
-                key_wsf = eoscale_manager.open_raster(raster_path = args.wsf)
-
-                args.nodata_vhr = 0 # TODO : get nodata value from image profile
+                key_wsf = eoscale_manager.open_raster(raster_path = args.extracted_wsf)
                 
+                args.nodata_vhr = 0 # TODO : get nodata value from image profile
                 # Get cloud mask if any
                 if args.file_cloud_gml:
                     cloud_mask_array = np.logical_not(
@@ -407,7 +405,6 @@ def main():
                     mask_nocloud_key = eoscale_manager.create_image(profile)
                     eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
 
-                    
                 key_validstack = eoexe.n_images_to_m_images_filter(inputs = [key_image, mask_nocloud_key],
                                                                    image_filter = compute_valid_stack,   
                                                                    filter_parameters=args,
