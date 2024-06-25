@@ -979,16 +979,10 @@ def main():
                 print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
                 
             ### Image HAND (numpy array, first band)
-<<<<<<< HEAD
-            if not args.file_hand:
-                args.file_hand = join(dirname(args.watermask), "hand.tif")
-                im_hand = aux.hand_recovery(args.file_vhr, args.file_hand, write=True)  
-=======
             if not args.extracted_hand or not(isfile(args.extracted_hand)):
                 # TODO : gestion hand à revoir 
                 args.extracted_hand = join(dirname(args.watermask), "hand.tif")
                 im_hand = aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand, write=True)  
->>>>>>> master
                 hand_nodata = -9999.0    
                 
 
