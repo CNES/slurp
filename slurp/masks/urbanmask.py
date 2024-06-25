@@ -726,13 +726,13 @@ def main():
                 key_shadowmask = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=key_shadowmask).fill(0)
 
-            if args.urban_raster:
-                gt_key = eoscale_manager.open_raster(raster_path=args.urban_raster)
+            if args.extracted_wsf:
+                gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
 
             else:
-                args.urban_raster = join(dirname(args.urbanmask), "wsf.tif")
-                im_gt = aux.wsf_recovery(args.file_vhr, args.wsf, args.urban_raster, True)
-                gt_key = eoscale_manager.open_raster(raster_path=args.urban_raster)
+                args.extracted_wsf = join(dirname(args.urbanmask), "wsf.tif")
+                im_gt = aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf, True)
+                gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
             
             # Global validity mask construction
             input_for_valid_stack = [key_phr, mask_nocloud_key, key_vegmask, key_watermask]
