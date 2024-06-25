@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf8
 #
-# Copyright (C) 2022 Y T[3~[D.
+# Copyright (C) 2022-2024 CNES
 #
 # This file is part of slurp
 #

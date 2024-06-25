@@ -43,8 +43,8 @@ def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.
     final_shadow_mask = raw_shadow_mask
     if params["binary_opening"] > 0:
         final_shadow_mask = binary_opening(raw_shadow_mask, disk(params["binary_opening"]))
-    if params["small_objects"] > 0:
-        final_shadow_mask = remove_small_objects(final_shadow_mask, params["small_objects"], connectivity=2)
+    if params["remove_small_objects"] > 0:
+        final_shadow_mask = remove_small_objects(final_shadow_mask, params["remove_small_objects"], connectivity=2)
         
     raw_shadow_mask = np.where(raw_shadow_mask, 1, 0)
     final_shadow_mask = np.where(final_shadow_mask, 1, 0)
@@ -60,6 +60,7 @@ def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.
 
 def getarguments():
     parser = argparse.ArgumentParser()
+
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
     parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
@@ -70,6 +71,7 @@ def getarguments():
                         help="Relative shadow threshold for RGB bands (default 0.3)")
     parser.add_argument("-th_nir", type=float, action="store",
                         help="Relative shadow threshold for NIR band (default 0.3)")
+    parser.add_argument("-absolute_threshold", type=float, required=False, action="store",help="Compute shadow mask with a unique absolute threshold")
     parser.add_argument("-percentile", help="Percentile value to cut histogram and estimate shadow threshold")
     parser.add_argument("-binary_opening", "--binary_opening", type=int, required=False, action="store",
                         help="Size of ball structuring element")
@@ -143,23 +145,35 @@ def main():
             ds_phr = rio.open(args.file_vhr)
             nodata = ds_phr.profile["nodata"]
             ds_phr.close()
-            
-            # Compute threshold for each band
-            th_bands = np.zeros(4)
-            for cpt in range(3):
-                min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
-                max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
-                th_bands[cpt]  = min_band + args.th_rgb * (max_percentile - min_band)
 
-            cpt = 3
-            min_nir = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
-            max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
-            th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
-            
-            params = {"thresholds":th_bands, "binary_opening":args.binary_opening, "small_objects":args.remove_small_objects, "nodata":nodata}
+            if args.absolute_threshold == False:
+                # Compute threshold for each band
+                th_bands = np.zeros(4)
+                for cpt in range(3):
+                    min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
+                    max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
+                    th_bands[cpt]  = min_band + args.th_rgb * (max_percentile - min_band)
+                    
+                    cpt = 3
+                    min_nir = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
+                    max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
+                    th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
+            else:
+                # Use an absolute threshold instead of relative threshold
+                # Useful when using calibrated images
+                th_bands = np.zeros(4)
+                for i in range(4):
+                    th_bands[i] = args.absolute_threshold
+                    
+            params = {
+                "thresholds": th_bands,
+                "binary_opening": args.binary_opening,
+                "remove_small_objects": args.remove_small_objects,
+                "nodata": nodata
+            }
 
             if args.watermask:
-                key_watermask= eoscale_manager.open_raster(raster_path =args.watermask)
+                key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
             else:
                 profile = eoscale_manager.get_profile(key_phr)
                 profile["count"] = 1
