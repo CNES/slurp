@@ -739,7 +739,7 @@ def main():
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs=input_for_valid_stack,
                                                                 image_filter=utils.compute_valid_stack_masks,
                                                                 filter_parameters=vars(args),
-                                                                generate_output_profiles=eo_utils.single_bool_profile,
+                                                                generate_output_profiles=eo_utils.single_old_bool_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
