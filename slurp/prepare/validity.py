@@ -13,5 +13,5 @@ def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) ->
     :param dict args: dictionary of arguments, must contain a key "nodata"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata"], axis=0)
-    return valid_phr
+    valid_mask = np.logical_and.reduce(input_buffer[0] != args["nodata"], axis=0)
+    return valid_mask
