@@ -84,7 +84,7 @@ def hand_recovery(file_ref: str, hand_ref: str, file_out: str, write: bool = Fal
         hand_ref,
         file_ref,
         file_out,
-        otb.ImagePixelType_int16,
+        otb.ImagePixelType_uint16,
         write
     )
 

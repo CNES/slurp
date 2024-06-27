@@ -49,6 +49,15 @@ def single_int16_profile(input_profiles: list, map_params):
     
     return profile
 
+def single_uint16_profile(input_profiles: list, map_params):
+    profile= input_profiles[0]
+    profile["count"]= 1
+    profile["dtype"]= np.uint16
+    profile["nodata"] = 32767
+    profile["compress"] = "deflate"
+    
+    return profile
+
 def single_int32_profile(input_profiles: list, map_params):
     profile= input_profiles[0]
     profile["count"]= 1
