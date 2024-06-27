@@ -4,6 +4,46 @@
 import rasterio as rio
 import matplotlib.pyplot as plt
 import numpy as np
+import json
+
+
+def read_json(main_config_file: str, keys: list, user_config_file: str = None) -> dict:
+    """
+    Read JSON config files
+
+    :param str main_config_file: Path to the main JSON config file
+    :param list keys: Keys to read in the JSON files
+    :param str user_config_file: Path to the overload JSON config file (None by default)
+    :returns: dictionary of arguments
+    """
+    # Read the JSON data from the main config
+    try:
+        with open(main_config_file, 'r') as json_file1:
+            full_args = json.load(json_file1)
+            argsdict = full_args[keys[0]]
+            for key in keys[1:]:
+                argsdict.update(full_args[key])
+
+    except FileNotFoundError:
+        print(f"File {main_config_file} not found.")
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON data from {main_config_file}. Please check the file format.")
+
+    if user_config_file:
+        # Read the JSON data from the input file
+        try:
+            with open(user_config_file, 'r') as json_file2:
+                full_args = json.load(json_file2)
+                for k in full_args.keys():
+                    if k in keys:
+                        argsdict.update(full_args[k])
+
+        except FileNotFoundError:
+            print(f"File {user_config_file} not found.")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON data from {user_config_file}. Please check the file format.")
+
+    return argsdict
 
 
 def print_dataset_infos(dataset, prefix=""):

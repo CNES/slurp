@@ -909,7 +909,7 @@ def main():
             valid_stack_key = eoexe.n_images_to_m_images_filter(inputs=[key_phr, mask_nocloud_key],
                                                                 image_filter=utils.compute_valid_stack_clouds,
                                                                 filter_parameters=vars(args),
-                                                                generate_output_profiles=eo_utils.single_bool_profile,
+                                                                generate_output_profiles=eo_utils.single_old_bool_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
@@ -941,7 +941,7 @@ def main():
                     )
                 else:
                     args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
-                    im_pekel = aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel, write=True)   
+                    im_pekel = aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel, write=True)
                 
                 pekel_nodata = 255.0 
                 

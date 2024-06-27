@@ -11,11 +11,23 @@ def single_float_profile(input_profiles: list, map_params):
     
     return profile
 
+
+def single_old_bool_profile(input_profiles: list, map_params):
+    profile = input_profiles[0]
+    profile['count'] = 1
+    profile['dtype'] = bool
+    profile["compress"] = "deflate"
+    
+    return profile
+    
+
 def single_bool_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
-    profile['count']=1
-    profile['dtype']=bool
+    profile['count'] = 1
+    profile['dtype'] = np.uint8
+    profile['nbits'] = 1
     profile["compress"] = "deflate"
+    profile["nodata"] = None
 
     return profile
 
