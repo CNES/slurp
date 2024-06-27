@@ -1,6 +1,7 @@
-{"input":
-	{
-	    "file_vhr": "absolute_path_to_image.tif",
+{
+    "input":
+    {
+        "file_vhr": "absolute_path_to_image.tif",
 	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
 	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
 	    "hand": "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt"
