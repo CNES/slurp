@@ -474,7 +474,6 @@ def main(args=None):
     print(argsdict)
     args = argparse.Namespace(**argsdict) 
     
->>>>>>> master
     ds_phr = rio.open(args.file_vhr)
     args.nodata_phr = ds_phr.nodata
     ds_phr.close()
