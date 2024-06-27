@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This script stacks existing masks
+This script computes a shadow mask
 """
 
 import argparse
