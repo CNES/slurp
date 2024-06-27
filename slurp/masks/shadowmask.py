@@ -130,10 +130,10 @@ def main():
                     max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
                     th_bands[cpt]  = min_band + args.th_rgb * (max_percentile - min_band)
                     
-                    cpt = 3
-                    min_nir = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
-                    max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
-                    th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
+                cpt = 3
+                min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
+                max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
+                th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
             else:
                 # Use an absolute threshold instead of relative threshold
                 # Useful when using calibrated images
