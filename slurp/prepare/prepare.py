@@ -25,8 +25,11 @@ def getarguments():
 
     # valid stack
     parser.add_argument("-valid_stack", help="Path to store valid stack file")
+    
+    # perfo params
+    parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
 
-    # others
+    # only cli
     parser.add_argument("-overwrite", action="store_true", help="Recompute files even if exists")
 
     args = parser.parse_args()

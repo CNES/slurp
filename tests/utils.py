@@ -27,6 +27,11 @@ def get_output_path(file, key):
     output_image = os.path.join(pytest.output_dir, key + "_" + filename)
     return output_image
 
+def get_aux_path(file, key):
+    filename = os.path.basename(file)
+    aux_image = os.path.join(pytest.ref_dir, "Prepare",  "ref_" + key + "_" + filename)
+    return aux_image
+
 
 def remove_file(file):
     with contextlib.suppress(FileNotFoundError):

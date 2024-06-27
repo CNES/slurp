@@ -64,6 +64,9 @@ def getarguments():
     parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
     parser.add_argument("-shadowmask", help="Final mask")
+    
+    # aux files
+    parser.add_argument("-valid_stack", help="Validity mask")
 
     # computation params
     parser.add_argument("-th_rgb", type=float, action="store",
