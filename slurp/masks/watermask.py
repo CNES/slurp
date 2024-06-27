@@ -10,7 +10,6 @@ import time
 import traceback
 from os.path import dirname, join, isfile
 from subprocess import call
-import json
 
 import numpy as np
 import rasterio as rio
@@ -521,14 +520,6 @@ def getarguments():
         metavar="FILE_LAYER",
         help="Add layers as features used by learning algorithm",
     )
-
-    group1.add_argument(
-        "-cloud_gml",
-        required=False,
-        action="store",
-        dest="file_cloud_gml",
-        help="Cloud file in .GML format",
-    )
     
     group1.add_argument(
         "-filters",
@@ -540,11 +531,6 @@ def getarguments():
     )
 
     # Options
-    group2.add_argument("-red", default=1, help="Red band index")
-    group2.add_argument("-nir", default=4, help="NIR band index")
-    group2.add_argument("-green", default=2, help="green band index")
-
-    
     group2.add_argument(
         "-hand_strict",
         required=False,
@@ -771,43 +757,10 @@ def getarguments():
 def main():
 
     argparse_dict = vars(getarguments())
-    # Get the input file path from the command line argument
-    arg_file_path_1 = argparse_dict["main_config"]
 
-    # Read the JSON data from the input file
-    try:
-        with open(arg_file_path_1, 'r') as json_file1:
-            full_args=json.load(json_file1)
-            argsdict = full_args['input']
-            argsdict.update(full_args['aux_layers'])
-            argsdict.update(full_args['masks'])
-            argsdict.update(full_args['ressources'])
-            argsdict.update(full_args['water'])
-            
-            # a effacer après migration du pre-processing:
-            argsdict.update(full_args['pre_process'])
-
-    except FileNotFoundError:
-        print(f"File {arg_file_path} not found.")
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON data from {arg_file_path_1}. Please check the file format.")
-
-    if argparse_dict["user_config"] :   
-    # Get the input file path from the command line argument
-        arg_file_path_2 = argparse_dict["user_config"]
-
-        # Read the JSON data from the input file
-        try:
-            with open(arg_file_path_2, 'r') as json_file2:
-                full_args=json.load(json_file2)
-                for k in full_args.keys():
-                    if k in ['input','aux_layers','masks','ressources', 'water']:
-                        argsdict.update(full_args[k])
-
-        except FileNotFoundError:
-            print(f"File {arg_file_path} not found.")
-        except json.JSONDecodeError:
-            print(f"Error decoding JSON data from {arg_file_path_2}. Please check the file format.")
+    # Read the JSON files
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'water', 'pre_process']
+    argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     #Overload with manually passed arguments if not None
     for key in argparse_dict.keys():
@@ -819,7 +772,6 @@ def main():
     args = argparse.Namespace(**argsdict)  
     
     with eom.EOContextManager(nb_workers = args.n_workers, tile_mode = True) as eoscale_manager:
-       
         try:
 
             t0 = time.time()
@@ -847,73 +799,15 @@ def main():
             ds_phr.close()
             del ds_phr
             
-            # Store image in shared memmory
+            # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path = args.file_vhr)
-            
-            ### Compute NDVI
-            if args.file_ndvi and isfile(args.file_ndvi):
-                key_ndvi = [eoscale_manager.open_raster(raster_path=args.file_ndvi)]
-            else:
-                key_ndvi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                               image_filter = compute_ndvi,
-                                                               filter_parameters=vars(args),
-                                                               generate_output_profiles = eo_utils.single_int16_profile,
-                                                               stable_margin= 0,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "NDVI processing...")
-                if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndvi[0], img_path = args.file_ndvi)
-                
-            
-            ### Compute NDWI        
-            if args.file_ndwi and isfile(args.file_ndwi):
-                key_ndwi = [eoscale_manager.open_raster(raster_path =args.file_ndwi)]
-            else:
-                key_ndwi = eoexe.n_images_to_m_images_filter(inputs = [key_phr],
-                                                               image_filter = compute_ndwi,
-                                                               filter_parameters=vars(args),
-                                                               generate_output_profiles = eo_utils.single_int16_profile,
-                                                               stable_margin= 0,
-                                                               context_manager = eoscale_manager,
-                                                               multiproc_context= "fork",
-                                                               filter_desc= "NDWI processing...")         
-                if (args.save_mode != "none" and args.save_mode != "aux"):
-                    eoscale_manager.write(key = key_ndwi[0], img_path = args.file_ndwi)
-            
-            # Get cloud mask if any
-            if args.file_cloud_gml and isfile(args.file_cloud_gml):
-                cloud_mask_array = np.logical_not(
-                    aux.cloud_from_gml(args.file_cloud_gml, args.file_vhr)
-                )
-                #save cloud mask
-                io_utils.save_image(cloud_mask_array,
-                    join(dirname(args.watermask), "nocloud.tif"),
-                    args.crs,
-                    args.transform,
-                    None,
-                    args.rpc,
-                    tags=args.__dict__,
-                )
-                mask_nocloud_key = eoscale_manager.open_raster(raster_path = join(dirname(args.watermask), "nocloud.tif"))   
-                
-            else:
-                # Get profile from im_phr
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                mask_nocloud_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=mask_nocloud_key).fill(1)
 
-            # Global validity mask construction
-            valid_stack_key = eoexe.n_images_to_m_images_filter(inputs=[key_phr, mask_nocloud_key],
-                                                                image_filter=utils.compute_valid_stack_clouds,
-                                                                filter_parameters=vars(args),
-                                                                generate_output_profiles=eo_utils.single_old_bool_profile,
-                                                                stable_margin=0,
-                                                                context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
-                                                                filter_desc="Valid stack processing...")
+            # Valid stack
+            key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
+
+            # NDXI
+            key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
+            key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
             
             time_stack = time.time()
             
@@ -1012,7 +906,7 @@ def main():
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
                 print("Simple threshold mask NDWI > "+str(args.ndwi_threshold))
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi[0], valid_stack_key[0]],
+                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi, key_valid_stack],
                                                                 image_filter=utils.compute_mask_threshold,
                                                                 filter_parameters={"threshold": 1000 * args.ndwi_threshold},
                                                                 context_manager=eoscale_manager,
@@ -1027,7 +921,7 @@ def main():
             elif not_enough_water_samples:
                 # We compute a void mask (0 every where, except for NO DATA values)
                 # Tips : we threshold NDWI > 1000 : no pixel should be detected.
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi[0], valid_stack_key[0]],
+                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi, key_valid_stack],
                                                                 image_filter=utils.compute_mask_threshold,
                                                                 filter_parameters={"threshold": 1000},
                                                                 context_manager=eoscale_manager,
@@ -1041,11 +935,11 @@ def main():
                 # Nominal case : select samples, train, predict
                 #
                 # Sample selection
-                valid_stack = eoscale_manager.get_array(valid_stack_key[0])
+                valid_stack = eoscale_manager.get_array(key_valid_stack)
                 nb_valid_pixels = np.count_nonzero(valid_stack)
                 args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
                 args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
-                input_for_samples = [mask_pekel[0], valid_stack_key[0], mask_hand[0], key_phr, key_ndvi[0], key_ndwi[0]]
+                input_for_samples = [mask_pekel[0], key_valid_stack, mask_hand[0], key_phr, key_ndvi, key_ndwi]
 
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
@@ -1073,7 +967,7 @@ def main():
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [key_phr, key_ndvi[0], key_ndwi[0], valid_stack_key[0]]
+                input_for_prediction = [key_phr, key_ndvi, key_ndwi, key_valid_stack]
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
@@ -1091,7 +985,7 @@ def main():
                     for i in range(len(args.file_filters))
                 ]
 
-                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], valid_stack_key[0]] + file_filters
+                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack] + file_filters
                 im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
                                                                image_filter=post_process,
                                                                filter_parameters=vars(args),
