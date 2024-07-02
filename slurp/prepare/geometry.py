@@ -22,7 +22,7 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out, write: boo
     app.SetParameterString("inm", file_in)
     app.SetParameterString("inr", file_ref)
     app.SetParameterString("interpolator", "nn")
-    app.SetParameterString("out", file_out + "?&writerpctags=true")
+    app.SetParameterString("out", file_out + "?&writerpctags=true&gdal:co:COMPRESS=DEFLATE")
     app.SetParameterOutputImagePixelType("out", type_out)
     app.Execute()
 
@@ -54,7 +54,7 @@ def rasterization(file_in: str, file_ref: str, file_out: str, type_out, write: b
     app.SetParameterFloat("background", 0)
     app.SetParameterString("mode", "binary")
     app.SetParameterFloat("mode.binary.foreground", 1)
-    app.SetParameterString("out", file_out + "?&writerpctags=true")
+    app.SetParameterString("out", file_out + "?&writerpctags=true&gdal:co:COMPRESS=DEFLATE")
     app.SetParameterOutputImagePixelType("out", type_out)
     app.Execute()
 

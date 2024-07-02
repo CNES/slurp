@@ -560,7 +560,7 @@ def main(args=None):
             texture = eoexe.n_images_to_m_images_filter(inputs=[input_img, valid_stack_key[0]],
                                                         image_filter=aux.texture_task,
                                                         filter_parameters=vars(args),
-                                                        generate_output_profiles=eo_utils.single_float_profile,
+                                                        generate_output_profiles=eo_utils.single_uint16_profile,
                                                         stable_margin=args.texture_rad,
                                                         context_manager=eoscale_manager,
                                                         multiproc_context="fork",

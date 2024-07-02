@@ -1,20 +1,22 @@
 {"input":
 	{
     "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Demo/xt_PHR.tif",
-	"pekel" : null
+	"pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+	"hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+	"wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt"
 	},
 	
 "aux_layers":
 	{
-	"extracted_pekel" : null,
+    "extracted_pekel": "../out_slurp/pekel.tif",
+    "extracted_hand": "../out_slurp/hand.tif",
+	"extracted_wsf": "../out_slurp/wsf.tif",
 	"file_ndvi": null, 
 	"file_ndwi":null, 
 	"valid_stack":null,
 	"file_cloud_gml": null,
 	"file_texture":null,
-    "file_hand":null,
-    "wsf" : null,
-    "mnh" : null 
+    "mnh":null
     },
 "masks":
      {
