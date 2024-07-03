@@ -9,7 +9,7 @@ import rasterio as rio
 import time
 import traceback
 
-from os.path import dirname, join, basename
+from os.path import dirname, join, basename, isfile
 from skimage import segmentation
 from skimage.filters import sobel
 from sklearn.ensemble import RandomForestClassifier
@@ -62,8 +62,9 @@ def apply_watermask(input_buffer: list, input_profiles: list, args: dict) -> np.
     return valid_stack
 
 
-def print_feature_importance(classifier, feature_names):
+def print_feature_importance(classifier, layers):
     """Compute feature importance."""
+    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
 
     importances = classifier.feature_importances_
     indices = np.argsort(importances)[::-1]
@@ -256,22 +257,22 @@ def watershed_regul(params: dict, clean_predict: np.ndarray, input_buffer: list)
 
     """
     weak_detection = np.logical_and(input_buffer[0][2] > 50, input_buffer[0][2] < args.confidence_threshold)
-    true_negative = np.logical_and(binary_closing(input_buffer[5][0], disk(10)) == 255, weak_detection)
+    true_negative = np.logical_and(binary_closing(input_buffer[3][0], disk(10)) == 255, weak_detection)
     markers[weak_detection] = 3
     """
 
     #  probable_buildings = np.logical_and(input_buffer[0][2] > args.confidence_threshold, clean_predict == 1)
     probable_background = np.logical_and(input_buffer[0][2] < 40, clean_predict == 0)
-    ground_truth_eroded = binary_erosion(input_buffer[5][0] == 255, disk(5))
+    ground_truth_eroded = binary_erosion(input_buffer[3][0] == 255, disk(5))
     probable_buildings = np.logical_and(ground_truth_eroded, input_buffer[0][2] > 50)
 
     """
-    ground_truth_eroded = binary_erosion(input_buffer[5][0]==255, disk(5))
+    ground_truth_eroded = binary_erosion(input_buffer[3][0]==255, disk(5))
     # If WSF = 1
     probable_buildings = np.logical_and(input_buffer[0][2] > 70, ground_truth_eroded)
     #probable_background = np.logical_and(input_buffer[0][2] < 40, ground_truth_eroded)
 
-    no_WSF = binary_dilation(input_buffer[5][0]==0, disk(5)) 
+    no_WSF = binary_dilation(input_buffer[3][0]==0, disk(5)) 
     false_positive = np.logical_and(no_WSF, input_buffer[0][2] > params["confidence_threshold"])
 
     # note : all other pixels are 0
@@ -286,19 +287,10 @@ def watershed_regul(params: dict, clean_predict: np.ndarray, input_buffer: list)
 
     if params["file_shadowmask"]:
         # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
-        markers[binary_erosion(input_buffer[4][0] == 2, disk(5))] = 8
-
-    '''
-    if params["file_vegetationmask"]:
-        # vegetation
-        markers[input_buffer[3][0] > params["vegmask_max_value"]] = 7
-    if params["file_watermask"]:
-        # water
-        markers[input_buffer[2][0] == 1] = 6
-    '''
+        markers[binary_erosion(input_buffer[2][0] == 2, disk(5))] = 8
 
     if params["remove_false_positive"]:
-        ground_truth = input_buffer[5][0]
+        ground_truth = input_buffer[3][0]
         # mark as false positive pixels with high confidence but not covered by dilated ground truth
         # TODO : check if we can reduce radius for dilation
         false_positive = np.logical_and(binary_dilation(ground_truth, disk(10)) == 0,
@@ -370,257 +362,76 @@ def getarguments():
     parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     parser.add_argument("-file_vhr", help="PHR filename")
 
-    parser.add_argument("-red", help="Red band index")
-    parser.add_argument("-nir", help="NIR band index")
-    parser.add_argument("-green", help="green band index")
+    # Input files
+    parser.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
+    parser.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
+    parser.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
+    parser.add_argument("-wsf", action="store", dest="extracted_wsf", help="WSF filename")
+    parser.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
+                        help="Add layers as features used by learning algorithm")
+    parser.add_argument("-urban_raster", action="store",
+                        help="Ground Truth (could be OSM, WSF). By default, WSF is automatically retrieved")
     
-    parser.add_argument(
-        "-save",
-        choices=["none", "prim", "aux", "all", "debug"],
-        required=False,
-        action="store",
-        dest="save_mode",
-        help="Save all files (debug), only primitives (prim), only wsf (aux), primitives and wsf (all) or only output mask (none)",
-    )
-
-    parser.add_argument(
-        "-ndvi",
-        required=False,
-        action="store",
-        dest="file_ndvi",
-        help="NDVI filename (computed if missing option)",
-    )
-
-    parser.add_argument(
-        "-ndwi",
-        required=False,
-        action="store",
-        dest="file_ndwi",
-        help="NDWI filename (computed if missing option)",
-    )
+    # Other masks
+    parser.add_argument("-watermask", action="store",
+                        help="Watermask filename : urban mask will be learned & predicted, excepted on water areas")    
+    parser.add_argument("-vegetationmask", action="store",
+                        help="Vegetation mask filename : urban mask will be learned & predicted, excepted on vegetated areas")
+    parser.add_argument("-vegmask_max_value", type=int, action="store",
+                        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted")
+    parser.add_argument("-shadowmask", action="store",
+                        help="Shadowmask filename : big shadow areas will be marked as background")
     
-    parser.add_argument(
-        "-watermask",
-        required=False,
-        action="store",
-        dest="watermask",
-        help="Watermask filename : urban mask will be learned & predicted, excepted on water areas"
-    )
+    # Options
+    parser.add_argument("-nb_classes", type=int, action="store",
+                        help="Nb of classes in the ground-truth (1 by default - buildings only. Can be fix to 2 to classify buildings/roads") 
+    parser.add_argument("-save", choices=["none", "debug"], action="store", dest="save_mode",
+                        help="Save all files (debug) or only output mask (none)")
     
-    parser.add_argument(
-        "-vegetationmask",
-        required=False,
-        action="store",
-        dest="vegetationmask",
-        help="Vegetation mask filename : urban mask will be learned & predicted, excepted on vegetated areas"
-    )
+    # Samples
+    parser.add_argument("-nb_samples_urban", type=int, action="store",
+                        help="Number of samples in buildings for learning (default is 1000)")
 
-    parser.add_argument(
-        "-vegmask_max_value",
-        required=False,
-        type=int,
-        action="store",
-        dest="vegmask_max_value",
-        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted"
-    )
+    parser.add_argument("-nb_samples_other", type=int, action="store",
+                        help="Number of samples in other for learning (default is 5000)")
 
-    parser.add_argument(
-        "-shadowmask",
-        required=False,
-        action="store",
-        dest="shadowmask",
-        help="Shadowmask filename : big shadow areas will be marked as background"
-    )
-
-    parser.add_argument(
-        "-post_process",
-        required=False,
-        action="store_true",
-        dest="post_process",
-        help="Post-process urban mask : apply morphological operations and regularize building shapes (watershed regularization)"
-    )
-
-    parser.add_argument(
-        "-wsf",
-        required=False,
-        action="store",
-        dest="extracted_wsf",
-        help="WSF filename",
-    )
-
-    parser.add_argument(
-        "-valid",
-        required=False,
-        action="store",
-        dest="valid_stack",
-        help="Validity mask",
-    )
-
-    parser.add_argument(
-        "-layers",
-        nargs="+",
-        required=False,
-        action="store",
-        dest="files_layers",
-        metavar="FILE_LAYER",
-        help="Add layers as features used by learning algorithm",
-    )
+    parser.add_argument("-max_depth", type=int, action="store", help="Max depth of trees")
+    parser.add_argument( "-nb_estimators", type=int, action="store", help="Nb of trees in Random Forest")
+    parser.add_argument("-n_jobs", type=int, action="store", help="Nb of parallel jobs for Random Forest")
+    parser.add_argument("-random_seed", type=int, action="store", help="Fix the random seed for samples selection")
     
-    parser.add_argument(
-        "-urban_raster",
-        required=False,
-        action="store",
-        dest="urban_raster",
-        help="Ground Truth (could be OSM, WSF). By default, WSF is automatically retrieved"
-    )
+    # Post-process
+    parser.add_argument("-post_process", action="store",
+                        help="Post-process urban mask : apply morphological operations and regularize building shapes (watershed regularization)")  
+
+    parser.add_argument("-binary_closing", type=int, action="store",
+                        help="Size of disk structuring element (erode GT before picking-up samples)") 
+
+    parser.add_argument("-binary_opening", type=int, action="store",
+                        help="Size of square structuring element")
+
+    parser.add_argument("-binary_dilation", type=int, action="store",
+                        help="Size of disk structuring element (dilate non vegetated areas)")
+
+    parser.add_argument("-remove_small_objects", type=int, action="store",
+                        help="The minimum area, in pixels, of the objects to detect")
     
-    parser.add_argument(
-        "-nb_classes",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_classes",
-        help="Nb of classes in the ground-truth (1 by default - buildings only. Can be fix to 2 to classify buildings/roads"
-    )
+    parser.add_argument("-remove_small_holes", type=int, action="store",
+                        help="The minimum area, in pixels, of the holes to fill")
 
-    parser.add_argument(
-        "-urbanmask",
-        help="Output classification filename (default is classif.tif)",
-    )
-
-    parser.add_argument(
-        "-value_classif",
-        type=int,
-        required=False,
-        action="store",
-        dest="value_classif",
-        help="Input ground truth class to consider in the input ground truth (default is 255 for WSF)",
-    )
-
-    parser.add_argument(
-        "-nb_samples_urban",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_samples_urban",
-        help="Number of samples in buildings for learning (default is 1000)",
-    )
-
-    parser.add_argument(
-        "-nb_samples_other",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_samples_other",
-        help="Number of samples in other for learning (default is 5000)",
-    )
-
-    parser.add_argument(
-        "-max_depth",
-        type=int,
-        required=False,
-        action="store",
-        dest="max_depth",
-        help="Max depth of trees"
-    )
-
-    parser.add_argument(
-        "-nb_estimators",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_estimators",
-        help="Nb of trees in Random Forest"
-    )
-
-    parser.add_argument(
-        "-n_jobs",
-        type=int,
-        required=False,
-        action="store",
-        dest="n_jobs",
-        help="Nb of parallel jobs for Random Forest"
-    )
+    parser.add_argument("-remove_false_positive", action="store",
+                        help="Will dilate and use input ground-truth as mask to filter false positive from initial prediction")
     
-    parser.add_argument(
-        "-n_workers",
-        type=int,
-        required=False,
-        action="store",
-        dest="n_workers",
-        help="Nb of CPU"
-    )
+    parser.add_argument("-confidence_threshold", type=int, action="store",
+                        help="Confidence threshold to consider true positive in regularization step (85 by default)")    
     
-    parser.add_argument(
-        "-random_seed",
-        type=int,
-        required=False,
-        action="store",
-        dest="random_seed",
-        help="Fix the random seed for samples selection",
-    )
-
-    parser.add_argument(
-        "-binary_closing",
-        type=int,
-        required=False,
-        action="store",
-        dest="binary_closing",
-        help="Size of disk structuring element (erode GT before picking-up samples)"
-    ) 
-
-    parser.add_argument(
-        "-binary_opening",
-        type=int,
-        required=False,
-        action="store",
-        dest="binary_opening",
-        help="Size of square structuring element"
-    )
-
-    parser.add_argument(
-        "-binary_dilation",
-        type=int,
-        required=False,
-        action="store",
-        dest="binary_dilation",
-        help="Size of disk structuring element (dilate non vegetated areas)"
-    )
-
-    parser.add_argument(
-        "-remove_small_objects",
-        type=int,
-        required=False,
-        action="store",
-        dest="remove_small_objects",
-        help="The minimum area, in pixels, of the objects to detect",
-    )
+    # Output
+    parser.add_argument("-urbanmask", help="Output classification filename (default is classif.tif)")
+    parser.add_argument("-value_classif", type=int, action="store",
+                        help="Input ground truth class to consider in the input ground truth (default is 255 for WSF)")
     
-    parser.add_argument(
-        "-remove_small_holes",
-        type=int,
-        required=False,
-        action="store",
-        dest="remove_small_holes",
-        help="The minimum area, in pixels, of the holes to fill",
-    )
-    
-    parser.add_argument(
-        "-remove_false_positive",
-        required=False,
-        action="store_true",
-        dest="remove_false_positive",
-        help="Will dilate and use input ground-truth as mask to filter false positive from initial prediction"
-    )
-    
-    parser.add_argument(
-        "-confidence_threshold",
-        type=int,
-        required=False,
-        action="store",
-        dest="confidence_threshold",
-        help="Confidence threshold to consider true positive in regularization step (85 by default)"
-    )
+    # Parallel computing
+    parser.add_argument("-n_workers", type=int, action="store", help="Nb of CPU")
     
     return parser.parse_args()
 
@@ -629,7 +440,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'urban', 'pre_process']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'urban']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -649,36 +460,22 @@ def main():
 
             ################ Build stack with all layers #######
             
-            # Band positions in PHR image
-            if args.red == 1:
-                names_stack = ["R", "G", "B", "NIR", "NDVI", "NDWI"]
-            else:
-                names_stack = ["B", "G", "R", "NIR", "NDVI", "NDWI"]
-
-            names_stack += [basename(f) for f in args.files_layers]
-            
             # Image PHR (numpy array, 4 bands, band number is first dimension),
-            ds_phr = rio.open(args.file_vhr)
-            io_utils.print_dataset_infos(ds_phr, "PHR")
-            args.nodata_phr = ds_phr.nodata
-           
-            # Save crs, transform and rpc in args
-            args.shape = ds_phr.shape
-            args.crs = ds_phr.crs
-            args.transform = ds_phr.transform
-            args.rpc = ds_phr.tags(ns="RPC")
-
-            ds_phr.close()
-            del ds_phr
-            
-            # Store image in shared memmory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
+            profile_phr = eoscale_manager.get_profile(key_phr)
+            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
+
+            args.nodata_phr = profile_phr["nodata"]
+            args.shape = (profile_phr["height"], profile_phr["width"])
+            args.crs = profile_phr["crs"]
+            args.transform = profile_phr["transform"]
+            args.rpc = None
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
 
             # Global validity mask construction
-            if args.vegetationmask:
+            if args.vegetationmask and isfile(args.vegetationmask):
                 key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_vegmask],
@@ -692,7 +489,7 @@ def main():
                 )
                 key_valid_stack = key_valid_stack[0]
 
-            if args.watermask:
+            if args.watermask and isfile(args.watermask):
                 key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_watermask],
@@ -758,7 +555,7 @@ def main():
                 y_samples = samples[:, 0]
 
                 train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier, names_stack)
+                print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
@@ -795,7 +592,7 @@ def main():
                     )
 
                 ######### Post_processing  ################
-                if args.shadowmask:
+                if args.shadowmask and isfile(args.shadowmask):
                     key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
                 else:
                     profile = eoscale_manager.get_profile(key_phr)
@@ -805,15 +602,7 @@ def main():
                     eoscale_manager.get_array(key=key_shadowmask).fill(0)
 
                 if args.post_process is True:
-                    inputs_for_post_process = [
-                        key_predict[0],
-                        key_phr,
-                        key_watermask,
-                        key_vegmask,
-                        key_shadowmask,
-                        gt_key,
-                        key_valid_stack
-                    ]
+                    inputs_for_post_process = [key_predict[0], key_phr, key_shadowmask, gt_key, key_valid_stack]
                     key_post_process = eoexe.n_images_to_m_images_filter(inputs=inputs_for_post_process,
                                                                          image_filter=post_process,
                                                                          filter_parameters=vars(args),
@@ -846,12 +635,12 @@ def main():
                 end_time = time.time()
 
                 print(f"**** Urban mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
-                print("Total time (user)       :\t"+convert_time(end_time-t0))
-                print("- Build_stack           :\t"+convert_time(time_stack-t0))
-                print("- Build_samples         :\t"+convert_time(time_samples-time_stack))
-                print("- Random forest (total) :\t"+convert_time(time_random_forest-time_samples))
+                print("Total time (user)       :\t" + convert_time(end_time-t0))
+                print("- Build_stack           :\t" + convert_time(time_stack-t0))
+                print("- Build_samples         :\t" + convert_time(time_samples-time_stack))
+                print("- Random forest (total) :\t" + convert_time(time_random_forest-time_samples))
                 if args.post_process is True:
-                    print("- Post-processing       :\t"+convert_time(end_time-time_random_forest))
+                    print("- Post-processing       :\t" + convert_time(end_time-time_random_forest))
                 print("***")   
                 
             elif args.nb_valid_built_pixels > 0:
