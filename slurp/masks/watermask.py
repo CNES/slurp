@@ -42,16 +42,15 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     """
     if params["hand_strict"]:
         if not params["no_pekel_filter"]:
-            [mask_pekel, mask_pekelxx, mask_pekel0] = utils.compute_mask(
+            [mask_pekel, mask_pekelxx] = utils.compute_mask(
                 input_buffer[0],
-                [params["thresh_pekel"], params["strict_thresh"], 0]
+                [params["thresh_pekel"], params["strict_thresh"]]
             )
         else:
             [mask_pekel, mask_pekelxx] = utils.compute_mask(
                 input_buffer[0],
                 [params["thresh_pekel"], params["strict_thresh"]]
             )
-            mask_pekel0 = np.zeros(input_buffer[0].shape)
         return [mask_pekel, mask_pekelxx]
 
     elif not params["no_pekel_filter"]:
@@ -65,7 +64,7 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     return [mask_pekel, mask_pekel0]
 
 
-def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) -> bool:
     """
     Compute Hand mask with one or multiple threshold values.
 
@@ -76,7 +75,7 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
     """
     mask_hand = input_buffer[0] > params["thresh_hand"]
 
-    # Do not learn in water surface (usefull if image contains big water surfaces)
+    # Do not learn in water surface (useful if image contains big water surfaces)
     # Add some robustness if hand_strict is not used
     # if args.hand_strict:
     # np.logical_not(np.logical_or(mask_hand, inputBuffer[1]), out=mask_hand)
@@ -169,12 +168,6 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
 
         height = mask_1.shape[0]
         width = mask_1.shape[1]
-
-        nz_rows, nz_cols = np.nonzero(mask_2)
-        min_row = np.min(nz_rows)
-        max_row = np.max(nz_rows)
-        min_col = np.min(nz_cols)
-        max_col = np.max(nz_cols)
 
         while nb_idxs < nb_indexes:
             np.random.seed(712)  # reproductible results
@@ -279,8 +272,9 @@ def mask_filter(im_in, mask_ref):
     return im_filtered
 
 
-def print_feature_importance(classifier, feature_names):
+def print_feature_importance(classifier):
     """Compute feature importance."""
+    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"]
 
     importances = classifier.feature_importances_
     indices = np.argsort(importances)[::-1]
@@ -334,7 +328,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
             nb_other_subsamples, input_buffer[1][0], input_buffer[2][0]
         )
 
-    if params["samples_method"] == "smart":
+    elif params["samples_method"] == "smart":
         rows_pekel, cols_pekel = get_smart_indexes_from_mask(
             nb_water_subsamples,
             params["smart_area_pct"],
@@ -346,11 +340,14 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
             nb_other_subsamples, input_buffer[1][0], input_buffer[2][0]
         )
 
-    if params["samples_method"] == "grid":
+    elif params["samples_method"] == "grid":
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples, input_buffer[1], valid_water_pixels[0])
 
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[1], input_buffer[2])
+
+    else:
+        raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
 
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
@@ -448,303 +445,81 @@ def getarguments():
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="PHR filename")
 
-    group1.add_argument(
-        "-pekel",
-        required=False,
-        action="store",
-        dest="extracted_pekel",
-        help="Pekel filename (computed if missing option)",
-    )
-
-    group1.add_argument(
-        "-thresh_pekel",
-        type=float,
-        required=False,
-        action="store",
-        dest="thresh_pekel",
-        help="Pekel Threshold float (default is 50)",
-    )
-
-    group1.add_argument(
-        "-hand",
-        required=False,
-        action="store",
-        dest="extracted_hand",
-        help="Hand filename (computed if missing option)",
-    )
-
-    group1.add_argument(
-        "-thresh_hand",
-        type=int,
-        required=False,
-        action="store",
-        dest="thresh_hand",
-        help="Hand Threshold int >= 0 (default is 25)",
-    )
-
-    group1.add_argument(
-        "-ndvi",
-        required=False,
-        action="store",
-        dest="file_ndvi",
-        help="NDVI filename (computed if missing option)",
-    )
-
-    group1.add_argument(
-        "-ndwi",
-        required=False,
-        action="store",
-        dest="file_ndwi",
-        help="NDWI filename (computed if missing option)",
-    )
-
-    group1.add_argument(
-        "-layers",
-        nargs="+",
-        required=False,
-        action="store",
-        dest="files_layers",
-        metavar="FILE_LAYER",
-        help="Add layers as features used by learning algorithm",
-    )
-
-    group1.add_argument(
-        "-filters",
-        nargs="+",
-        required=False,
-        action="store",
-        dest="file_filters",
-        help="Add files used in filtering (postprocessing)",
-    )
-
-    group1.add_argument(
-        "-valid",
-        required=False,
-        action="store",
-        dest="valid_stack",
-        help="Validity mask",
-    )
+    group1.add_argument("-pekel", action="store", dest="extracted_pekel", help="Pekel filename")
+    group1.add_argument("-hand", action="store", dest="extracted_hand", help="Hand filename")
+    group1.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
+    group1.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
+    group1.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
+                        help="Add layers as features used by learning algorithm")
+    group1.add_argument("-filters", nargs="+", action="store", dest="file_filters",
+                        help="Add files used in filtering (postprocessing)")
+    group1.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
 
     # Options
-    group2.add_argument("-red", default=1, help="Red band index")
-
-    group2.add_argument(
-        "-hand_strict",
-        required=False,
-        action="store_true",
-        dest="hand_strict",
-        help="Use not(pekelxx) for other (no water) samples",
-    )
-
-    group2.add_argument(
-        "-strict_thresh",
-        type=float,
-        required=False,
-        action="store",
-        dest="strict_thresh",
-        help="Pekel Threshold float (default is 50)",
-    )
-
-    group2.add_argument(
-        "-save_mode",
-        choices=["none", "prim", "aux", "all", "debug"],
-        required=False,
-        action="store",
-        dest="save_mode",
-        help="Save all files (debug), only primitives (prim), only pekel and hand (aux), primitives, pekel and hand (all) or only output mask (none)",
-    )
-
-    group2.add_argument(
-        "-simple_ndwi_threshold",
-        required=False,
-        action="store_true",
-        dest="simple_ndwi_threshold",
-        help="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel"
-    )
-
-    group2.add_argument(
-        "-ndwi_threshold",
-        required=False,
-        type=float,
-        action="store",
-        dest="ndwi_threshold",
-        help="Threshold used when Pekel is empty in the area"
-    )
+    group2.add_argument("-thresh_pekel", type=float, action="store", help="Pekel Threshold float (default is 50)")
+    group2.add_argument("-hand_strict", action="store_true", help="Use not(pekelxx) for other (no water) samples")
+    group2.add_argument("-thresh_hand", type=int, action="store", help="Hand Threshold int >= 0 (default is 25)")
+    group2.add_argument("-strict_thresh", type=float, action="store", help="Pekel Threshold float (default is 50)",)
+    group2.add_argument("-save_mode", choices=["none", "debug"], action="store",
+                        help="Save all files (debug) or only output mask (none)")
+    group2.add_argument("-simple_ndwi_threshold", action="store",
+                        help="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel")
+    group2.add_argument("-ndwi_threshold", type=float, action="store",
+                        help="Threshold used when Pekel is empty in the area")
 
     # Samples
-    group3.add_argument(
-        "-samples_method",
-        choices=["smart", "grid", "random"],
-        required=False,
-        action="store",
-        dest="samples_method",
-        help="Select method for choosing learning samples",
-    )
+    group3.add_argument("-samples_method", choices=["smart", "grid", "random"], action="store",
+                        help="Select method for choosing learning samples")
 
-    group3.add_argument(
-        "-nb_samples_water",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_samples_water",
-        help="Number of samples in water for learning (default is 2000)",
-    )
+    group3.add_argument("-nb_samples_water", type=int, action="store",
+                        help="Number of samples in water for learning (default is 2000)")
 
-    group3.add_argument(
-        "-nb_samples_other",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_samples_other",
-        help="Number of samples in other for learning (default is 10000)",
-    )
+    group3.add_argument("-nb_samples_other", type=int, action="store",
+                        help="Number of samples in other for learning (default is 10000)")
 
-    group3.add_argument(
-        "-nb_samples_auto",
-        required=False,
-        action="store_true",
-        dest="nb_samples_auto",
-        help="Auto select number of samples for water and other",
-    )
+    group3.add_argument("-nb_samples_auto", action="store",
+                        help="Auto select number of samples for water and other")
 
-    group3.add_argument(
-        "-auto_pct",
-        type=float,
-        required=False,
-        action="store",
-        dest="auto_pct",
-        help="Percentage of samples points, to use with -nb_samples_auto",
-    )
+    group3.add_argument("-auto_pct", type=float, action="store",
+                        help="Percentage of samples points, to use with -nb_samples_auto")
 
-    group3.add_argument(
-        "-smart_area_pct",
-        type=int,
-        required=False,
-        action="store",
-        dest="smart_area_pct",
-        help="For smart method, importance of area for selecting number of samples in each water surface.",
-    )
+    group3.add_argument("-smart_area_pct", type=int, action="store",
+                        help="For smart method, importance of area for selecting number of samples in each water surface.")
 
-    group3.add_argument(
-        "-smart_minimum",
-        type=int,
-        required=False,
-        action="store",
-        dest="smart_minimum",
-        help="For smart method, minimum number of samples in each water surface.",
-    )
+    group3.add_argument("-smart_minimum", type=int, action="store",
+                        help="For smart method, minimum number of samples in each water surface.")
 
-    group3.add_argument(
-        "-grid_spacing",
-        type=int,
-        required=False,
-        action="store",
-        dest="grid_spacing",
-        help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)",
-    )
+    group3.add_argument("-grid_spacing", type=int, action="store",
+                        help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)")
 
-    group3.add_argument(
-        "-max_depth",
-        type=int,
-        required=False,
-        action="store",
-        dest="max_depth",
-        help="Max depth of trees"
-    )
+    group3.add_argument("-max_depth", type=int, action="store", help="Max depth of trees")
 
-    group3.add_argument(
-        "-nb_estimators",
-        type=int,
-        required=False,
-        action="store",
-        dest="nb_estimators",
-        help="Nb of trees in Random Forest"
-    )
+    group3.add_argument("-nb_estimators", type=int, action="store", help="Nb of trees in Random Forest")
 
-    group3.add_argument(
-        "-n_jobs",
-        type=int,
-        required=False,
-        action="store",
-        dest="n_jobs",
-        help="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)"
-    )
+    group3.add_argument("-n_jobs", type=int, action="store",
+                        help="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)")
 
-    # Post processing
-    group4.add_argument(
-        "-no_pekel_filter",
-        required=False,
-        action="store_true",
-        dest="no_pekel_filter",
-        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel",
-    )
+    # Post-processing
+    group4.add_argument("-no_pekel_filter", action="store", 
+                        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel")
 
-    group4.add_argument(
-        "-hand_filter",
-        default=False,
-        required=False,
-        action="store_true",
-        dest="hand_filter",
-        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict",
-    )
+    group4.add_argument("-hand_filter", action="store", 
+                        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict",)
 
-    group4.add_argument(
-        "-binary_closing",
-        type=int,
-        required=False,
-        action="store",
-        dest="binary_closing",
-        help="Size of square structuring element",
-    )
-
-    group4.add_argument(
-        "-area_closing",
-        type=int,
-        required=False,
-        action="store",
-        dest="area_closing",
-        help="Area closing removes all dark structures",
-    )
-
-    group4.add_argument(
-        "-remove_small_holes",
-        type=int,
-        required=False,
-        action="store",
-        dest="remove_small_holes",
-        help="The maximum area, in pixels, of a contiguous hole that will be filled",
-    )
+    group4.add_argument("-binary_closing", type=int, action="store", help="Size of square structuring element",)
+    group4.add_argument("-area_closing", type=int, action="store", help="Area closing removes all dark structures",)
+    group4.add_argument("-remove_small_holes", type=int, action="store",
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled",)
 
     # Output
     group5.add_argument("-watermask", help="Output classification filename")
-
-    group5.add_argument(
-        "-value_classif",
-        type=int,
-        required=False,
-        action="store",
-        dest="value_classif",
-        help="Output classification value (default is 1)",
-    )
+    group5.add_argument("-value_classif", type=int, action="store", help="Output classification value (default is 1)")
 
     # Parallel computing
-    group6.add_argument(
-        "-max_mem",
-        type=int,
-        required=False,
-        action="store",
-        dest="max_memory",
-        help="Max memory permitted for the prediction of the Random Forest (in Gb)"
-    )
+    group6.add_argument("-max_mem", type=int, action="store", dest="max_memory",
+                        help="Max memory permitted for the prediction of the Random Forest (in Gb)")
 
-    group6.add_argument(
-        "-n_workers",
-        type=int,
-        required=False,
-        action="store",
-        dest="n_workers",
-        help="Nb of CPU"
-    )
+    group6.add_argument("-n_workers", type=int, action="store", help="Nb of CPU")
 
     return parser.parse_args()
 
@@ -756,7 +531,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'water', 'pre_process']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'water']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -776,29 +551,16 @@ def main():
 
             ################ Build stack with all layers #######
 
-            # Band positions in PHR image
-            if args.red == 1:
-                names_stack = ["R", "G", "B", "NIR", "NDVI", "NDWI"]
-            else:
-                names_stack = ["B", "G", "R", "NIR", "NDVI", "NDWI"]
-
             # Image PHR (numpy array, 4 bands, band number is first dimension),
-            ds_phr = rio.open(args.file_vhr)
-            ds_phr_profile = ds_phr.profile
-            io_utils.print_dataset_infos(ds_phr, "PHR")
-            args.nodata_phr = ds_phr.nodata
-
-            # Save crs, transform and rpc in args
-            args.shape = ds_phr.shape
-            args.crs = ds_phr.crs
-            args.transform = ds_phr.transform
-            args.rpc = ds_phr.tags(ns="RPC")
-
-            ds_phr.close()
-            del ds_phr
-
-            # Store image in shared memmory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
+            profile_phr = eoscale_manager.get_profile(key_phr)
+            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
+
+            args.nodata_phr = profile_phr["nodata"]
+            args.shape = (profile_phr["height"], profile_phr["width"])
+            args.crs = profile_phr["crs"]
+            args.transform = profile_phr["transform"]
+            args.rpc = None
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
@@ -809,13 +571,15 @@ def main():
 
             time_stack = time.time()
 
+            ################ Build samples ##################
+
             # Pekel
             key_pekel = eoscale_manager.open_raster(raster_path=args.extracted_pekel)
             pekel_profile = eoscale_manager.get_profile(key_pekel)
             eo_utils.print_dataset_infos(args.extracted_pekel, pekel_profile, "PEKEL")
             args.pekel_nodata = pekel_profile["nodata"]
 
-            ### Pekel valid masks
+            # Pekel valid masks
             mask_pekel = eoexe.n_images_to_m_images_filter(inputs=[key_pekel],
                                                            image_filter=compute_pekel_mask,
                                                            filter_parameters=vars(args),
@@ -835,11 +599,11 @@ def main():
             local_mask_pekel = eoscale_manager.get_array(mask_pekel[0])
             if np.count_nonzero(local_mask_pekel) < args.nb_samples_water:
                 # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
-                # Alternative would be to select samples in a thresholded NDWI..
+                # Alternative would be to select samples in a thresholded NDWI...
                 not_enough_water_samples = True
                 print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
 
-            ### HAND
+            # HAND
             key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
             hand_profile = eoscale_manager.get_profile(key_hand)
             eo_utils.print_dataset_infos(args.extracted_hand, hand_profile, "HAND")
@@ -859,7 +623,6 @@ def main():
             # Flag to command post-process
             do_post_process = True
 
-            ################ Build samples ##################
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
                 print("Simple threshold mask NDWI > " + str(args.ndwi_threshold))
@@ -877,7 +640,7 @@ def main():
                 do_post_process = False
 
             elif not_enough_water_samples:
-                # We compute a void mask (0 every where, except for NO DATA values)
+                # We compute a void mask (0 everywhere, except for NO DATA values)
                 # Tips : we threshold NDWI > 1000 : no pixel should be detected.
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi, key_valid_stack],
                                                                 image_filter=utils.compute_mask_threshold,
@@ -921,7 +684,7 @@ def main():
                 x_samples = samples[:, :-1]
                 y_samples = samples[:, -1]
                 train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier, names_stack)
+                print_feature_importance(classifier)
                 gc.collect()
 
                 ######### Predict  ################
