@@ -6,7 +6,6 @@ This script computes a shadow mask
 """
 
 import argparse
-import rasterio as rio
 import numpy as np
 import traceback
 
@@ -114,10 +113,7 @@ def main():
             # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             local_phr = eoscale_manager.get_array(key_phr)
-
-            ds_phr = rio.open(args.file_vhr)
-            nodata = ds_phr.profile["nodata"]
-            ds_phr.close()
+            nodata = eoscale_manager.get_profile(key_phr)["nodata"]
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
