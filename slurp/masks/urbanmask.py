@@ -5,7 +5,6 @@
 import argparse
 import gc
 import numpy as np
-import rasterio as rio
 import time
 import traceback
 

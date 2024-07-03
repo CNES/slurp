@@ -48,8 +48,8 @@ def compute_urbanmask(file, nb_workers):
     ndwi = get_aux_path(file, "ndwi")
     wsf = get_aux_path(file, "wsf")
     
-    os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -remove_false_positive -remove_small_objects 400 -remove_small_holes 50 " \
-              f"-binary_closing 3 -binary_opening 3 -urbanmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
+    os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} " \
+              f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
     
     assert os.path.exists(proba_image), f"The file {proba_image} has not been created. Error during urbanmask computation ?"
     
