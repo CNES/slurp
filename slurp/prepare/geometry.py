@@ -6,7 +6,7 @@ import otbApplication as otb
 import time
 
 
-def superimpose(file_in: str, file_ref: str, file_out: str, type_out, write: bool = False) -> np.ndarray:
+def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Superimpose using OTB
 
@@ -14,7 +14,6 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out, write: boo
     :param str file_ref: path to the input reference image
     :param str file_out: path for the output reprojected image
     :param type_out: OTB type for the output image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: reprojected image
     """
     start_time = time.time()
@@ -24,16 +23,9 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out, write: boo
     app.SetParameterString("interpolator", "nn")
     app.SetParameterString("out", file_out + "?&writerpctags=true")
     app.SetParameterOutputImagePixelType("out", type_out)
-    app.Execute()
-
-    res = np.int16(np.copy(app.GetVectorImageAsNumpyArray("out")))
-
-    if write:
-        app.WriteOutput()
+    app.ExecuteAndWriteOutput()
 
     print("Superimpose in", time.time() - start_time, "seconds.")
-
-    return res
 
 
 def rasterization(file_in: str, file_ref: str, file_out: str, type_out, write: bool = False) -> np.ndarray:

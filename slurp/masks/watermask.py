@@ -769,8 +769,6 @@ def getarguments():
 
 def main():
     argparse_dict = vars(getarguments())
-    # Get the input file path from the command line argument
-    arg_file_path_1 = argparse_dict["main_config"]
 
     # Read the JSON files
     keys = ['input', 'aux_layers', 'masks', 'ressources', 'water', 'pre_process']
@@ -826,42 +824,11 @@ def main():
 
             time_stack = time.time()
 
-            ################ Build samples #################
-
-            write = False if (args.save_mode == "none" or args.save_mode == "prim") else True
-
-            #### Image Pekel recovery (numpy array, first band)
-            if not args.extracted_pekel or not (isfile(args.extracted_pekel)):
-                if 1 <= args.pekel_month <= 12:
-                    args.file_data_pekel = join(
-                        dirname(args.watermask), f"pekel{args.pekel_month}.tif"
-                    )
-                    args.file_mask_pekel = join(
-                        dirname(args.watermask),
-                        f"has_observations{args.pekel_month}.tif",
-                    )
-                    args.extracted_pekel = args.file_data_pekel
-                    im_pekel = aux.pekel_month_recovery(
-                        args.file_vhr,
-                        args.pekel_month,
-                        args.file_data_pekel,
-                        args.file_mask_pekel,
-                        write=True,
-                    )
-                else:
-                    args.extracted_pekel = join(dirname(args.watermask), "pekel.tif")
-                    im_pekel = aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel, write=True)
-
-                pekel_nodata = 255.0
-
-            ds_ref = rio.open(args.extracted_pekel)
-            io_utils.print_dataset_infos(ds_ref, "PEKEL")
-            pekel_nodata = ds_ref.nodata  # contradiction
+            # Pekel
             key_pekel = eoscale_manager.open_raster(raster_path=args.extracted_pekel)
-            ds_ref.close()
-            del ds_ref
-
-            args.pekel_nodata = pekel_nodata
+            pekel_profile = eoscale_manager.get_profile(key_pekel)
+            eo_utils.print_dataset_infos(args.extracted_pekel, pekel_profile, "PEKEL")
+            args.pekel_nodata = pekel_profile["nodata"]
 
             ### Pekel valid masks
             mask_pekel = eoexe.n_images_to_m_images_filter(inputs=[key_pekel],
@@ -887,21 +854,11 @@ def main():
                 not_enough_water_samples = True
                 print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
 
-            ### Image HAND (numpy array, first band)
-            if not args.extracted_hand or not (isfile(args.extracted_hand)):
-                # TODO : gestion hand à revoir
-                args.extracted_hand = join(dirname(args.watermask), "hand.tif")
-                im_hand = aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand, write=True)
-                hand_nodata = -9999.0
-
-            ds_hand = rio.open(args.extracted_hand)
-            io_utils.print_dataset_infos(ds_hand, "HAND")
-            hand_nodata = ds_hand.nodata
+            ### HAND
             key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
-            ds_hand.close()
-            del ds_hand
-
-            args.hand_nodata = hand_nodata
+            hand_profile = eoscale_manager.get_profile(key_hand)
+            eo_utils.print_dataset_infos(args.extracted_hand, hand_profile, "HAND")
+            args.hand_nodata = hand_profile["nodata"]
 
             # Create HAND mask
             mask_hand = eoexe.n_images_to_m_images_filter(inputs=[key_hand],

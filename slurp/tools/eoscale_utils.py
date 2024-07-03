@@ -3,6 +3,21 @@
 import numpy as np
 import copy
 
+
+def print_dataset_infos(name, profile, prefix=""):
+    """Print information about rasterio dataset."""
+
+    print()
+    print(prefix, "Image name :", name)
+    print(prefix, "Image size :", profile["width"], "x", profile["height"])
+    print(prefix, "Image bands :", profile["count"])
+    print(prefix, "Image types :", profile["dtype"])
+    print(prefix, "Image nodata :", profile["nodata"])
+    print(prefix, "Image crs :", profile["crs"])
+    print(prefix, "Image transform :", profile["transform"])
+    print()
+
+
 def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile['count']=1

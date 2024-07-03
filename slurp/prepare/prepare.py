@@ -35,6 +35,14 @@ def getarguments():
     parser.add_argument("-nir", help="NIR band index")
     parser.add_argument("-green", help="Green band index")
 
+    # Pekel and HAND
+    parser.add_argument("-pekel", help="Path of the global Pekel file")
+    parser.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
+    parser.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
+    parser.add_argument("-pekel_method", help="Method for Pekel recovery")
+    parser.add_argument("-hand", help="Path of the global HAND file")
+    parser.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+
     # perfo params
     parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
 
@@ -128,6 +136,29 @@ def main():
                 eoscale_manager.write(key=key_ndwi[0], img_path=args.file_ndwi)
             else:
                 print("Not computing NDWI : the file already exists.")
+
+            # Pekel
+            if args.pekel:
+                if args.overwrite or not path.isfile(args.extracted_pekel):
+                    if args.pekel_method == "month":
+                        aux.pekel_month_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.pekel_obs)
+                    elif args.pekel_method == "all":
+                        aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel)
+                    else:
+                        raise Exception("Method for Pekel extraction not accepted. Use 'month' or 'all'")
+                else:
+                    print("Not extracting Pekel : the file already exists.")
+            else:
+                print("Pass Pekel extraction")
+
+            # Hand
+            if args.hand:
+                if args.overwrite or not path.isfile(args.extracted_hand):
+                    aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand)
+                else:
+                    print("Not extracting Hand : the file already exists.")
+            else:
+                print("Pass Hand extraction")
 
 
         except FileNotFoundError as fnfe_exception:
