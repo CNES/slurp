@@ -18,6 +18,7 @@
 	    "valid_stack": "out/valid_stack.tif",
 	    "file_texture": null,
 	    "extracted_wsf" : "out/wsf.tif",
+        "extracted_wsf" : null,
 	    "mnh": null
 	},
 "masks":

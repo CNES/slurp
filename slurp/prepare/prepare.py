@@ -44,7 +44,7 @@ def getarguments():
     # WSF
     parser.add_argument("-wsf", help="Path of the global WSF file")
     parser.add_argument("-extracted_wsf", help="Path to store the extracted WSF file")
-
+    
     # perfo params
     parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
 
