@@ -11,11 +11,11 @@
 	
 "aux_layers":
 	{
-	    "extracted_pekel":"out/pekel.tif",
-	    "extracted_hand":"out/hand.tif",
-	    "file_ndvi":"out/ndvi.tif",
-	    "file_ndwi":"out/ndwi.tif", 
-	    "valid_stack":"out/valid_stack.tif",
+	    "extracted_pekel": "out/pekel.tif",
+	    "extracted_hand": "out/hand.tif",
+	    "file_ndvi" : "out/ndvi.tif",
+	    "file_ndwi" : "out/ndwi.tif", 
+	    "valid_stack": "out/valid_stack.tif",
 	    "file_texture": null,
 	    "extracted_wsf" : null,
 	    "mnh": null

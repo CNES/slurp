@@ -2,9 +2,11 @@
     "input":
     {
         "file_vhr": "absolute_path_to_image.tif",
-	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+	    "pekel" : null,
+        "pekel_obs": null,
 	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
-	    "hand": "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt"
+	    "hand": "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+        "cloud_mask": null
 	},
 	
  "aux_layers":
@@ -37,11 +39,7 @@
 	    "red":1,
 	    "nir":4,
 	    "green":2,
-	    "thresh_pekel":50,
-	    "pekel_month":0,
-	    "thresh_hand":25,
-	    "strict_thresh":50,
-	    "hand_strict":false,
+        "pekel_method": "all",
 	    "texture_mode":"yes",
 	    "texture_rad":5,
 	    "filter_texture":90,
@@ -81,7 +79,11 @@
  "water":
         {
 	    "layers":[],
-	    "file_filters":[],        
+	    "file_filters":[],
+        "thresh_pekel":50,
+	    "thresh_hand":25,
+	    "strict_thresh":50,
+	    "hand_strict":false,
 	    "simple_ndwi_threshold":false,
 	    "ndwi_threshold":0.1,
 	    "samples_method":"grid",

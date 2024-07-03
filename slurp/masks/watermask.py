@@ -470,15 +470,6 @@ def getarguments():
     )
 
     group1.add_argument(
-        "-pekel_month",
-        type=int,
-        required=False,
-        action="store",
-        dest="pekel_month",
-        help="Use monthly recurrence map instead of occurence map",
-    )
-
-    group1.add_argument(
         "-hand",
         required=False,
         action="store",
@@ -522,14 +513,6 @@ def getarguments():
     )
 
     group1.add_argument(
-        "-cloud_gml",
-        required=False,
-        action="store",
-        dest="file_cloud_gml",
-        help="Cloud file in .GML format",
-    )
-
-    group1.add_argument(
         "-filters",
         nargs="+",
         required=False,
@@ -538,10 +521,16 @@ def getarguments():
         help="Add files used in filtering (postprocessing)",
     )
 
+    group1.add_argument(
+        "-valid",
+        required=False,
+        action="store",
+        dest="valid_stack",
+        help="Validity mask",
+    )
+
     # Options
     group2.add_argument("-red", default=1, help="Red band index")
-    group2.add_argument("-nir", default=4, help="NIR band index")
-    group2.add_argument("-green", default=2, help="green band index")
 
     group2.add_argument(
         "-hand_strict",
