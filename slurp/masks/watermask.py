@@ -7,9 +7,7 @@ import argparse
 import gc
 import time
 import traceback
-from os.path import dirname, join, isfile
-from subprocess import call
-import json
+from os.path import dirname, join
 
 import numpy as np
 import rasterio as rio
@@ -22,8 +20,6 @@ from sklearn.model_selection import train_test_split
 from pylab import *
 
 from slurp.tools import eoscale_utils as eo_utils, io_utils, utils
-from slurp.prepare.primitives import compute_ndvi, compute_ndwi
-from slurp.prepare import aux_files as aux
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -958,21 +954,19 @@ def main():
                                                                filter_desc="Post processing...")
 
                 # Save predict and classif image
-                final_predict = eoscale_manager.write(key=im_classif[0],
-                                                      img_path=join(dirname(args.watermask), "predict.tif"))
-                final_classif = eoscale_manager.write(key=im_classif[1], img_path=args.watermask)
+                eoscale_manager.write(key=im_classif[0], img_path=join(dirname(args.watermask), "predict.tif"))
+                eoscale_manager.write(key=im_classif[1], img_path=args.watermask)  # classif
             else:
                 # no post-process : we save the same mask with two different names for compatibility purpose
-                final_predict = eoscale_manager.write(key=key_predict[0],
-                                                      img_path=join(dirname(args.watermask), "predict.tif"))
-                final_classif = eoscale_manager.write(key=key_predict[0], img_path=args.watermask)
+                eoscale_manager.write(key=key_predict[0], img_path=join(dirname(args.watermask), "predict.tif"))
+                eoscale_manager.write(key=key_predict[0], img_path=args.watermask)  # classif
 
             end_time = time.time()
 
             print("**** Water mask for " + str(args.file_vhr) + " (saved as " + str(args.watermask) + ") ****")
             print("Total time (user)       :\t" + convert_time(end_time - t0))
             print("- Build_stack           :\t" + convert_time(time_stack - t0))
-            if not (args.simple_ndwi_threshold) and not (not_enough_water_samples):
+            if not args.simple_ndwi_threshold and not not_enough_water_samples:
                 print("- Build_samples         :\t" + convert_time(time_samples - time_stack))
                 print("- Random forest (total) :\t" + convert_time(time_random_forest - time_samples))
                 print("- Post-processing       :\t" + convert_time(end_time - time_random_forest))

@@ -4,7 +4,6 @@
 import numpy as np
 import otbApplication as otb
 import scipy
-import time
 from os import path
 
 from slurp.prepare import geometry
@@ -17,7 +16,6 @@ def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str):
     :param str file_ref: path to the input reference image
     :param str pekel_ref: path to the input Pekel global image (tile or .vrt)
     :param str file_out: path for the recovered Pekel image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: Pekel image recovered
     """
     print(f"Recover Occurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
@@ -68,7 +66,6 @@ def hand_recovery(file_ref: str, hand_ref: str, file_out: str):
     :param str file_ref: path to the input reference image
     :param str hand_ref: path to the input Pekel global image (tile or .vrt)
     :param str file_out: path for the recovered HAND image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: HAND image recovered
     """
     print(f"Recover Occurrence Hand file {hand_ref=} to {file_out=} onto {file_ref=} geometry")
@@ -118,8 +115,7 @@ def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str, write=False) -> np.
         wsf_ref,
         file_ref,
         file_out,
-        otb.ImagePixelType_uint16,
-        write
+        otb.ImagePixelType_uint16
     )
 
     return wsf_image.transpose(2, 0, 1)[0]

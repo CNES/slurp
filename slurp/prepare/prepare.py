@@ -6,8 +6,6 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
-import numpy as np
-import rasterio as rio
 import traceback
 from os import path
 
@@ -159,7 +157,6 @@ def main():
                     print("Not extracting Hand : the file already exists.")
             else:
                 print("Pass Hand extraction")
-
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
