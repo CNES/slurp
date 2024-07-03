@@ -97,28 +97,22 @@ def cloud_from_gml(file_cloud: str, file_ref: str) -> np.ndarray:
     return mask_cloud
 
 
-def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str, write=False) -> np.ndarray:
+def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str):
     """
     Recover WSF image in uint16
 
     :param str file_ref: path to the input reference image
     :param str wsf_ref: path to the global World Settlement Footprint vrt file
     :param str file_out: path for the recovered WSF image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: WSF image recovered
     """
-    if write:
-        print("Recover WSF file to", file_out)
-    else:
-        print("Recover WSF file")
-    wsf_image = geometry.superimpose(
+    print(f"Recover Occurrence Hand file {wsf_ref=} to {file_out=} onto {file_ref=} geometry")
+    geometry.superimpose(
         wsf_ref,
         file_ref,
         file_out,
         otb.ImagePixelType_uint16
     )
-
-    return wsf_image.transpose(2, 0, 1)[0]
 
 
 def std_convoluted(im: np.ndarray, N: int, min_value: float, max_value: float) -> np.ndarray:

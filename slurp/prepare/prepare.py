@@ -41,6 +41,10 @@ def getarguments():
     parser.add_argument("-hand", help="Path of the global HAND file")
     parser.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
 
+    # WSF
+    parser.add_argument("-wsf", help="Path of the global WSF file")
+    parser.add_argument("-extracted_wsf", help="Path to store the extracted WSF file")
+
     # perfo params
     parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
 
@@ -81,7 +85,7 @@ def main():
                         inputs=[key_phr, key_cloud_mask],
                         image_filter=validity.compute_valid_stack_clouds,
                         filter_parameters={"nodata": profile["nodata"]},
-                        generate_output_profiles=eo_utils.single_bool_profile,
+                        generate_output_profiles=eo_utils.single_uint8_1b_profile,
                         stable_margin=0,
                         context_manager=eoscale_manager,
                         multiproc_context="fork",
@@ -92,7 +96,7 @@ def main():
                         inputs=[key_phr],
                         image_filter=validity.compute_valid_stack,
                         filter_parameters={"nodata": profile["nodata"]},
-                        generate_output_profiles=eo_utils.single_bool_profile,
+                        generate_output_profiles=eo_utils.single_uint8_1b_profile,
                         stable_margin=0,
                         context_manager=eoscale_manager,
                         multiproc_context="fork",
@@ -157,6 +161,15 @@ def main():
                     print("Not extracting Hand : the file already exists.")
             else:
                 print("Pass Hand extraction")
+
+            # WSF
+            if args.wsf:
+                if args.overwrite or not path.isfile(args.extracted_wsf):
+                    aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf)
+                else:
+                    print("Not extracting WSF : the file already exists.")
+            else:
+                print("Pass WSF extraction")
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
