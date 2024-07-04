@@ -106,7 +106,7 @@ def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str):
     :param str file_out: path for the recovered WSF image
     :returns: WSF image recovered
     """
-    print(f"Recover Occurrence Hand file {wsf_ref=} to {file_out=} onto {file_ref=} geometry")
+    print(f"Recover WSF file {wsf_ref=} to {file_out=} onto {file_ref=} geometry")
     geometry.superimpose(
         wsf_ref,
         file_ref,

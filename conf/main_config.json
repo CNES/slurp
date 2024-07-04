@@ -2,11 +2,11 @@
 	{
 	    "file_vhr": "absolute_path_to_image.tif",
 	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
-        "pekel_obs": null,
+            "pekel_obs": null,
 	    "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
-	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_cog.tif",
-        "cloud_mask": null,
-        "file_cloud_gml": null
+	    "wsf": "/work/CAMPUS/etudes/Masques_CO3D/Data/WSF/wsf.vrt",
+            "cloud_mask": null,
+            "file_cloud_gml": null
 	},
 	
 "aux_layers":
@@ -18,7 +18,6 @@
 	    "valid_stack": "out/valid_stack.tif",
 	    "file_texture": null,
 	    "extracted_wsf" : "out/wsf.tif",
-        "extracted_wsf" : null,
 	    "mnh": null
 	},
 "masks":
