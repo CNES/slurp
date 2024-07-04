@@ -56,7 +56,7 @@ def apply_watermask(input_buffer: list, input_profiles: list, args: dict) -> np.
     :param dict args: dictionary of arguments (not used but necessary for eoscale)
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    valid_stack = np.logical_and(input_buffer[1], np.where(input_buffer[1] == 0, True, False))
+    valid_stack = np.logical_and(input_buffer[0], np.where(input_buffer[1] == 0, True, False))
 
     return valid_stack
 
