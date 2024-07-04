@@ -295,13 +295,13 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     Build samples
 
-    :param list input_buffer: [mask_pekel, valid_stack, mask_hand, im_phr, im_ndvi, im_ndwi]
+    :param list input_buffer: [valid_stack, mask_hand, mask_pekel, im_phr, im_ndvi, im_ndwi]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: Retrieve number of pixels for each class
     """
-    nb_valid_subset = np.count_nonzero(input_buffer[1])
-    valid_water_pixels = np.logical_and(input_buffer[0], input_buffer[5] > params["ndwi_threshold"])
+    nb_valid_subset = np.count_nonzero(input_buffer[0])
+    valid_water_pixels = np.logical_and(input_buffer[2], input_buffer[5] > params["ndwi_threshold"])
 
     nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, input_buffer[1]))
     nb_other_subset = nb_valid_subset - nb_water_subset
@@ -321,11 +321,11 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     # Pekel samples
     if params["samples_method"] == "random":
         rows_pekel, cols_pekel = get_random_indexes_from_masks(
-            nb_water_subsamples, input_buffer[1][0], input_buffer[0][0]
+            nb_water_subsamples, input_buffer[0][0], input_buffer[2][0]
         )
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, input_buffer[1][0], input_buffer[2][0]
+            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
         )
 
     elif params["samples_method"] == "smart":
@@ -333,18 +333,18 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
             nb_water_subsamples,
             params["smart_area_pct"],
             params["smart_minimum"],
-            np.logical_and(input_buffer[0][0], input_buffer[1][0]),
+            np.logical_and(input_buffer[2][0], input_buffer[0][0]),
         )
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, input_buffer[1][0], input_buffer[2][0]
+            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
         )
 
     elif params["samples_method"] == "grid":
-        rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples, input_buffer[1], valid_water_pixels[0])
+        rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples, input_buffer[0], valid_water_pixels[0])
 
         # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[1], input_buffer[2])
+        rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0], input_buffer[1])
 
     else:
         raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
@@ -371,7 +371,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         )
 
     # Prepare samples for learning
-    im_stack = np.concatenate((input_buffer[3], input_buffer[4], input_buffer[5], input_buffer[0]), axis=0)
+    im_stack = np.concatenate((input_buffer[2:]), axis=0)
     samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
 
     return samples  # [x_samples, y_samples]
@@ -403,21 +403,21 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     Random Forest prediction
 
-    :param list input_buffer: [vhr_image, ndvi, ndwi, valid_stack]
+    :param list input_buffer: [ key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: predicted mask
     """
-    im_stack = np.concatenate((input_buffer[0], input_buffer[1], input_buffer[2]), axis=0)
-    valid_mask = input_buffer[3].astype(bool)
+    im_stack = np.concatenate((input_buffer[1:]), axis=0)
+    valid_mask = input_buffer[0].astype(bool)
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
 
     classifier = params["classifier"]
-    prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
-    if buffer_to_predict.shape[0] == 0:
+    prediction = np.zeros(valid_mask[1].shape, dtype=np.uint8)
+    if buffer_to_predict.shape[1] == 0:
         print(f"WARNING > zone with NO DATA")
     else:
-        prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
+        prediction[valid_mask[1]] = classifier.predict(buffer_to_predict)
 
     return prediction
 
@@ -655,12 +655,17 @@ def main():
             else:
                 # Nominal case : select samples, train, predict
                 #
+                #Taking optional layers into account
+                file_layers = [
+                eoscale_manager.open_raster(raster_path=args.files_layers[i])
+                for i in range(len(args.files_layers))
+                ]
                 # Sample selection
                 valid_stack = eoscale_manager.get_array(key_valid_stack)
                 nb_valid_pixels = np.count_nonzero(valid_stack)
                 args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
                 args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
-                input_for_samples = [mask_pekel[0], key_valid_stack, mask_hand[0], key_phr, key_ndvi, key_ndwi]
+                input_for_samples = [key_valid_stack, mask_hand[0], mask_pekel[0], key_phr, key_ndvi, key_ndwi] + file_layers
 
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
@@ -688,7 +693,7 @@ def main():
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [key_phr, key_ndvi, key_ndwi, key_valid_stack]
+                input_for_prediction = [ key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
