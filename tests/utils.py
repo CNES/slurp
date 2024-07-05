@@ -9,7 +9,6 @@
 
 import os
 import glob
-import json
 import pytest
 import contextlib
 
@@ -20,12 +19,15 @@ def get_files_to_process(key):
     return glob.glob(all_input_folder + "/*.tif") + glob.glob(key_input_folder + "/*.tif")
 
 
-def get_output_path(file, key):
+def get_output_path(file, key, remove=False):
     assert os.path.exists(file), f"The file {file} doesn't exist"
     assert os.path.exists(pytest.output_dir), f"The file {pytest.output_dir} doesn't exist"
     filename = os.path.basename(file)
-    output_image = os.path.join(pytest.output_dir, key + "_" + filename)
+    output_image = os.path.join(pytest.output_dir, key + "_" + filename)    
+    if remove:
+        remove_file(output_image)
     return output_image
+
 
 def get_aux_path(file, key):
     filename = os.path.basename(file)

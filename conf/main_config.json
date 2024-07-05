@@ -2,31 +2,31 @@
 	{
 	    "file_vhr": "absolute_path_to_image.tif",
 	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+        "pekel_obs": null,
 	    "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
-	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt"
+	    "wsf": "/work/CAMPUS/etudes/Masques_CO3D/Data/WSF/wsf.vrt",
+        "cloud_mask": null
 	},
-	
 "aux_layers":
 	{
-	    "extracted_pekel":"out/pekel.tif",
-	    "extracted_hand":"out/hand.tif",
-	    "file_ndvi":"out/ndvi.tif",
-	    "file_ndwi":"out/ndwi.tif", 
-	    "valid_stack":"out/valid_stack.tif",
-	    "file_cloud_gml":null,
-	    "file_texture": null,
-	    "extracted_wsf" : null,
+	    "extracted_pekel": "out/pekel.tif",
+	    "extracted_hand": "out/hand.tif",
+	    "file_ndvi" : "out/ndvi.tif",
+	    "file_ndwi" : "out/ndwi.tif", 
+	    "valid_stack": "out/valid_stack.tif",
+	    "file_texture": "out/texture.tif",
+	    "extracted_wsf" : "out/wsf.tif",
 	    "mnh": null
 	},
 "masks":
- {
-     "watermask":"out/watermask.tif",
-     "urbanmask": "out/urbanmask.tif",
-     "urban_proba": "out/urbanmask_proba.tif",
-     "vegetationmask":"out/vegetationmask.tif" ,
-     "shadowmask":"out/shadowmask.tif",
-     "stackmask":"out/stackmask.tif"
- },
+     {
+         "watermask": "out/watermask.tif",
+         "urbanmask": "out/urbanmask.tif",
+         "urban_proba": "out/urbanmask_proba.tif",
+         "vegetationmask": "out/vegetationmask.tif",
+         "shadowmask": "out/shadowmask.tif",
+         "stackmask":"out/stackmask.tif"
+     },
 "ressources":
 	{
 	    "n_workers":8,
@@ -39,14 +39,8 @@
 	    "red":1,
 	    "nir":4,
 	    "green":2,
-	    "thresh_pekel":50,
-	    "pekel_month":0,
-	    "thresh_hand":25,
-	    "strict_thresh":50,
-	    "hand_strict":false,
-	    "texture_mode":"yes",
-	    "texture_rad":5,
-	    "filter_texture":90
+        "pekel_method": "all",
+	    "texture_rad":5
 	},
 "shadows":
 	{
@@ -55,40 +49,41 @@
 	    "percentile":2,
 	    "binary_opening":2,
 	    "remove_small_objects":100,
-	    "absolute_threshold":false
-	    
+	    "absolute_threshold":false 
 	},
 "urban":
     {
-	"vegmask_max_value":21,
-	"post_process":false,
-	"nb_samples_other":5000,
-	"nb_samples_urban":1000,
-	"files_layers":[],
-	"urban_raster":null,
-	"nb_classes":1,
-	"value_classif":255,
-	"max_depth":8,
-	"nb_estimators":100,
-	"random_seed":712,
-	"binary_closing":5,
-	"binary_opening":2,
-	"binary_dilation":5,
-	"remove_small_objects":0,
-	"remove_small_holes":0,
-	"remove_false_positive":false,
-	"confidence_threshold":85    
+        "vegmask_max_value":21,
+        "post_process":false,
+        "nb_samples_other":5000,
+        "nb_samples_urban":1000,
+        "files_layers":[],
+        "urban_raster":null,
+        "nb_classes":1,
+        "value_classif":255,
+        "max_depth":8,
+        "nb_estimators":100,
+        "random_seed":712,
+        "binary_closing":5,
+        "binary_opening":2,
+        "binary_dilation":5,
+        "remove_small_objects":0,
+        "remove_small_holes":0,
+        "remove_false_positive":false,
+        "confidence_threshold":85    
      },
 "vegetation":
-        {
-	    "slic_seg_size":100,
+    {
+	    "texture_mode":"yes",
+        "filter_texture":90,
+        "slic_seg_size":100,
 	    "slic_compactness":0.1,
 	    "nb_clusters_veg":3,
-	    "min_ndvi_veg":false,
-	    "max_ndvi_noveg":false,
-	    "non_veg_clusters":false,
+	    "min_ndvi_veg": null,
+	    "max_ndvi_noveg": null,
+	    "non_veg_clusters":null,
 	    "nb_clusters_low_veg":3,
-	    "max_low_veg":false,
+	    "max_low_veg":null,
 	    "binary_dilation":2,
 	    "remove_small_objects":100,
 	    "remove_small_holes":100,
@@ -96,39 +91,42 @@
     },
 "water":
     {
-	"layers":[],
-	"file_filters":[],
-	"pekel_month":0,
-	"simple_ndwi_threshold":false,
-	"ndwi_threshold":0.1,
-	"samples_method":"grid",
-	"nb_samples_water":2000,
-	"nb_samples_other":10000,
-	"nb_samples_auto":false,
-	"auto_pct": 0.0002,
-	"smart_area_pct":50,
-	"smart_minimum":10,
-	"grid_spacing":40,
-	"max_depth":8,
-	"nb_estimators":100,
-	"no_pekel_filter":false,
-	"hand_filter": false,
-	"binary_closing":2,
-	"area_closing":false,
-	"remove_small_holes":100,
-	"value_classif":1 
-        },
+        "layers":[],
+        "file_filters":[],
+        "thresh_pekel":50,
+        "thresh_hand":25,
+        "hand_strict":false,
+        "strict_thresh":50,
+        "simple_ndwi_threshold":false,
+        "ndwi_threshold":0.1,
+        "samples_method":"grid",
+        "nb_samples_water":2000,
+        "nb_samples_other":10000,
+        "nb_samples_auto":false,
+        "auto_pct": 0.0002,
+        "smart_area_pct":50,
+        "smart_minimum":10,
+        "grid_spacing":40,
+        "max_depth":8,
+        "nb_estimators":100,
+        "no_pekel_filter":false,
+        "hand_filter": false,
+        "binary_closing":2,
+        "area_closing":false,
+        "remove_small_holes":100,
+        "value_classif":1
+    },
 "stack":
-        {
-	    "vegmask_max_value":21,
-	    "waterpred":null,
-            "building_threshold":70,
-	    "binary_closing":3,
-	    "binary_opening":3,
-	    "building_erosion":2,
-	    "bonus_gt":10,
-	    "malus_shadow":10,
-	    "remove_small_objects":300,
-	    "remove_small_holes":300
-        }
+    {
+        "vegmask_max_value":21,
+        "waterpred":null,
+        "building_threshold":70,
+        "binary_closing":3,
+        "binary_opening":3,
+        "building_erosion":2,
+        "bonus_gt":10,
+        "malus_shadow":10,
+        "remove_small_objects":300,
+        "remove_small_holes":300
+    }
 }

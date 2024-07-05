@@ -6,7 +6,8 @@ import argparse
 import time
 from os.path import dirname, join
 
-from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, f1_score, precision_score, recall_score, jaccard_score
+from sklearn.metrics import (accuracy_score, log_loss, confusion_matrix, f1_score,  precision_score, recall_score,
+                             jaccard_score)
 import rasterio as rio
 from rasterio import features
 from rasterio.windows import Window
@@ -21,10 +22,10 @@ def generate_polygons_in_gdf(im, crs, transform):
     buildings = np.array(list(features.shapes(im, transform=transform)))
     mask = (buildings[:, 1] == 1.0)
     buildings = buildings[mask]
-    #print(buildings.shape)
+    # print(buildings.shape)
     geometry = np.array([shape(buildings[i][0]) for i in range(0, len(buildings))])
     gdf = gpd.GeoDataFrame(
-        {'id': list(range(0, len(geometry))), 'geometry': geometry },
+        {'id': list(range(0, len(geometry))), 'geometry': geometry},
         crs=crs
     )
     return gdf
@@ -85,7 +86,9 @@ def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, c
             gdf_union.to_file(join(dir_out, "union.shp"))
 
         # Generate stack GeoDataFrame
-        df_merged = gdf_intersect_area.merge(gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index').drop(columns="index")
+        df_merged = gdf_intersect_area.merge(
+            gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index'
+        ).drop(columns="index")
         df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on='id_1', right_on='id_1')
         
         # Scores
@@ -130,7 +133,7 @@ def get_score(im_ref, im_predict):
     print("Jaccard >>> {:.2f}".format(jaccard_score(im_ref, im_predict)))    
     # print("Log loss >>>", log_loss(im_ref, im_predict))
     # print("Confusion matrix >>>", confusion_matrix(im_ref, im_predict))
-    #print("F1 >>>", f1_score(im_ref, im_predict))
+    # print("F1 >>>", f1_score(im_ref, im_predict))
     
     print("Scores calculation execution time : "+str(time.time() - start_time))
 
@@ -138,40 +141,35 @@ def get_score(im_ref, im_predict):
 def getarguments():
     """ Parse command line arguments. """
 
-    parser = argparse.ArgumentParser(description='Rasterize OSM layer with respect to an input image geographic extent and spacing')
+    parser = argparse.ArgumentParser(
+        description='Rasterize OSM layer with respect to an input image geographic extent and spacing'
+    )
 
-    parser.add_argument('-gt', required=True, action='store', dest='gt',
-                        help='Ground truth file (OSM, WSF...)')
-    parser.add_argument('-im', required=True, action='store', dest='im',
-                       help='Prediction image')
-    parser.add_argument('-out', required=True, action='store', dest='out',
-                       help='Output filename')
-    parser.add_argument('-vcr', required=False, action='store', dest='value_classif_ref', type=int, nargs='+', default=[1],
-                       help='Ground truth classification values (default is 1)')
+    parser.add_argument('-gt', required=True, action='store', help='Ground truth file (OSM, WSF...)')
+    parser.add_argument('-im', required=True, action='store', help='Prediction image')
+    parser.add_argument('-out', required=True, action='store', help='Output filename')
+    parser.add_argument('-vcr', required=False, action='store', dest='value_classif_ref', type=int, nargs='+',
+                        default=[1], help='Ground truth classification values (default is 1)')
     parser.add_argument('-vcp', required=False, action='store', dest='value_classif', type=int, nargs='+', default=[1],
-                       help='Image to validate classification values (default is 1)')
-    parser.add_argument('-startx', required=False, action='store', dest='startx', type=int,
-                       help='ROI start x position')
-    parser.add_argument('-starty', required=False, action='store', dest='starty', type=int,
-                       help='ROI start y position')
-    parser.add_argument('-sizex', required=False, action='store', dest='sizex', type=int,
-                       help='Size along x in pixels')
-    parser.add_argument('-sizey', required=False, action='store', dest='sizey', type=int,
-                       help='Size along y in pixels')
+                        help='Image to validate classification values (default is 1)')
+    parser.add_argument('-startx', required=False, action='store', type=int, help='ROI start x position')
+    parser.add_argument('-starty', required=False, action='store', type=int, help='ROI start y position')
+    parser.add_argument('-sizex', required=False, action='store', type=int, help='Size along x in pixels')
+    parser.add_argument('-sizey', required=False, action='store', type=int, help='Size along y in pixels')
     parser.add_argument('-polygonize', required=False, action='store_true', dest='polygonize', default=False,
-                       help='Will estimate the number of buildings from the truth file predicted')
+                        help='Will estimate the number of buildings from the truth file predicted')
     parser.add_argument('-polygonize.union', required=False, action='store_true', dest='union', default=False,
-                       help='Will estimate IoU and overlay scores')
+                        help='Will estimate IoU and overlay scores')
     parser.add_argument('-polygonize.area', required=False, action='store', dest='area', type=int, default=0,
-                       help='Minimal area required in the ground truth file (default is 0)')
-    parser.add_argument('-polygonize.unit', required=False, action='store', dest='unit', choices=["meter", "degree"], default="meter",
-                       help='Unit of spacing (default is meter)')
+                        help='Minimal area required in the ground truth file (default is 0)')
+    parser.add_argument('-polygonize.unit', required=False, action='store', dest='unit', choices=["meter", "degree"],
+                        default="meter", help='Unit of spacing (default is meter)')
     parser.add_argument('-polygonize.iou', required=False, action='store', dest='thresh_iou', type=int, default=50,
-                       help='IoU threshold (default is 50)')
-    parser.add_argument('-polygonize.overlay', required=False, action='store', dest='thresh_overlay', type=int, default=50,
-                       help='Threshold proportion to detect a building (default is 50)')
-    parser.add_argument('-save', required=False, action='store_true', dest='save', default=False,
-                       help='Save SHP files containing the buildings')
+                        help='IoU threshold (default is 50)')
+    parser.add_argument('-polygonize.overlay', required=False, action='store', dest='thresh_overlay', type=int,
+                        default=50, help='Threshold proportion to detect a building (default is 50)')
+    parser.add_argument('-save', required=False, action='store_true', default=False,
+                        help='Save SHP files containing the buildings')
 
     return parser.parse_args()
 
@@ -184,7 +182,9 @@ def main():
         ds_ref = rio.open(args.gt)
         crs_ref = ds_ref.crs
         transform_ref = ds_ref.transform
-        im_ref = ds_ref.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_ref.read(1)
+        im_ref = ds_ref.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) \
+            if args.startx \
+            else ds_ref.read(1)
         ds_ref.close()
         del ds_ref
         
@@ -195,8 +195,8 @@ def main():
             args.value_classif_ref = np.array(args.value_classif_ref) + 1
         if len(args.value_classif_ref) > 1:
             for value_ref in args.value_classif_ref[1:]:
-                im_ref[im_ref == value_ref] =  classif_ref
-        im_ref[im_ref != classif_ref] =  0
+                im_ref[im_ref == value_ref] = classif_ref
+        im_ref[im_ref != classif_ref] = 0
         im_ref[im_ref == classif_ref] = 1            
 
         # Get predicted mask
@@ -204,7 +204,9 @@ def main():
         crs_predict = ds_predict.crs
         transform_predict = ds_predict.transform
         rpc = ds_predict.tags(ns="RPC")
-        im_predict = ds_predict.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) if args.startx else ds_predict.read(1)
+        im_predict = ds_predict.read(1, window=Window(args.startx, args.starty, args.sizex, args.sizey)) \
+            if args.startx \
+            else ds_predict.read(1)
         ds_predict.close()
         del ds_predict
         
@@ -215,8 +217,8 @@ def main():
             args.value_classif = np.array(args.value_classif) + 1
         if len(args.value_classif) > 1:
             for value_predict in args.value_classif[1:]:
-                im_predict[im_predict == value_predict] =  classif_predict
-        im_predict[im_predict != classif_predict] =  0
+                im_predict[im_predict == value_predict] = classif_predict
+        im_predict[im_predict != classif_predict] = 0
         im_predict[im_predict == classif_predict] = 1 
         
         # Count buildings
@@ -254,9 +256,10 @@ def main():
     except MemoryError as me_exception:
         print('MemoryError', me_exception)
 
-    except Exception as exception: # pylint: disable=broad-except
+    except Exception as exception:  # pylint: disable=broad-except
         print('oups...', exception)
         traceback.print_exc()
+
 
 if __name__ == '__main__':
     main()

@@ -6,14 +6,14 @@ This script computes a shadow mask
 """
 
 import argparse
-import rasterio as rio
 import numpy as np
 import traceback
 
 from os import path
 from skimage.morphology import binary_opening, remove_small_objects, disk
 
-from slurp.tools import eoscale_utils as eo_utils, io_utils
+from slurp.tools import io_utils
+from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -114,10 +114,7 @@ def main():
             # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             local_phr = eoscale_manager.get_array(key_phr)
-
-            ds_phr = rio.open(args.file_vhr)
-            nodata = ds_phr.profile["nodata"]
-            ds_phr.close()
+            nodata = eoscale_manager.get_profile(key_phr)["nodata"]
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)

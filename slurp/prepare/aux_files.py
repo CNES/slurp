@@ -4,135 +4,96 @@
 import numpy as np
 import otbApplication as otb
 import scipy
-import time
+from os import path
 
 from slurp.prepare import geometry
 
 
-def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str, write: bool = False) -> np.ndarray:
+def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str):
     """
     Recover Occurrence Pekel image in uint8
 
     :param str file_ref: path to the input reference image
     :param str pekel_ref: path to the input Pekel global image (tile or .vrt)
     :param str file_out: path for the recovered Pekel image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: Pekel image recovered
     """
-    
     print(f"Recover Occurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
-    pekel_image = geometry.superimpose(
+
+    geometry.superimpose(
         pekel_ref,
         file_ref,
         file_out,
-        otb.ImagePixelType_uint8,
-        write
+        otb.ImagePixelType_uint8
     )
-    
-    return pekel_image.transpose(2, 0, 1)[0]
 
 
-def pekel_month_recovery(file_ref: str, month: int, file_data_out: str, file_mask_out: str, write: bool = False) -> np.ndarray:
+def pekel_month_recovery(file_ref: str, pekel_ref: str, file_out: str, pekel_obs_ref: str = None):
     """
     Recover Monthly Recurrence Pekel image.
     monthlyRecurrence and has_observations are signed int8 but coded on int16.
 
     :param str file_ref: path to the input reference image
-    :param int month: number of the month
-    :param str file_data_out: path for the recovered monthly recurrence Pekel image
-    :param str file_mask_out: path for the recovered has observations Pekel image
-    :param bool write: write the output image if True, else keep the image in memory
+    :param str pekel_ref: path of the monthly global Pekel VRT file
+    :param str file_out: path for the recovered monthly recurrence Pekel image
+    :param str pekel_obs_ref: path of the has observations monthly global Pekel VRT file (facultative)
     :returns: Pekel image recovered
     """
-    if write:
-        print("Recover Monthly Recurrence Pekel file to", file_data_out)
-    else:
-        print("Recover Monthly Recurrence Pekel file")
+    print(f"Recover Monthly Recurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
 
-    pekel_image = geometry.superimpose(
-        "/work/datalake/static_aux/MASQUES/PEKEL/data2021/MonthlyRecurrence/"
-        f"monthlyRecurrence{month}/monthlyRecurrence{month}.vrt",
+    geometry.superimpose(
+        pekel_ref,
         file_ref,
-        file_data_out,
-        otb.ImagePixelType_int16,
-        write
+        file_out,
+        otb.ImagePixelType_int16
     )
 
-    pekel_mask_out = geometry.superimpose(
-        "/work/datalake/static_aux/MASQUES/PEKEL/data2021/MonthlyRecurrence/"
-        f"has_observations{month}/has_observations{month}.vrt",
-        file_ref,
-        file_mask_out,
-        otb.ImagePixelType_int16,
-        write
-    )
+    if pekel_obs_ref:
+        file_mask_out = path.join(path.dirname(file_out), "has_observations.tif")
+        print(f"Recover Monthly Recurrence Pekel file {pekel_obs_ref=} to {file_mask_out=} onto {file_ref=} geometry")
+        geometry.superimpose(
+            pekel_obs_ref,
+            file_ref,
+            file_mask_out,
+            otb.ImagePixelType_int16
+        )
 
-    return pekel_image.transpose(2, 0, 1)[0]
 
-
-def hand_recovery(file_ref: str, hand_ref: str, file_out: str, write: bool = False) -> np.ndarray:
+def hand_recovery(file_ref: str, hand_ref: str, file_out: str):
     """
     Recover HAND image
 
     :param str file_ref: path to the input reference image
+    :param str hand_ref: path to the input Pekel global image (tile or .vrt)
     :param str file_out: path for the recovered HAND image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: HAND image recovered
     """
-    print(f"Recover Occurrence Pekel file {hand_ref=} to {file_out=} onto {file_ref=} geometry")
-    hand_image = geometry.superimpose(
+    print(f"Recover Occurrence Hand file {hand_ref=} to {file_out=} onto {file_ref=} geometry")
+
+    geometry.superimpose(
         hand_ref,
         file_ref,
         file_out,
-        otb.ImagePixelType_uint16,
-        write
+        otb.ImagePixelType_float
     )
 
-    return hand_image.transpose(2, 0, 1)[0]
 
-
-def cloud_from_gml(file_cloud: str, file_ref: str) -> np.ndarray:
-    """
-    Compute cloud mask from GML file
-
-    :param str file_cloud: path to the GML file
-    :param str file_ref: path to the input reference image
-    :returns: cloud mask
-    """
-    mask_cloud = geometry.rasterization(
-        file_cloud,
-        file_ref,
-        "",
-        otb.ImagePixelType_uint8,
-        write=False
-    )
-
-    return mask_cloud
-
-
-def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str, write=False) -> np.ndarray:
+def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str):
     """
     Recover WSF image in uint16
 
     :param str file_ref: path to the input reference image
     :param str wsf_ref: path to the global World Settlement Footprint vrt file
     :param str file_out: path for the recovered WSF image
-    :param bool write: write the output image if True, else keep the image in memory
     :returns: WSF image recovered
     """
-    if write:
-        print("Recover WSF file to", file_out)
-    else:
-        print("Recover WSF file")
-    wsf_image = geometry.superimpose(
+    print(f"Recover WSF file {wsf_ref=} to {file_out=} onto {file_ref=} geometry")
+    geometry.superimpose(
         wsf_ref,
         file_ref,
         file_out,
-        otb.ImagePixelType_uint16,
-        write
+        otb.ImagePixelType_uint16
     )
-
-    return wsf_image.transpose(2, 0, 1)[0]
 
 
 def std_convoluted(im: np.ndarray, N: int, min_value: float, max_value: float) -> np.ndarray:
