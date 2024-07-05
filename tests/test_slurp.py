@@ -7,15 +7,11 @@
 #
 """Tests for `slurp` package."""
 
-# Third party imports
-import pytest
-
 # slurp imports
 import slurp
 
 
-
 def test_slurp():
     """Sample pytest slurp module test function"""
-    #assert slurp.__author__ == "CNES - Y T[3~[D"
+    # assert slurp.__author__ == "CNES - Y T[3~[D"
     assert slurp.__email__ == "yannick.tanguy@cnes.fr"

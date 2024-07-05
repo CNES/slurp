@@ -33,8 +33,10 @@ main_config="/home/qt/tanguyy/SRC/slurp/conf/main_config.json"
 # Start
 echo "Launch SLURP from `pwd`"
 
+# Prepare
+slurp_prepare ${main_config} -file_vhr ${TMPDIR}/${filename}
 # Watermask
-slurp_watermask ${main_config} -file_vhr ${TMPDIR}/${filename} -save prim
+slurp_watermask ${main_config} -file_vhr ${TMPDIR}/${filename} 
 
 # Vegetationmask
 slurp_vegetationmask ${main_config} -file_vhr ${TMPDIR}/${filename}
@@ -51,7 +53,7 @@ slurp_urbanmask ${main_config} -file_vhr ${TMPDIR}/${filename}
 # Stack
 # slurp_stackmasks ${TMPDIR}/image/${filename} stack/stack_simple.tif -vegmask vegetation/vegetationmask.tif -watermask water/watermask.tif -waterpred water/watermask.tif -urban_proba urban/urbanmask_proba.tif  -shadow shadows/shadowmask.tif -wsf urban/wsf.tif -remove_small_objects 300 -binary_closing 3 -binary_opening 3 -remove_small_holes 300 -building_erosion 2 -bonus_gt 10 -malus_shadow 10
 
-slurp_stackmasks ${main_config} -file_vhr ${TMPDIR}/${filename} -waterpred toto.tif -extracted_wsf out/wsf.tif
+slurp_stackmasks ${main_config} -file_vhr ${TMPDIR}/${filename} -waterpred toto.tif 
 
 stop_monitoring.sh --name SLURP_all_masks
 
