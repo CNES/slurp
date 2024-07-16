@@ -682,8 +682,8 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])  # A revoir si possible
-                x_samples = samples[:, :-1]
-                y_samples = samples[:, -1]
+                x_samples = samples[:, 1:]
+                y_samples = samples[:, 0]
                 train_classifier(classifier, x_samples, y_samples)
                 print_feature_importance(classifier)
                 gc.collect()
