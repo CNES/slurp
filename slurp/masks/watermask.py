@@ -304,7 +304,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     nb_valid_subset = np.count_nonzero(input_buffer[0])
     valid_water_pixels = np.logical_and(input_buffer[2], input_buffer[5] > params["ndwi_threshold"])
 
-    nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, input_buffer[1]))
+    nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, input_buffer[0]))
     nb_other_subset = nb_valid_subset - nb_water_subset
 
     # Ratio of pixel class compare to the full image ratio
@@ -346,9 +346,6 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
 
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0], input_buffer[1])
-
-    else:
-        raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
 
     else:
         raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
@@ -417,11 +414,11 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
 
     classifier = params["classifier"]
-    prediction = np.zeros(valid_mask[1].shape, dtype=np.uint8)
+    prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
     if buffer_to_predict.shape[1] == 0:
         print(f"WARNING > zone with NO DATA")
     else:
-        prediction[valid_mask[1]] = classifier.predict(buffer_to_predict)
+        prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
 
     return prediction
 
@@ -654,10 +651,10 @@ def main():
             else:
                 # Nominal case : select samples, train, predict
                 #
-                #Taking optional layers into account
+                # Taking optional layers into account
                 file_layers = [
-                eoscale_manager.open_raster(raster_path=args.files_layers[i])
-                for i in range(len(args.files_layers))
+                    eoscale_manager.open_raster(raster_path=args.files_layers[i])
+                    for i in range(len(args.files_layers))
                 ]
                 # Sample selection
                 valid_stack = eoscale_manager.get_array(key_valid_stack)

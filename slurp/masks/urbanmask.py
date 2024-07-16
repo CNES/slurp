@@ -509,7 +509,7 @@ def main():
             
             ################ Build samples #################
                                    
-            #Recover useful features
+            # Recover useful features
             valid_stack = eoscale_manager.get_array(key_valid_stack)
             local_gt = eoscale_manager.get_array(gt_key)
             file_filters = [
