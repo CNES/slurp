@@ -11,7 +11,7 @@ import pytest
 import os
 import glob
 
-from tests.utils import get_files_to_process, get_output_path, remove_file
+from tests.utils import get_output_path, get_aux_path
 from tests.validation import validate_mask
 
 
@@ -23,8 +23,7 @@ predict_images = glob.glob(os.path.join(pytest.output_dir + "/stack_*.tif"))
 
 
 def compute_stackmask(file, nb_workers):
-    output_image = get_output_path(file, "stack")
-    remove_file(output_image)
+    output_image = get_output_path(file, "stack", remove=True)
     
     masks_folder = os.path.join(pytest.data_dir, "stack", os.path.basename(file).replace('.tif', ''))
     watermask = os.path.join(masks_folder, "watermask.tif")
@@ -32,10 +31,11 @@ def compute_stackmask(file, nb_workers):
     urbanmask_proba = os.path.join(masks_folder, "urbanmask_proba.tif")
     shadowmask = os.path.join(masks_folder, "shadowmask.tif")
     wsf = os.path.join(masks_folder, "wsf.tif")
+    valid_stack = get_aux_path(file, "valid_stack")
         
-    os.system(f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -vegetationmask {vegetationmask} -watermask {watermask} -waterpred {watermask} -urban_proba {urbanmask_proba} -shadow {shadowmask} " \
-              f"-extracted_wsf {wsf} -n_workers {nb_workers} -remove_small_objects 300  -binary_closing 3 -binary_opening 3 -remove_small_holes 300 -building_erosion 2 " \
-              f"-bonus_gt 10 -malus_shadow 10 -stackmask {output_image}")
+    os.system(f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -stackmask {output_image} "
+              f"-vegetationmask {vegetationmask} -watermask {watermask} -waterpred {watermask} "
+              f"-urban_proba {urbanmask_proba} -shadow {shadowmask} -extracted_wsf {wsf} -valid {valid_stack} ")
 
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during stackmask computation ?"
     return output_image

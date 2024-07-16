@@ -19,7 +19,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from pylab import *
 
-from slurp.tools import eoscale_utils as eo_utils, io_utils, utils
+from slurp.tools import io_utils, utils
+from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -349,6 +350,9 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     else:
         raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
 
+    else:
+        raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
+
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
@@ -403,7 +407,7 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     Random Forest prediction
 
-    :param list input_buffer: [ key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
+    :param list input_buffer: [key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: predicted mask
@@ -420,11 +424,6 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
         prediction[valid_mask[1]] = classifier.predict(buffer_to_predict)
 
     return prediction
-
-
-def convert_time(seconds):
-    full_time = time.gmtime(seconds)
-    return time.strftime("%H:%M:%S", full_time)
 
 
 def getarguments():
@@ -693,7 +692,7 @@ def main():
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [ key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
+                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
@@ -731,13 +730,13 @@ def main():
 
             end_time = time.time()
 
-            print("**** Water mask for " + str(args.file_vhr) + " (saved as " + str(args.watermask) + ") ****")
-            print("Total time (user)       :\t" + convert_time(end_time - t0))
-            print("- Build_stack           :\t" + convert_time(time_stack - t0))
+            print(f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****")
+            print("Total time (user)       :\t" + utils.convert_time(end_time - t0))
+            print("- Build_stack           :\t" + utils.convert_time(time_stack - t0))
             if not args.simple_ndwi_threshold and not not_enough_water_samples:
-                print("- Build_samples         :\t" + convert_time(time_samples - time_stack))
-                print("- Random forest (total) :\t" + convert_time(time_random_forest - time_samples))
-                print("- Post-processing       :\t" + convert_time(end_time - time_random_forest))
+                print("- Build_samples         :\t" + utils.convert_time(time_samples - time_stack))
+                print("- Random forest (total) :\t" + utils.convert_time(time_random_forest - time_samples))
+                print("- Post-processing       :\t" + utils.convert_time(end_time - time_random_forest))
             print("***")
             print("Max workers used for parallel tasks " + str(args.n_workers))
 

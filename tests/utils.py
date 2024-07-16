@@ -9,7 +9,6 @@
 
 import os
 import glob
-import json
 import pytest
 import contextlib
 
@@ -28,6 +27,7 @@ def get_output_path(file, key, remove=False):
     if remove:
         remove_file(output_image)
     return output_image
+
 
 def get_aux_path(file, key):
     filename = os.path.basename(file)

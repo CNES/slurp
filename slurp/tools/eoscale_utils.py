@@ -68,9 +68,9 @@ def single_int16_profile(input_profiles: list, map_params):
 
 
 def single_uint16_profile(input_profiles: list, map_params):
-    profile= input_profiles[0]
-    profile["count"]= 1
-    profile["dtype"]= np.uint16
+    profile = input_profiles[0]
+    profile["count"] = 1
+    profile["dtype"] = np.uint16
     profile["nodata"] = 32767
     profile["compress"] = "deflate"
     
@@ -92,25 +92,6 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile["dtype"] = np.uint8
     profile["compress"] = "lzw"
     profile["nodata"] = 255
-    
-    return profile
-
-
-def three_int16_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile["count"] = 3
-    profile["dtype"] = np.int16
-    profile["compress"] = "deflate"
-    profile["nodata"] = 32767
-    
-    return profile
-
-
-def three_int32_profile(input_profiles: list, map_params):
-    profile = input_profiles[0]
-    profile["count"] = 3
-    profile["dtype"] = np.int32
-    profile["compress"] = "deflate"
     
     return profile
 

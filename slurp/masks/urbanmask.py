@@ -17,7 +17,8 @@ from sklearn.model_selection import train_test_split
 from skimage.morphology import (binary_closing, binary_opening, binary_dilation, binary_erosion, remove_small_holes,
                                 remove_small_objects, square, disk)
 
-from slurp.tools import io_utils, utils, eoscale_utils as eo_utils
+from slurp.tools import io_utils, utils
+from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
@@ -328,11 +329,6 @@ def watershed_regul(params: dict, clean_predict: np.ndarray, input_buffer: list)
     return seg, markers, edges
 
 
-def convert_time(seconds):
-    full_time = time.gmtime(seconds)
-    return time.strftime("%H:%M:%S", full_time)
-
-
 def clean(args, im_classif):
     #t0 = time.time()
     
@@ -634,12 +630,12 @@ def main():
                 end_time = time.time()
 
                 print(f"**** Urban mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
-                print("Total time (user)       :\t" + convert_time(end_time-t0))
-                print("- Build_stack           :\t" + convert_time(time_stack-t0))
-                print("- Build_samples         :\t" + convert_time(time_samples-time_stack))
-                print("- Random forest (total) :\t" + convert_time(time_random_forest-time_samples))
+                print("Total time (user)       :\t" + utils.convert_time(end_time-t0))
+                print("- Build_stack           :\t" + utils.convert_time(time_stack-t0))
+                print("- Build_samples         :\t" + utils.convert_time(time_samples-time_stack))
+                print("- Random forest (total) :\t" + utils.convert_time(time_random_forest-time_samples))
                 if args.post_process is True:
-                    print("- Post-processing       :\t" + convert_time(end_time-time_random_forest))
+                    print("- Post-processing       :\t" + utils.convert_time(end_time-time_random_forest))
                 print("***")   
                 
             elif args.nb_valid_built_pixels > 0:

@@ -6,6 +6,7 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
+import numpy as np
 import traceback
 from os import path
 
@@ -29,21 +30,26 @@ def getarguments():
     # ndxi
     parser.add_argument("-file_ndvi", help="Path to store the NDVI file")
     parser.add_argument("-file_ndwi", help="Path to store the NDWI file")
-    parser.add_argument("-red", help="Red band index")
-    parser.add_argument("-nir", help="NIR band index")
-    parser.add_argument("-green", help="Green band index")
+    parser.add_argument("-red", type=int, help="Red band index")
+    parser.add_argument("-nir", type=int, help="NIR band index")
+    parser.add_argument("-green", type=int, help="Green band index")
 
     # Pekel and HAND
     parser.add_argument("-pekel", help="Path of the global Pekel file")
     parser.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
     parser.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
-    parser.add_argument("-pekel_method", help="Method for Pekel recovery")
+    parser.add_argument("-pekel_method",
+                        help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery")
     parser.add_argument("-hand", help="Path of the global HAND file")
     parser.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
 
     # WSF
     parser.add_argument("-wsf", help="Path of the global WSF file")
     parser.add_argument("-extracted_wsf", help="Path to store the extracted WSF file")
+
+    # Texture
+    parser.add_argument("-file_texture", help="Path to store the texture file")
+    parser.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
     
     # perfo params
     parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
@@ -170,6 +176,31 @@ def main():
                     print("Not extracting WSF : the file already exists.")
             else:
                 print("Pass WSF extraction")
+
+            # Texture
+            if args.texture_rad:
+                if args.overwrite or not path.isfile(args.file_texture):
+                    params = {
+                        "nir": args.nir,
+                        "texture_rad": args.texture_rad,
+                        "min_value": np.min(eoscale_manager.get_array(key_phr)[3]),
+                        "max_value": np.max(eoscale_manager.get_array(key_phr)[3])
+                    }
+                    key_texture = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_phr, key_valid_stack[0]],
+                        image_filter=aux.texture_task,
+                        filter_parameters=params,
+                        generate_output_profiles=eo_utils.single_uint16_profile,
+                        stable_margin=args.texture_rad,
+                        context_manager=eoscale_manager,
+                        multiproc_context="fork",
+                        filter_desc="Texture processing..."
+                    )
+                    eoscale_manager.write(key=key_texture[0], img_path=args.file_texture)
+                else:
+                    print("Not computing texture file : the file already exists.")
+            else:
+                print("Pass texture computation")
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

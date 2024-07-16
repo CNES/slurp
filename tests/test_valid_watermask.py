@@ -28,9 +28,9 @@ def prepare_watermask(file, nb_workers):
     hand = get_output_path(file, "hand", remove=True)
     global_pekel = "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt"
     global_hand = "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt"
-    
-    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} " \
-              f"-valid_stack {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} " \
+
+    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} " 
+              f"-valid_stack {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} " 
               f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {global_pekel} -hand {global_hand}")
     
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
@@ -48,9 +48,9 @@ def compute_watermask(file, nb_workers):
     ndwi = get_aux_path(file, "ndwi")
     pekel = get_aux_path(file, "pekel")
     hand = get_aux_path(file, "hand")
-    
-    os.system(f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -watermask {output_image} "
-              f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand}")
+
+    os.system(f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+              f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand}")
     
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during watermask computation ?"
     

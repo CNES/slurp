@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import otbApplication as otb
 import time
 
@@ -14,7 +13,6 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     :param str file_ref: path to the input reference image
     :param str file_out: path for the output reprojected image
     :param type_out: OTB type for the output image
-    :returns: reprojected image
     """
     start_time = time.time()
     app = otb.Registry.CreateApplication("Superimpose")
@@ -28,7 +26,7 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     print("Superimpose in", time.time() - start_time, "seconds.")
 
 
-def rasterization(file_in: str, file_ref: str, file_out: str, type_out, write: bool = False) -> np.ndarray:
+def rasterization(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Rasterization using OTB
 
@@ -36,8 +34,6 @@ def rasterization(file_in: str, file_ref: str, file_out: str, type_out, write: b
     :param str file_ref: path to the input reference image
     :param str file_out: path for the output reprojected image
     :param type_out: OTB type for the output image
-    :param bool write: write the output image if True, else keep the image in memory
-    :returns: rasterized image
     """
     start_time = time.time()
     app = otb.Registry.CreateApplication("Rasterization")
@@ -48,13 +44,6 @@ def rasterization(file_in: str, file_ref: str, file_out: str, type_out, write: b
     app.SetParameterFloat("mode.binary.foreground", 1)
     app.SetParameterString("out", file_out + "?&writerpctags=true&gdal:co:COMPRESS=DEFLATE")
     app.SetParameterOutputImagePixelType("out", type_out)
-    app.Execute()
-
-    res = np.int8(np.copy(app.GetImageAsNumpyArray("out")))
-
-    if write:
-        app.WriteOutput()
+    app.ExecuteAndWriteOutput()
 
     print("Rasterize in", time.time() - start_time, "seconds.")
-
-    return res

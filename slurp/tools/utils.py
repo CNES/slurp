@@ -2,35 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import time
 from skimage.morphology import binary_dilation, disk
 
 
-def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
-    """
-    Calculation of the valid pixels of a given image
-
-    :param list input_buffer: VHR input image [im_vhr]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
-    """
-    valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata"], axis=0)
-    return valid_phr
-
-
-def compute_valid_stack_clouds(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
-    """
-    Calculation of the valid pixels of a given image with a cloud mask
-
-    :param list input_buffer: VHR input image [im_vhr, mask_nocloud]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
-    """
-    valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata_phr"], axis=0)
-    valid_stack_cloud = np.logical_and(valid_phr, input_buffer[1])
-
-    return valid_stack_cloud
+def convert_time(seconds):
+    full_time = time.gmtime(seconds)
+    return time.strftime("%H:%M:%S", full_time)
 
 
 def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:

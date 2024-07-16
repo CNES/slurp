@@ -78,25 +78,6 @@ def hand_recovery(file_ref: str, hand_ref: str, file_out: str):
     )
 
 
-def cloud_from_gml(file_cloud: str, file_ref: str) -> np.ndarray:
-    """
-    Compute cloud mask from GML file
-
-    :param str file_cloud: path to the GML file
-    :param str file_ref: path to the input reference image
-    :returns: cloud mask
-    """
-    mask_cloud = geometry.rasterization(
-        file_cloud,
-        file_ref,
-        "",
-        otb.ImagePixelType_uint8,
-        write=False
-    )
-
-    return mask_cloud
-
-
 def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str):
     """
     Recover WSF image in uint16

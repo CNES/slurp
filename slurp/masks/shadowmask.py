@@ -12,7 +12,8 @@ import traceback
 from os import path
 from skimage.morphology import binary_opening, remove_small_objects, disk
 
-from slurp.tools import eoscale_utils as eo_utils, io_utils
+from slurp.tools import io_utils
+from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
