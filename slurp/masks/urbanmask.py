@@ -199,7 +199,7 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
         prediction[2][valid_mask[0]] = 100 * proba[:, 1]
 
     else:
-        ### corner case : only NO_DATA !
+        # corner case : only NO_DATA !
         prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
         prediction[0][valid_mask[0]].fill(255)
         prediction[1][valid_mask[0]].fill(0)
@@ -512,7 +512,7 @@ def main():
             # Recover useful features
             valid_stack = eoscale_manager.get_array(key_valid_stack)
             local_gt = eoscale_manager.get_array(gt_key)
-            file_filters = [
+            keys_files_layers = [
                 eoscale_manager.open_raster(raster_path=args.files_layers[i])
                 for i in range(len(args.files_layers))
             ]
@@ -524,7 +524,7 @@ def main():
 
             if args.nb_valid_built_pixels > 0 and args.nb_valid_other_pixels > 0:
                 ##### Nominal case : Ground Truth contains some pixels marked as building.  #####
-                input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + file_filters
+                input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
                                                       filter_parameters=vars(args),
@@ -546,15 +546,15 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])
-                x_samples = samples[:, 1:]
-                y_samples = samples[:, 0]
+                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                y_samples = samples[:, 0]  # gt
 
                 train_classifier(classifier, x_samples, y_samples)
                 print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_filters
+                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
