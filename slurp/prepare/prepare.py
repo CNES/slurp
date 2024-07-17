@@ -146,10 +146,8 @@ def main():
                 print("Not computing NDWI : the file already exists.")
 
             # Pekel
-            if args.extracted_pekel:
+            if args.pekel and args.extracted_pekel:
                 if args.overwrite or not path.isfile(args.extracted_pekel):
-                    if not args.pekel:
-                        raise Exception("No Pekel file given")
                     if args.pekel_method == "month":
                         aux.pekel_month_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.pekel_obs)
                     elif args.pekel_method == "all":
@@ -162,10 +160,8 @@ def main():
                 print("Pass Pekel extraction")
 
             # Hand
-            if args.extracted_hand:
+            if args.hand and args.extracted_hand:
                 if args.overwrite or not path.isfile(args.extracted_hand):
-                    if not args.hand:
-                        raise Exception("No HAND file given")
                     aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand)
                 else:
                     print("Not extracting Hand : the file already exists.")
@@ -173,11 +169,8 @@ def main():
                 print("Pass Hand extraction")
 
             # WSF
-            if args.extracted_wsf:
+            if args.wsf and args.extracted_wsf:
                 if args.overwrite or not path.isfile(args.extracted_wsf):
-                    print(args.wsf)
-                    if not args.wsf:
-                        raise Exception("No WSF file given")
                     aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf)
                 else:
                     print("Not extracting WSF : the file already exists.")
