@@ -426,7 +426,7 @@ def getarguments():
     group1.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
     group1.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
     group1.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
-                        help="Add layers as features used by learning algorithm")
+                        help="Add layers as additional features used by learning algorithm")
     group1.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
 
     # Options
