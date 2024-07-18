@@ -199,7 +199,7 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
         prediction[2][valid_mask[0]] = 100 * proba[:, 1]
 
     else:
-        ### corner case : only NO_DATA !
+        # corner case : only NO_DATA !
         prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
         prediction[0][valid_mask[0]].fill(255)
         prediction[1][valid_mask[0]].fill(0)
@@ -546,8 +546,8 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])
-                x_samples = samples[:, 1:]
-                y_samples = samples[:, 0]
+                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                y_samples = samples[:, 0]  # gt
 
                 train_classifier(classifier, x_samples, y_samples)
                 print_feature_importance(classifier, args.files_layers)

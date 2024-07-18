@@ -95,7 +95,6 @@
  "water":
         {
 	    "files_layers":[],
-	    "file_filters":[],
         "thresh_pekel":50,
 	    "thresh_hand":25,
 	    "strict_thresh":50,

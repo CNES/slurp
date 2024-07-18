@@ -87,27 +87,11 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
     return mask_hand
 
 
-def compute_filter(file_filter, desc_filter):
-    """Compute filter mask. Water value is 1."""
-
-    id_water = 1
-
-    ds_filter = rio.open(file_filter)
-    im_filter = ds_filter.read(1)
-    valid_filter = im_filter != ds_filter.nodata
-    mask_filter = im_filter == id_water
-    io_utils.print_dataset_infos(ds_filter, desc_filter)
-    ds_filter.close()
-    del im_filter, ds_filter
-
-    return mask_filter, valid_filter
-
-
 def post_process(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
     Compute some filters on the prediction image.
 
-    :param list input_buffer: [im_predict, mask_hand, mask_pekel0, valid_stack + file filters*x]
+    :param list input_buffer: [im_predict, mask_hand, mask_pekel0, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: predict mask and post-processed mask
@@ -122,15 +106,11 @@ def post_process(input_buffer: list, input_profiles: list, params: dict) -> list
             print("\nWARNING: hand_filter and hand_strict are incompatible.")
 
     # Filter for final classification
-    if len(input_buffer) > 4 or not params["no_pekel_filter"]:
+    if not params["no_pekel_filter"]:
         mask = np.zeros(buffer_shape, dtype=bool)
         if not params["no_pekel_filter"]:  # filter with pekel0
             mask = np.zeros(buffer_shape, dtype=bool)
             mask = np.logical_or(mask, input_buffer[2][0])  # problème de mask_pekel0 if "not defined"
-        for i in range(len(input_buffer) - 4):  # Other classification files
-            filter_mask = compute_filter(input_buffer[i + 4], "FILTER " + str(i))[0]
-            mask = np.logical_or(mask, filter_mask)
-
         im_classif = mask_filter(input_buffer[0], mask)
     else:
         im_classif = input_buffer[0]
@@ -296,7 +276,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     Build samples
 
-    :param list input_buffer: [valid_stack, mask_hand, mask_pekel, im_phr, im_ndvi, im_ndwi]
+    :param list input_buffer: [valid_stack, mask_hand, mask_pekel, im_phr, im_ndvi, im_ndwi] + files_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: Retrieve number of pixels for each class
@@ -447,8 +427,6 @@ def getarguments():
     group1.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
     group1.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
                         help="Add layers as features used by learning algorithm")
-    group1.add_argument("-filters", nargs="+", action="store", dest="file_filters",
-                        help="Add files used in filtering (postprocessing)")
     group1.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
 
     # Options
@@ -682,8 +660,8 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 samples = np.concatenate(samples[:])  # A revoir si possible
-                x_samples = samples[:, 1:]
-                y_samples = samples[:, 0]
+                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                y_samples = samples[:, 0]  # mask_pekel
                 train_classifier(classifier, x_samples, y_samples)
                 print_feature_importance(classifier, args.files_layers)
                 gc.collect()
@@ -702,12 +680,7 @@ def main():
 
             if do_post_process:
                 ######### Post_processing  ################
-                file_filters = [
-                    eoscale_manager.open_raster(raster_path=args.file_filters[i])
-                    for i in range(len(args.file_filters))
-                ]
-
-                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack] + file_filters
+                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack]
                 im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
                                                                image_filter=post_process,
                                                                filter_parameters=vars(args),
