@@ -139,7 +139,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
             cols = []
 
     # Prepare samples for learning
-    im_stack = np.concatenate((input_buffer[1:]), axis=0)  # TODO : gérer les files_layers optionnels
+    im_stack = np.concatenate((input_buffer[1:]), axis=0) 
     samples = np.transpose(im_stack[:, rows, cols])
 
     return samples
@@ -363,7 +363,7 @@ def getarguments():
     parser.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
     parser.add_argument("-wsf", action="store", dest="extracted_wsf", help="WSF filename")
     parser.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
-                        help="Add layers as features used by learning algorithm")
+                        help="Add layers as additionnal features used by learning algorithm")
     parser.add_argument("-urban_raster", action="store",
                         help="Ground Truth (could be OSM, WSF). By default, WSF is automatically retrieved")
     
