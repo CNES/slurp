@@ -512,7 +512,7 @@ def main():
             # Recover useful features
             valid_stack = eoscale_manager.get_array(key_valid_stack)
             local_gt = eoscale_manager.get_array(gt_key)
-            file_filters = [
+            keys_files_layers = [
                 eoscale_manager.open_raster(raster_path=args.files_layers[i])
                 for i in range(len(args.files_layers))
             ]
@@ -524,7 +524,7 @@ def main():
 
             if args.nb_valid_built_pixels > 0 and args.nb_valid_other_pixels > 0:
                 ##### Nominal case : Ground Truth contains some pixels marked as building.  #####
-                input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + file_filters
+                input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
                                                       filter_parameters=vars(args),
@@ -554,7 +554,7 @@ def main():
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_filters
+                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},

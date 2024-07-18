@@ -273,9 +273,9 @@ def mask_filter(im_in, mask_ref):
     return im_filtered
 
 
-def print_feature_importance(classifier):
+def print_feature_importance(classifier, layers):
     """Compute feature importance."""
-    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"]
+    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
 
     importances = classifier.feature_importances_
     indices = np.argsort(importances)[::-1]
@@ -652,7 +652,7 @@ def main():
                 # Nominal case : select samples, train, predict
                 #
                 # Taking optional layers into account
-                file_layers = [
+                keys_files_layers = [
                     eoscale_manager.open_raster(raster_path=args.files_layers[i])
                     for i in range(len(args.files_layers))
                 ]
@@ -661,7 +661,7 @@ def main():
                 nb_valid_pixels = np.count_nonzero(valid_stack)
                 args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
                 args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
-                input_for_samples = [key_valid_stack, mask_hand[0], mask_pekel[0], key_phr, key_ndvi, key_ndwi] + file_layers
+                input_for_samples = [key_valid_stack, mask_hand[0], mask_pekel[0], key_phr, key_ndvi, key_ndwi] + keys_files_layers
 
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
@@ -685,11 +685,11 @@ def main():
                 x_samples = samples[:, 1:]
                 y_samples = samples[:, 0]
                 train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier)
+                print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
-                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + file_layers
+                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
