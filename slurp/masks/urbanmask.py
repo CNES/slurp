@@ -114,8 +114,8 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     
     # Retrieve number of pixels for each class
     nb_valid_subset = np.count_nonzero(input_buffer[0])
-    nb_built_subset = np.count_nonzero(np.logical_and(input_buffer[1], input_buffer[0]))
-    nb_other_subset = nb_valid_subset - nb_built_subset
+    nb_built_subset = np.count_nonzero(np.logical_and(mask_building, input_buffer[0]))
+    nb_other_subset = np.count_nonzero(np.logical_and(mask_non_building, input_buffer[0]))
     # Ratio of pixel class compare to the full image ratio
     urban_ratio = nb_built_subset / params["nb_valid_built_pixels"]
     other_ratio = nb_other_subset / params["nb_valid_other_pixels"]
@@ -132,16 +132,20 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
             rows = np.concatenate((rows, rows_nob), axis=0)
             cols = np.concatenate((cols, cols_nob), axis=0)
     else:
+        rows, cols = [], []
         if nb_other_subsamples > 0:
             rows, cols = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
-        else:
-            rows = []
-            cols = []
-
+    
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[1:]), axis=0) 
-    samples = np.transpose(im_stack[:, rows, cols])
-
+    
+    if rows == [] or cols == []:
+        samples = np.zeros(shape=(0,im_stack.shape[0]))
+    else:
+        
+        samples = np.transpose(im_stack[:, rows, cols])
+   
+    
     return samples
 
 
@@ -522,7 +526,10 @@ def main():
             args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
             args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
 
-            if args.nb_valid_built_pixels > 0 and args.nb_valid_other_pixels > 0:
+            building_areas = False
+            non_building_areas = False
+            
+            if args.nb_valid_built_pixels > args.nb_samples_urban and args.nb_valid_other_pixels > 0:
                 ##### Nominal case : Ground Truth contains some pixels marked as building.  #####
                 input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
@@ -534,10 +541,20 @@ def main():
                                                       output_scalars=[],
                                                       multiproc_context="fork",
                                                       filter_desc="Samples building processing...")
-                # samples=[y_samples, x_samples]
 
+                samples = np.concatenate(samples[:])
+                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                y_samples = samples[:, 0]  # gt
+
+                # Check if we have found "building" AND "non building" samples
+                # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
+                building_areas = len(np.where(y_samples == 255)[0]) > 0
+                non_building_areas = len(np.where(y_samples == 0)[0]) > 0
+                    
                 time_samples = time.time()
 
+
+            if building_areas and non_building_areas:
                 ################ Train classifier from samples #########
 
                 classifier = RandomForestClassifier(
@@ -545,10 +562,7 @@ def main():
                     random_state=0, n_jobs=args.n_jobs
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
-                samples = np.concatenate(samples[:])
-                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
-                y_samples = samples[:, 0]  # gt
-
+                
                 train_classifier(classifier, x_samples, y_samples)
                 print_feature_importance(classifier, args.files_layers)
                 gc.collect()
@@ -638,7 +652,7 @@ def main():
                     print("- Post-processing       :\t" + utils.convert_time(end_time-time_random_forest))
                 print("***")   
                 
-            elif args.nb_valid_built_pixels > 0:
+            elif args.nb_valid_built_pixels >= nb_valid_pixels:
                 #### Corner case : no "non building pixels"
                 print(f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****")
                 
