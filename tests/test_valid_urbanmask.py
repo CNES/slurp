@@ -25,11 +25,12 @@ def prepare_urbanmask(file, nb_workers):
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
     wsf = get_output_path(file, "wsf", remove=True)
-    global_wsf = "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_cog.tif"
-    
+    if not pytest.wsf:
+        raise Exception("Please add a global wsf file in 'config_tests.json' to run this test")
+
     os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
               f"-valid_stack {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
-              f"-extracted_wsf {wsf} -wsf {global_wsf}")
+              f"-extracted_wsf {wsf} -wsf {pytest.wsf}")
     
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
     assert os.path.exists(ndvi), f"The file {ndvi} has not been created. Error during NDVI computation ?"
@@ -47,7 +48,7 @@ def compute_urbanmask(file, nb_workers):
     ndvi = get_aux_path(file, "ndvi")
     ndwi = get_aux_path(file, "ndwi")
     wsf = get_aux_path(file, "wsf")
-    
+
     os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
               f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
     

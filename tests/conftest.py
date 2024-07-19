@@ -35,6 +35,9 @@ def pytest_configure(config):
         pytest.data_dir = conf["data_dir"]
         pytest.output_dir = conf["output_dir"]
         pytest.ref_dir = conf["ref_dir"]
+        pytest.pekel = conf["pekel"]
+        pytest.hand = conf["hand"]
+        pytest.wsf = conf["wsf"]
     pytest.main_config = os.path.join(current_dir, 'main_config_tests.json')
     if not os.path.exists(pytest.output_dir):
         os.makedirs(pytest.output_dir)
