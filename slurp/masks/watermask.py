@@ -10,7 +10,6 @@ import traceback
 from os.path import dirname, join
 
 import numpy as np
-import rasterio as rio
 from skimage.filters.rank import maximum
 from skimage.measure import label, regionprops
 from skimage.morphology import area_closing, binary_closing, remove_small_holes, square, disk
@@ -408,92 +407,65 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Water Mask.")
 
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
-    group2 = parser.add_argument_group(description="*** OPTIONS ***")
-    group3 = parser.add_argument_group(
-        description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
-    group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
-    group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
-    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
-
-    # Input files
-    group1.add_argument("main_config", help="First JSON file, load basis arguments")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    group1.add_argument("-file_vhr", help="PHR filename")
-
-    group1.add_argument("-pekel", action="store", dest="extracted_pekel", help="Pekel filename")
-    group1.add_argument("-hand", action="store", dest="extracted_hand", help="Hand filename")
-    group1.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
-    group1.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
-    group1.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
+    group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
+    group1.add_argument("-pekel", dest="extracted_pekel", help="Extracted Pekel filename")
+    group1.add_argument("-hand", dest="extracted_hand", help="Extracted Hand filename")
+    group1.add_argument("-layers", nargs="+", dest="files_layers",
                         help="Add layers as additional features used by learning algorithm")
-    group1.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-filters", nargs="+", dest="file_filters", help="Add files used in filtering (postprocessing)")
 
-    # Options
-    group2.add_argument("-thresh_pekel", type=float, action="store", help="Pekel Threshold float (default is 50)")
+    group2 = parser.add_argument_group(description="*** OPTIONS ***")
+    group2.add_argument("-thresh_pekel", type=float, help="Pekel Threshold float")
     group2.add_argument("-hand_strict", action="store_true", help="Use not(pekelxx) for other (no water) samples")
-    group2.add_argument("-thresh_hand", type=int, action="store", help="Hand Threshold int >= 0 (default is 25)")
-    group2.add_argument("-strict_thresh", type=float, action="store", help="Pekel Threshold float (default is 50)",)
-    group2.add_argument("-save_mode", choices=["none", "debug"], action="store",
+    group2.add_argument("-thresh_hand", type=int, help="Hand Threshold int >= 0")
+    group2.add_argument("-strict_thresh", type=float, help="Pekel Threshold float if hand_strict")
+    group2.add_argument("-save_mode", choices=["none", "debug"],
                         help="Save all files (debug) or only output mask (none)")
-    group2.add_argument("-simple_ndwi_threshold", action="store",
-                        help="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel")
-    group2.add_argument("-ndwi_threshold", type=float, action="store",
-                        help="Threshold used when Pekel is empty in the area")
+    group2.add_argument("-simple_ndwi_threshold", help="Compute water mask as a simple NDWI threshold - "
+                                                       "useful in arid places where no water is known by Peckel")
+    group2.add_argument("-ndwi_threshold", type=float, help="Threshold used when Pekel is empty in the area")
 
-    # Samples
-    group3.add_argument("-samples_method", choices=["smart", "grid", "random"], action="store",
+    group3 = parser.add_argument_group(description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
+    group3.add_argument("-samples_method", choices=["smart", "grid", "random"],
                         help="Select method for choosing learning samples")
-
-    group3.add_argument("-nb_samples_water", type=int, action="store",
-                        help="Number of samples in water for learning (default is 2000)")
-
-    group3.add_argument("-nb_samples_other", type=int, action="store",
-                        help="Number of samples in other for learning (default is 10000)")
-
-    group3.add_argument("-nb_samples_auto", action="store",
-                        help="Auto select number of samples for water and other")
-
-    group3.add_argument("-auto_pct", type=float, action="store",
-                        help="Percentage of samples points, to use with -nb_samples_auto")
-
-    group3.add_argument("-smart_area_pct", type=int, action="store",
-                        help="For smart method, importance of area for selecting number of samples in each water surface.")
-
-    group3.add_argument("-smart_minimum", type=int, action="store",
+    group3.add_argument("-nb_samples_water", type=int, help="Number of samples in water for learning")
+    group3.add_argument("-nb_samples_other", type=int, help="Number of samples in other for learning")
+    group3.add_argument("-nb_samples_auto", action="store_true", help="Auto select number of samples for water and other")
+    group3.add_argument("-auto_pct", type=float, help="Percentage of samples points, to use with -nb_samples_auto")
+    group3.add_argument("-smart_area_pct", type=int,
+                        help="For smart method, importance of area for selecting number of samples in each water surface")
+    group3.add_argument("-smart_minimum", type=int,
                         help="For smart method, minimum number of samples in each water surface.")
-
-    group3.add_argument("-grid_spacing", type=int, action="store",
+    group3.add_argument("-grid_spacing", type=int,
                         help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)")
+    group3.add_argument("-max_depth", type=int, help="Max depth of trees")
+    group3.add_argument("-nb_estimators", type=int, help="Nb of trees in Random Forest")
+    group3.add_argument("-n_jobs", type=int, help="Nb of parallel jobs for Random Forest "
+                                                  "(1 is recommanded : use n_workers to optimize parallel computing)")
 
-    group3.add_argument("-max_depth", type=int, action="store", help="Max depth of trees")
-
-    group3.add_argument("-nb_estimators", type=int, action="store", help="Nb of trees in Random Forest")
-
-    group3.add_argument("-n_jobs", type=int, action="store",
-                        help="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)")
-
-    # Post-processing
-    group4.add_argument("-no_pekel_filter", action="store", 
+    group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
+    group4.add_argument("-no_pekel_filter", action="store_true",
                         help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel")
+    group4.add_argument("-hand_filter", action="store_true",
+                        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict")
+    group4.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
+    group4.add_argument("-area_closing", type=int, help="Area closing removes all dark structures")
+    group4.add_argument("-remove_small_holes", type=int,
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
 
-    group4.add_argument("-hand_filter", action="store", 
-                        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict",)
-
-    group4.add_argument("-binary_closing", type=int, action="store", help="Size of square structuring element",)
-    group4.add_argument("-area_closing", type=int, action="store", help="Area closing removes all dark structures",)
-    group4.add_argument("-remove_small_holes", type=int, action="store",
-                        help="The maximum area, in pixels, of a contiguous hole that will be filled",)
-
-    # Output
+    group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group5.add_argument("-watermask", help="Output classification filename")
-    group5.add_argument("-value_classif", type=int, action="store", help="Output classification value (default is 1)")
+    group5.add_argument("-value_classif", type=int, help="Output classification value (default is 1)")
 
-    # Parallel computing
-    group6.add_argument("-max_mem", type=int, action="store", dest="max_memory",
-                        help="Max memory permitted for the prediction of the Random Forest (in Gb)")
-
-    group6.add_argument("-n_workers", type=int, action="store", help="Nb of CPU")
+    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group6.add_argument("-n_workers", type=int, action="store", help="Number of CPU")
 
     return parser.parse_args()
 
@@ -505,7 +477,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'water']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'water']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

@@ -58,33 +58,32 @@ def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.
 
 
 def getarguments():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
-    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
-    parser.add_argument("-shadowmask", help="Final mask")
-    
-    # aux files
-    parser.add_argument("-valid_stack", help="Validity mask")
 
-    # computation params
-    parser.add_argument("-th_rgb", type=float, action="store",
-                        help="Relative shadow threshold for RGB bands (default 0.3)")
-    parser.add_argument("-th_nir", type=float, action="store",
-                        help="Relative shadow threshold for NIR band (default 0.3)")
-    parser.add_argument("-absolute_threshold", type=float, required=False, action="store",
-                        help="Compute shadow mask with a unique absolute threshold")
-    parser.add_argument("-percentile", help="Percentile value to cut histogram and estimate shadow threshold")
-    parser.add_argument("-binary_opening", "--binary_opening", type=int, required=False, action="store",
-                        help="Size of ball structuring element")
-    parser.add_argument("-remove_small_objects", "--remove_small_objects", type=int, required=False, action="store",
+    group1 = parser.add_argument_group(description="*** INPUT FILES ***")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-watermask", help="Watermask filename : shadow mask will exclude water areas")
+
+    group2 = parser.add_argument_group(description="*** OPTIONS ***")
+    group2.add_argument("-th_rgb", type=float, help="Relative shadow threshold for RGB bands")
+    group2.add_argument("-th_nir", type=float, help="Relative shadow threshold for NIR band")
+    group2.add_argument("-absolute_threshold", type=float, help="Compute shadow mask with a unique absolute threshold")
+    group2.add_argument("-percentile", type=float, help="Percentile value to cut histogram and estimate shadow threshold")
+
+    group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
+    group3.add_argument("-binary_opening", type=int, help="Size of disk structuring element")
+    group3.add_argument("-remove_small_objects", type=int,
                         help="The maximum area, in pixels, of a contiguous object that will be removed")
-    parser.add_argument("-watermask", required=False, action="store", dest="watermask",
-                        help="Watermask filename : shadow mask will exclude water areas")
 
-    # perfo params
-    parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
+    group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
+    group4.add_argument("-shadowmask", help="Output classification filename")
+
+    group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group5.add_argument("-n_workers", type=int, help="Number of CPU")
 
     args = parser.parse_args()
 
@@ -96,7 +95,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'shadows']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'shadows']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

@@ -367,56 +367,53 @@ def getarguments():
     parser = argparse.ArgumentParser(description="Compute Vegetation Mask.")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
-    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    parser.add_argument("-file_vhr", help="input image (reflectances TOA)")
-    parser.add_argument("-vegetationmask", help="Output classification filename")
 
-    # primitives and texture arguments
-    parser.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
-    parser.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
-    parser.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
-    parser.add_argument("-texture", action="store", dest="file_texture", help="Texture filename")
-    parser.add_argument("-texture_mode", "--texture_mode", choices=["yes", "no", "debug"], action="store",
+    parser.add_argument('-d', '--debug', action='store_true', help='Debug flag')
+
+    group1 = parser.add_argument_group(description="*** INPUT FILES ***")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
+    group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
+    group1.add_argument("-texture", dest="file_texture", help="Texture filename")
+
+    group2 = parser.add_argument_group(description="*** OPTIONS ***")
+    group2.add_argument("-texture_mode", choices=["yes", "no", "debug"],
                         help="Labelize vegetation with (yes) or without (no) distinction low/high, "
                              "or get all 9 vegetation clusters without distinction low/high (debug)")
-    parser.add_argument("-filter_texture", "--filter_texture", type=int,
-                        help="Percentile for texture (between 1 and 99)")
-    parser.add_argument("-save", choices=["none", "debug"], action="store", dest="save_mode",
+    group2.add_argument("-filter_texture", type=int, help="Percentile for texture (between 1 and 99)")
+    group2.add_argument("-save", choices=["none", "debug"], dest="save_mode",
                         help="Save all files (debug) or only output mask (none)")
+    group2.add_argument("-slic_seg_size", type=int, help="Approximative segment size")
+    group2.add_argument("-slic_compactness", type=float,
+                        help="Balance between color and space proximity (see skimage.slic documentation)")
 
-    # segmentation arguments
-    parser.add_argument("-slic_seg_size", "--slic_seg_size", type=int, help="Approximative segment size (100 by default)")
-    parser.add_argument("-slic_compactness", "--slic_compactness", type=float,
-                        help="Balance between color and space proximity (see skimage.slic documentation) - 0.1 by default")
-
-    # clustering arguments
-    parser.add_argument("-nbclusters", "--nb_clusters_veg", type=int,
-                        help="Nb of clusters considered as vegetation (1-9), default : 3")
-    parser.add_argument("-min_ndvi_veg", "--min_ndvi_veg", type=int,
+    group3 = parser.add_argument_group(description="*** CLUSTERING ***")
+    group3.add_argument("-nb_clusters_veg", type=int, help="Nb of clusters considered as vegetation (1-9)")
+    group3.add_argument("-min_ndvi_veg", type=int,
                         help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
-    parser.add_argument("-max_ndvi_noveg", "--max_ndvi_noveg", type=int,
+    group3.add_argument("-max_ndvi_noveg", type=int,
                         help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
-    parser.add_argument("-non_veg_clusters", "--non_veg_clusters", action="store_true",
+    group3.add_argument("-non_veg_clusters", action="store_true",
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
-    parser.add_argument("-nbclusters_low", "--nb_clusters_low_veg", type=int,
-                        help="Nb of clusters considered as low vegetation (1-9), default : 3")
-    parser.add_argument("-max_low_veg", "--max_low_veg", type=int,
+    group3.add_argument("-nb_clusters_low_veg", type=int, help="Nb of clusters considered as low vegetation (1-9)")
+    group3.add_argument("-max_low_veg", type=int,
                         help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
 
-    # post-processing arguments
-    parser.add_argument("-binary_dilation", "--binary_dilation", type=int, action="store",
-                        help="Size of square structuring element")
-    parser.add_argument("-remove_small_objects", "--remove_small_objects", type=int, action="store",
+    group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
+    group4.add_argument("-binary_dilation", type=int,  help="Size of disk structuring element")
+    group4.add_argument("-remove_small_objects", type=int,
                         help="The maximum area, in pixels, of a contiguous object that will be removed")
-    parser.add_argument("-remove_small_holes", "--remove_small_holes", type=int, action="store",
+    group4.add_argument("-remove_small_holes", type=int,
                         help="The maximum area, in pixels, of a contiguous hole that will be filled")
 
-    # multiprocessing arguments
-    parser.add_argument("-n_workers", type=int,
-                        help="Number of workers for multiprocessed tasks (primitives+segmentation)")
+    group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
+    group5.add_argument("-vegetationmask", help="Output classification filename")
 
-    # Debug argument
-    parser.add_argument('--debug', action='store_true', help='Debug flag')
+    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group6.add_argument("-n_workers", type=int,
+                        help="Number of CPU for multiprocessed tasks (primitives+segmentation)")
 
     return parser.parse_args()
 
@@ -425,7 +422,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'vegetation']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'vegetation']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
