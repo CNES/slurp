@@ -32,7 +32,7 @@ def prepare_watermask(file, nb_workers):
         raise Exception("Please add a global hand file in 'config_tests.json' to run this test")
 
     os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} " 
-              f"-valid_stack {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} " 
+              f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} " 
               f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand}")
     
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"

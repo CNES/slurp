@@ -22,7 +22,7 @@ predict_images = glob.glob(os.path.join(pytest.output_dir + "/shadowmask*.tif"))
 
 def prepare_shadowmask(file, nb_workers):
     valid_stack = get_output_path(file, "valid_stack", remove=True)
-    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -valid_stack {valid_stack}") 
+    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -valid {valid_stack}")
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
     return valid_stack
 
@@ -31,7 +31,7 @@ def compute_shadowmask(file, nb_workers):
     output_image = get_output_path(file, "shadowmask", remove=True)
     valid_stack = get_aux_path(file, "valid_stack")
     os.system(f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-              f"-shadowmask {output_image} -valid_stack {valid_stack}")
+              f"-shadowmask {output_image} -valid {valid_stack}")
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during shadowmask computation ?"
     return output_image
 

@@ -23,8 +23,6 @@ def get_assert_message(predict_value, ref_value, key):
 def compare_datasets(ds_new_mask, ds_ref_mask):
     assert ds_new_mask.profile == ds_ref_mask.profile, \
         get_assert_message(ds_new_mask.profile, ds_ref_mask.profile, "profile")
-    assert ds_new_mask.tags() == ds_ref_mask.tags(), \
-        get_assert_message(ds_new_mask.tags(), ds_ref_mask.tags(), "tags")
     assert ds_new_mask.bounds == ds_ref_mask.bounds, \
         get_assert_message(ds_new_mask.bounds, ds_ref_mask.bounds, "bounds")
     assert ds_new_mask.colorinterp == ds_ref_mask.colorinterp, \

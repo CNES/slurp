@@ -17,45 +17,43 @@ import eoscale.eo_executors as eoexe
 
 
 def getarguments():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Compute auxiliary files needed for mask computation")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
-    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    parser.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    parser.add_argument("-w", "--overwrite", action="store_true", help="Recompute files even if exists")
 
-    # valid stack
-    parser.add_argument("-valid_stack", help="Path to store the valid stack file")
-    parser.add_argument("-cloud_mask", help="Path to the input cloud mask")
+    group1 = parser.add_argument_group(description="*** INPUT FILES ***")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Path to store the valid stack file")
+    group1.add_argument("-cloud_mask", help="Path to the input cloud mask")
 
-    # ndxi
-    parser.add_argument("-file_ndvi", help="Path to store the NDVI file")
-    parser.add_argument("-file_ndwi", help="Path to store the NDWI file")
-    parser.add_argument("-red", type=int, help="Red band index")
-    parser.add_argument("-nir", type=int, help="NIR band index")
-    parser.add_argument("-green", type=int, help="Green band index")
+    group2 = parser.add_argument_group(description="*** PRIMITIVES ***")
+    group2.add_argument("-file_ndvi", help="Path to store the NDVI file")
+    group2.add_argument("-file_ndwi", help="Path to store the NDWI file")
+    group2.add_argument("-red", type=int, help="Red band index")
+    group2.add_argument("-nir", type=int, help="NIR band index")
+    group2.add_argument("-green", type=int, help="Green band index")
 
-    # Pekel and HAND
-    parser.add_argument("-pekel", help="Path of the global Pekel file")
-    parser.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
-    parser.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
-    parser.add_argument("-pekel_method",
+    group3 = parser.add_argument_group(description="*** AUX FILES FOR WATER MASK ***")
+    group3.add_argument("-pekel_method",
                         help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery")
-    parser.add_argument("-hand", help="Path of the global HAND file")
-    parser.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+    group3.add_argument("-pekel", help="Path of the global Pekel file")
+    group3.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
+    group3.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
+    group3.add_argument("-hand", help="Path of the global HAND file")
+    group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
 
-    # WSF
-    parser.add_argument("-wsf", help="Path of the global WSF file")
-    parser.add_argument("-extracted_wsf", help="Path to store the extracted WSF file")
+    group4 = parser.add_argument_group(description="*** AUX FILES FOR URBAN MASK ***")
+    group4.add_argument("-wsf", help="Path of the global WSF file")
+    group4.add_argument("-extracted_wsf", help="Path to store the extracted WSF file")
 
-    # Texture
-    parser.add_argument("-file_texture", help="Path to store the texture file")
-    parser.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
+    group5 = parser.add_argument_group(description="*** AUX FILES FOR VEGETATION MASK ***")
+    group5.add_argument("-file_texture", help="Path to store the texture file")
+    group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
     
-    # perfo params
-    parser.add_argument("-n_workers", type=int, required=False, action="store", help="Nb of CPU")
-
-    # only cli
-    parser.add_argument("-overwrite", action="store_true", help="Recompute files even if exists")
+    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group6.add_argument("-n_workers", type=int, help="Number of CPU")
 
     args = parser.parse_args()
 

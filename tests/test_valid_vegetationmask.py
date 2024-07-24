@@ -26,7 +26,7 @@ def prepare_vegetationmask(file, nb_workers):
     ndwi = get_output_path(file, "ndwi", remove=True)
     texture = get_output_path(file, "texture", remove=True)
     
-    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -texture_rad 5 "
+    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
               f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
     
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"

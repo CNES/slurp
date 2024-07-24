@@ -9,13 +9,10 @@ import time
 import traceback
 
 from os.path import dirname, join, basename, isfile
-from skimage import segmentation
-from skimage.filters import sobel
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from skimage.morphology import (binary_closing, binary_opening, binary_dilation, binary_erosion, remove_small_holes,
-                                remove_small_objects, square, disk)
+from skimage.morphology import binary_dilation, binary_erosion, disk
 
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
@@ -37,12 +34,12 @@ def apply_vegetationmask(input_buffer: list, input_profiles: list, args: dict) -
 
     :param list input_buffer: VHR input image [valid_stack, vegetationmask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain the keys "vegmask_max_value" and "binary_dilation"
+    :param dict args: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
     non_veg = np.where(input_buffer[1] < args["vegmask_max_value"], True, False)
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
-    non_veg_dilated = binary_dilation(non_veg[0], disk(args["binary_dilation"]))
+    non_veg_dilated = binary_dilation(non_veg[0], disk(args["veg_binary_dilation"]))
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
 
     return valid_stack
@@ -109,11 +106,10 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
     mask_building_before_erosion = np.where(input_buffer[1] == params["value_classif"], True, False)
-    mask_building = [binary_erosion(mask_building_before_erosion[0], disk(params["binary_closing"]))]
+    mask_building = [binary_erosion(mask_building_before_erosion[0], disk(params["gt_binary_erosion"]))]
     mask_non_building = np.where(input_buffer[1] == 0, True, False)
     
     # Retrieve number of pixels for each class
-    nb_valid_subset = np.count_nonzero(input_buffer[0])
     nb_built_subset = np.count_nonzero(np.logical_and(mask_building, input_buffer[0]))
     nb_other_subset = np.count_nonzero(np.logical_and(mask_non_building, input_buffer[0]))
     # Ratio of pixel class compare to the full image ratio
@@ -140,11 +136,10 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     im_stack = np.concatenate((input_buffer[1:]), axis=0) 
     
     if rows == [] or cols == []:
-        samples = np.zeros(shape=(0,im_stack.shape[0]))
+        samples = np.zeros(shape=(0, im_stack.shape[0]))
     else:
         
         samples = np.transpose(im_stack[:, rows, cols])
-   
     
     return samples
 
@@ -212,225 +207,54 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     return prediction
 
 
-def post_process(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
-    """
-    Compute some filters on the prediction image.
-
-    :param list input_buffer: [im_predict, im_phr, watermask, vegetationmask, shadowmask, gt, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments
-    :returns: post-processed mask
-    """
-    # Clean
-    # im_classif = clean(params, inputBuffer[0][0])
-
-    # Watershed regulation
-    final_mask, markers, edges = watershed_regul(params, input_buffer[0][0], input_buffer)
-
-    # Add nodata in final_mask (input_buffer[6] : valid mask)
-    final_mask[np.logical_not(input_buffer[6][0])] = 255
-
-    res_int = np.zeros((3, input_buffer[1].shape[1], input_buffer[1].shape[2]))
-    res_int[0] = final_mask
-    res_int[1] = markers
-    res_int[2] = input_buffer[0][0]  # im_classif
-
-    return res_int
-
-
-def watershed_regul(params: dict, clean_predict: np.ndarray, input_buffer: list):
-    """
-    Compute watershed regulation.
-
-    :param dict params: dictionary of arguments
-    :param np.ndarray clean_predict: input image
-    :param list input_buffer: [im_predict, im_phr, watermask, vegetationmask, shadowmask, gt, valid_stack]
-    :returns: post-processed image
-    """
-    # Compute mono image from RGB image
-    im_mono = 0.29 * input_buffer[1][0] + 0.58 * input_buffer[1][1] + 0.114 * input_buffer[1][2]
-
-    # compute gradient
-    edges = sobel(im_mono)
-
-    del im_mono
-
-    # markers map : -1, 1 and 2 : probable background, buildings or false positive
-    # input_buffer[0] = proba of building class
-    markers = np.zeros_like(input_buffer[0][0])
-
-    """
-    weak_detection = np.logical_and(input_buffer[0][2] > 50, input_buffer[0][2] < args.confidence_threshold)
-    true_negative = np.logical_and(binary_closing(input_buffer[3][0], disk(10)) == 255, weak_detection)
-    markers[weak_detection] = 3
-    """
-
-    #  probable_buildings = np.logical_and(input_buffer[0][2] > args.confidence_threshold, clean_predict == 1)
-    probable_background = np.logical_and(input_buffer[0][2] < 40, clean_predict == 0)
-    ground_truth_eroded = binary_erosion(input_buffer[3][0] == 255, disk(5))
-    probable_buildings = np.logical_and(ground_truth_eroded, input_buffer[0][2] > 50)
-
-    """
-    ground_truth_eroded = binary_erosion(input_buffer[3][0]==255, disk(5))
-    # If WSF = 1
-    probable_buildings = np.logical_and(input_buffer[0][2] > 70, ground_truth_eroded)
-    #probable_background = np.logical_and(input_buffer[0][2] < 40, ground_truth_eroded)
-
-    no_WSF = binary_dilation(input_buffer[3][0]==0, disk(5)) 
-    false_positive = np.logical_and(no_WSF, input_buffer[0][2] > params["confidence_threshold"])
-
-    # note : all other pixels are 0
-    markers[false_positive] = 2
-    """
-
-    confident_buildings = np.logical_and(ground_truth_eroded, input_buffer[0][2] > params["confidence_threshold"])
-
-    markers[probable_background] = 4
-    markers[probable_buildings] = 1
-    markers[confident_buildings] = 2
-
-    if params["file_shadowmask"]:
-        # shadows (note : 2 are "cleaned / big shadows", 1 is raw shadow detection)
-        markers[binary_erosion(input_buffer[2][0] == 2, disk(5))] = 8
-
-    if params["remove_false_positive"]:
-        ground_truth = input_buffer[3][0]
-        # mark as false positive pixels with high confidence but not covered by dilated ground truth
-        # TODO : check if we can reduce radius for dilation
-        false_positive = np.logical_and(binary_dilation(ground_truth, disk(10)) == 0,
-                                        input_buffer[0][2] > params["confidence_threshold"])
-        markers[false_positive] = 3
-        del ground_truth, false_positive
-
-    # watershed segmentation
-    # seg[np.where(seg>3, True, False)] = 0
-    # markers[np.where(markers > 3)] = 0
-    seg = segmentation.watershed(edges, markers)
-
-    seg[np.where(seg > 3, True, False)] = 0
-    seg[np.where(seg == 2, True, False)] = 1
-
-    # TODO : check if we can remove/reduce this opening
-
-    seg[binary_closing(seg == 1, disk(params["binary_closing"]))] = 1
-    seg[binary_opening(seg == 1, disk(params["binary_closing"]))] = 1
-
-    # markers[binary_opening(input_buffer[4][0] == 2, disk(10))] = 8
-
-    if params["remove_small_holes"]:
-        res = remove_small_holes(
-            seg.astype(bool), params["remove_small_holes"], connectivity=2
-        ).astype(np.uint8)
-        seg = np.multiply(res, seg)
-
-    # remove small artefacts : TODO seg contains 1, 2, 3, 4 values...
-    # params["remove_small_objects"] = False
-    if params["remove_small_objects"]:
-        res = remove_small_objects(seg.astype(bool), params["remove_small_objects"], connectivity=2).astype(np.uint8)
-        # res is either 0 or 1 : we multiply by seg to keep 0/1/2 classes
-        seg = np.multiply(res, seg)
-
-    return seg, markers, edges
-
-
-def clean(args, im_classif):
-    #t0 = time.time()
-    
-    if args.binary_opening:
-        # Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks.
-        im_classif = binary_opening(im_classif, square(args.binary_opening)).astype(np.uint8)
-
-    if args.binary_closing:
-        # Closing can remove small dark spots (i.e. “pepper”) and connect small bright cracks.
-        im_classif = binary_closing(im_classif, square(args.binary_closing)).astype(np.uint8)
-
-    if args.remove_small_objects:
-        im_classif = remove_small_objects(
-            im_classif.astype(bool), args.remove_small_objects, connectivity=2
-        ).astype(np.uint8)
-
-    return im_classif
-
-
 def getarguments():
     """Parse command line arguments."""
 
-    parser = argparse.ArgumentParser(description="Compute Water Mask.")
-    
+    parser = argparse.ArgumentParser(description="Compute Urban Mask.")
+
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
-    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    parser.add_argument("-file_vhr", help="PHR filename")
 
-    # Input files
-    parser.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
-    parser.add_argument("-ndvi", action="store", dest="file_ndvi", help="NDVI filename")
-    parser.add_argument("-ndwi", action="store", dest="file_ndwi", help="NDWI filename")
-    parser.add_argument("-wsf", action="store", dest="extracted_wsf", help="WSF filename")
-    parser.add_argument("-layers", nargs="+", action="store", dest="files_layers", metavar="FILE_LAYER",
-                        help="Add layers as additionnal features used by learning algorithm")
-    parser.add_argument("-urban_raster", action="store",
-                        help="Ground Truth (could be OSM, WSF). By default, WSF is automatically retrieved")
-    
-    # Other masks
-    parser.add_argument("-watermask", action="store",
-                        help="Watermask filename : urban mask will be learned & predicted, excepted on water areas")    
-    parser.add_argument("-vegetationmask", action="store",
-                        help="Vegetation mask filename : urban mask will be learned & predicted, excepted on vegetated areas")
-    parser.add_argument("-vegmask_max_value", type=int, action="store",
+    group1 = parser.add_argument_group(description="*** INPUT FILES ***")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
+    group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted WSF filename")
+    group1.add_argument("-layers", nargs="+", dest="files_layers",
+                        help="Add layers as additional features used by learning algorithm")
+    group1.add_argument("-watermask", help="Watermask filename (facultative) : "
+                                           "urban mask will be learned & predicted, excepted on water areas")
+    group1.add_argument("-vegetationmask", help="Vegetation mask filename (facultative) : "
+                                                "urban mask will be learned & predicted, excepted on vegetated areas")
+    group1.add_argument("-shadowmask", help="Shadowmask filename (facultative) : "
+                                            "big shadow areas will be marked as background")
+
+    group2 = parser.add_argument_group(description="*** OPTIONS ***")
+    group2.add_argument("-vegmask_max_value", type=int,
                         help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted")
-    parser.add_argument("-shadowmask", action="store",
-                        help="Shadowmask filename : big shadow areas will be marked as background")
-    
-    # Options
-    parser.add_argument("-nb_classes", type=int, action="store",
-                        help="Nb of classes in the ground-truth (1 by default - buildings only. Can be fix to 2 to classify buildings/roads") 
-    parser.add_argument("-save", choices=["none", "debug"], action="store", dest="save_mode",
-                        help="Save all files (debug) or only output mask (none)")
-    
-    # Samples
-    parser.add_argument("-nb_samples_urban", type=int, action="store",
-                        help="Number of samples in buildings for learning (default is 1000)")
-
-    parser.add_argument("-nb_samples_other", type=int, action="store",
-                        help="Number of samples in other for learning (default is 5000)")
-
-    parser.add_argument("-max_depth", type=int, action="store", help="Max depth of trees")
-    parser.add_argument( "-nb_estimators", type=int, action="store", help="Nb of trees in Random Forest")
-    parser.add_argument("-n_jobs", type=int, action="store", help="Nb of parallel jobs for Random Forest")
-    parser.add_argument("-random_seed", type=int, action="store", help="Fix the random seed for samples selection")
-    
-    # Post-process
-    parser.add_argument("-post_process", action="store",
-                        help="Post-process urban mask : apply morphological operations and regularize building shapes (watershed regularization)")  
-
-    parser.add_argument("-binary_closing", type=int, action="store",
-                        help="Size of disk structuring element (erode GT before picking-up samples)") 
-
-    parser.add_argument("-binary_opening", type=int, action="store",
-                        help="Size of square structuring element")
-
-    parser.add_argument("-binary_dilation", type=int, action="store",
+    group2.add_argument("-veg_binary_dilation", type=int,
                         help="Size of disk structuring element (dilate non vegetated areas)")
+    group2.add_argument("-value_classif", type=int,
+                        help="Input ground truth class to consider in the input ground truth")
+    group2.add_argument("-gt_binary_erosion", type=int, action="store",
+                        help="Size of disk structuring element (erode GT before picking-up samples)")
+    group2.add_argument("-save", choices=["none", "debug"], dest="save_mode",
+                        help="Save all files (debug) or only output mask (none)")
 
-    parser.add_argument("-remove_small_objects", type=int, action="store",
-                        help="The minimum area, in pixels, of the objects to detect")
+    group3 = parser.add_argument_group(description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
+    group3.add_argument("-nb_samples_urban", type=int, help="Number of samples in buildings for learning")
+    group3.add_argument("-nb_samples_other", type=int, help="Number of samples in other for learning")
+    group3.add_argument("-max_depth", type=int, help="Max depth of trees")
+    group3.add_argument("-nb_estimators", type=int, help="Nb of trees in Random Forest")
+    group3.add_argument("-n_jobs", type=int, help="Nb of parallel jobs for Random Forest "
+                                                  "(1 is recommanded : use n_workers to optimize parallel computing)")
     
-    parser.add_argument("-remove_small_holes", type=int, action="store",
-                        help="The minimum area, in pixels, of the holes to fill")
+    group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
+    group4.add_argument("-urbanmask", help="Output classification filename")
 
-    parser.add_argument("-remove_false_positive", action="store",
-                        help="Will dilate and use input ground-truth as mask to filter false positive from initial prediction")
-    
-    parser.add_argument("-confidence_threshold", type=int, action="store",
-                        help="Confidence threshold to consider true positive in regularization step (85 by default)")    
-    
-    # Output
-    parser.add_argument("-urbanmask", help="Output classification filename (default is classif.tif)")
-    parser.add_argument("-value_classif", type=int, action="store",
-                        help="Input ground truth class to consider in the input ground truth (default is 255 for WSF)")
-    
-    # Parallel computing
-    parser.add_argument("-n_workers", type=int, action="store", help="Nb of CPU")
+    group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group5.add_argument("-n_workers", type=int, help="Number of CPU")
     
     return parser.parse_args()
 
@@ -553,7 +377,6 @@ def main():
                     
                 time_samples = time.time()
 
-
             if building_areas and non_building_areas:
                 ################ Train classifier from samples #########
 
@@ -582,7 +405,7 @@ def main():
                 final_predict = eoscale_manager.get_array(key_predict[0])
                 io_utils.save_image(
                         final_predict[2],
-                        join(dirname(args.urbanmask), basename(args.urbanmask).replace(".tif", "_proba.tif")),
+                        args.urbanmask,
                         args.crs,
                         args.transform,
                         255,
@@ -600,56 +423,13 @@ def main():
                         tags=args.__dict__,
                     )
 
-                ######### Post_processing  ################
-                if args.shadowmask and isfile(args.shadowmask):
-                    key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
-                else:
-                    profile = eoscale_manager.get_profile(key_phr)
-                    profile["count"] = 1
-                    profile["dtype"] = np.uint8
-                    key_shadowmask = eoscale_manager.create_image(profile)
-                    eoscale_manager.get_array(key=key_shadowmask).fill(0)
-
-                if args.post_process is True:
-                    inputs_for_post_process = [key_predict[0], key_phr, key_shadowmask, gt_key, key_valid_stack]
-                    key_post_process = eoexe.n_images_to_m_images_filter(inputs=inputs_for_post_process,
-                                                                         image_filter=post_process,
-                                                                         filter_parameters=vars(args),
-                                                                         generate_output_profiles=eo_utils.three_uint8_profile,
-                                                                         stable_margin=20,
-                                                                         context_manager=eoscale_manager,
-                                                                         multiproc_context="fork",
-                                                                         filter_desc="Post processing...")
-                
-                    # Save final mask (prediction + post-processing)
-                    eoscale_manager.write(key=key_post_process[0][0], img_path=args.urbanmask)
-                    eoscale_manager.write(
-                        key=key_post_process[0][2],
-                        img_path=join(
-                            dirname(args.urbanmask),
-                            basename(args.urbanmask).replace(".tif", "_clean.tif")
-                        )
-                    )
-                    
-                    if args.save_mode == "debug":
-                        # Save auxilliary results : raw prediction, markers
-                        eoscale_manager.write(
-                            key=key_post_process[0][1],
-                            img_path=join(
-                                dirname(args.urbanmask),
-                                basename(args.urbanmask).replace(".tif", "_markers.tif")
-                            )
-                        )
-
                 end_time = time.time()
 
-                print(f"**** Urban mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
+                print(f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
                 print("Total time (user)       :\t" + utils.convert_time(end_time-t0))
                 print("- Build_stack           :\t" + utils.convert_time(time_stack-t0))
                 print("- Build_samples         :\t" + utils.convert_time(time_samples-time_stack))
                 print("- Random forest (total) :\t" + utils.convert_time(time_random_forest-time_samples))
-                if args.post_process is True:
-                    print("- Post-processing       :\t" + utils.convert_time(end_time-time_random_forest))
                 print("***")   
                 
             elif args.nb_valid_built_pixels >= nb_valid_pixels:
@@ -663,14 +443,8 @@ def main():
                 final_classif_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=final_classif_key).fill(100)
                 
-                # Save final mask (prediction + post-processing)
-                eoscale_manager.write(
-                    key=final_classif_key,
-                    img_path=join(
-                        dirname(args.urbanmask),
-                        basename(args.urbanmask).replace(".tif", "_proba.tif")
-                    )
-                )
+                # Save proba mask
+                eoscale_manager.write(key=final_classif_key, img_path=args.urbanmask)
                 
             else:
                 #### Corner case : no "building pixels" --> void mask (0)
@@ -682,15 +456,9 @@ def main():
                 profile["nodata"] = 255
                 final_classif_key = eoscale_manager.create_image(profile)
                 eoscale_manager.get_array(key=final_classif_key).fill(0)
-                
-                # Save final mask (prediction + post-processing)
-                eoscale_manager.write(
-                    key=final_classif_key,
-                    img_path=join(
-                        dirname(args.urbanmask),
-                        basename(args.urbanmask).replace(".tif", "_proba.tif")
-                    )
-                )
+
+                # Save proba mask
+                eoscale_manager.write(key=final_classif_key, img_path=args.urbanmask)
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

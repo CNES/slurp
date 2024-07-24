@@ -113,16 +113,16 @@ def morpho_clean(im_classif, params):
 
 def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
     """
-    key_image, key_validstack, key_watermask, key_waterpred, key_vegmask, key_urban_proba, key_shadowmask, key_wsf
-    0          1              2              3              4            5                6               7   
+    key_image, key_validstack, key_watermask, key_vegmask, key_urban_proba, key_shadowmask, key_wsf
+    0          1              2              3             4                5               6
     """
     input_image = inputBuffer[0]
     valid_stack = inputBuffer[1]
     watermask   = inputBuffer[2]
-    vegmask     = inputBuffer[4]
-    urban_proba = inputBuffer[5]
-    shadowmask  = inputBuffer[6]
-    wsf = inputBuffer[7]
+    vegmask     = inputBuffer[3]
+    urban_proba = inputBuffer[4]
+    shadowmask  = inputBuffer[5]
+    wsf = inputBuffer[6]
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
     stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
@@ -176,42 +176,42 @@ def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.
 
 def getarguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
-    parser.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
-    parser.add_argument("-file_vhr", help="VHR input image")
-    parser.add_argument("-stackmask", help="Final mask")
-    parser.add_argument("-vegetationmask", help="Vegetation mask")
-    parser.add_argument("-vegmask_max_value", type=int, action="store",
-                        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted")
-    parser.add_argument("-watermask", help="Water mask (filtered mask)")
-    parser.add_argument("-waterpred", help="Water mask (prediction)")
-    parser.add_argument("-urban_proba", help="Urban mask probabilities")
-    parser.add_argument("-building_threshold", type=int, action="store",
-                        help="Threshold to consider building as detected (70 by default)")
-    parser.add_argument("-shadowmask", help="Shadow mask")
-    parser.add_argument("-valid", action="store", dest="valid_stack", help="Validity mask")
-     
-    parser.add_argument("-extracted_wsf", help="World Settlement Footprint raster")
-    parser.add_argument("-mnh", help="Height elevation model")
-    parser.add_argument("-binary_closing", type=int, action="store",
-                        help="Size of square structuring element (clean BUILDING / BARE_GROUND classes)")
-    parser.add_argument("-binary_opening", type=int, action="store",
-                        help="Size of square structuring element (clean BUILDING / BARE_GROUND classes)")
-    parser.add_argument("-building_erosion", type=int, action="store",
-                        help="Supposed buildings will be eroded by this size in the marker step")
 
-    parser.add_argument("-bonus_gt", type=int, action="store",
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+
+    group1 = parser.add_argument_group(description="*** INPUT FILES ***")
+    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
+    group1.add_argument("-vegetationmask", help="Vegetation mask")
+    group1.add_argument("-watermask", help="Water mask")
+    group1.add_argument("-urban_proba", dest="urbanmask", help="Urban mask probabilities")
+    group1.add_argument("-shadowmask", help="Shadow mask")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="World Settlement Footprint raster")
+
+    group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
+    group2.add_argument("-building_threshold", type=int, help="Threshold to consider building as detected")
+    group2.add_argument("-building_erosion", type=int,
+                        help="Supposed buildings will be eroded by this size in the marker step")
+    group2.add_argument("-bonus_gt", type=int,
                         help="Bonus for pixels covered by GT, in the watershed regularization step "
                              "(ex : +30 to improve discrimination between building and background)")
-    parser.add_argument("-malus_shadow", type=int, action="store",
+    group2.add_argument("-malus_shadow", type=int,
                         help="Malus for pixels in shadow, in the watershed regularization step")
-     
-    parser.add_argument("-remove_small_objects", type=int, action="store",
-                        help="The minimum area, in pixels, of the objects to detect")
-    parser.add_argument("-remove_small_holes", type=int, action="store",
-                        help="The minimum area, in pixels, of the holes to fill")
-    
-    parser.add_argument("-n_workers", type=int, action="store", help="Nb of CPU")
+
+    group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
+    group3.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
+    group3.add_argument("-binary_opening", type=int, help="Size of disk structuring element")
+    group3.add_argument("-remove_small_objects", type=int,
+                        help="The maximum area, in pixels, of a contiguous object that will be removed")
+    group3.add_argument("-remove_small_holes", type=int, action="store",
+                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
+
+    group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
+    group4.add_argument("-stackmask", help="Final mask")
+
+    group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group5.add_argument("-n_workers", type=int, help="Number of CPU")
 
     return parser.parse_args()
 
@@ -220,7 +220,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'stack']
+    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'stack']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -237,16 +237,15 @@ def main():
             t0 = time.time()
             key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
             key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
-            key_waterpred = key_watermask  # eoscale_manager.open_raster(raster_path=args.waterpred)
             key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
-            key_urban_proba = eoscale_manager.open_raster(raster_path=args.urban_proba)
+            key_urban_proba = eoscale_manager.open_raster(raster_path=args.urbanmask)
             key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
             key_wsf = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
             key_validstack = eoscale_manager.open_raster(raster_path=args.valid_stack)
                 
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
-            inputs_final = [key_image, key_validstack, key_watermask, key_waterpred, key_vegmask, key_urban_proba, key_shadowmask, key_wsf]
+            inputs_final = [key_image, key_validstack, key_watermask, key_vegmask, key_urban_proba, key_shadowmask, key_wsf]
             final_mask = eoexe.n_images_to_m_images_filter(inputs=inputs_final,
                                                            image_filter=post_process,
                                                            filter_parameters=vars(args),

@@ -17,7 +17,7 @@ from tests.validation import validate_mask
 input_files = get_files_to_process("urban")
 
 # Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/urbanmask*_proba.tif"))
+predict_images = glob.glob(os.path.join(pytest.output_dir + "/urbanmask*.tif"))
 
 
 def prepare_urbanmask(file, nb_workers):
@@ -29,8 +29,7 @@ def prepare_urbanmask(file, nb_workers):
         raise Exception("Please add a global wsf file in 'config_tests.json' to run this test")
 
     os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-              f"-valid_stack {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
-              f"-extracted_wsf {wsf} -wsf {pytest.wsf}")
+              f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf}")
     
     assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
     assert os.path.exists(ndvi), f"The file {ndvi} has not been created. Error during NDVI computation ?"
@@ -42,8 +41,7 @@ def prepare_urbanmask(file, nb_workers):
 
 def compute_urbanmask(file, nb_workers):
     output_image = get_output_path(file, "urbanmask")
-    proba_image = output_image.replace(".tif", "_proba.tif")
-    remove_file(proba_image)
+    remove_file(output_image)
     valid_stack = get_aux_path(file, "valid_stack")
     ndvi = get_aux_path(file, "ndvi")
     ndwi = get_aux_path(file, "ndwi")
@@ -52,9 +50,9 @@ def compute_urbanmask(file, nb_workers):
     os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
               f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
     
-    assert os.path.exists(proba_image), f"The file {proba_image} has not been created. Error during urbanmask computation ?"
+    assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during urbanmask computation ?"
     
-    return proba_image
+    return output_image
 
 
 @pytest.mark.prepare
