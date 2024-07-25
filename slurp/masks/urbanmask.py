@@ -5,10 +5,11 @@
 import argparse
 import gc
 import numpy as np
+import rasterio as rio
 import time
 import traceback
 
-from os.path import dirname, join, basename, isfile
+from os.path import isfile
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
@@ -82,7 +83,7 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
-    if len(rows) >= nb_samples and nb_samples >= 1:
+    if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
         # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
         indices = np.arange(0, len(rows)-1, int(len(rows)/nb_samples))
@@ -138,7 +139,6 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     if rows == [] or cols == []:
         samples = np.zeros(shape=(0, im_stack.shape[0]))
     else:
-        
         samples = np.transpose(im_stack[:, rows, cols])
     
     return samples
@@ -276,7 +276,6 @@ def main():
     args = argparse.Namespace(**argsdict)
     
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
-       
         try:
             
             t0 = time.time()
@@ -287,12 +286,6 @@ def main():
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
             eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
-
-            args.nodata_phr = profile_phr["nodata"]
-            args.shape = (profile_phr["height"], profile_phr["width"])
-            args.crs = profile_phr["crs"]
-            args.transform = profile_phr["transform"]
-            args.rpc = None
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
@@ -345,7 +338,7 @@ def main():
                 for i in range(len(args.files_layers))
             ]
             
-            # Calcul of valid pixels
+            # Calculation of valid pixels
             nb_valid_pixels = np.count_nonzero(valid_stack)
             args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
             args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
@@ -354,7 +347,7 @@ def main():
             non_building_areas = False
             
             if args.nb_valid_built_pixels > args.nb_samples_urban and args.nb_valid_other_pixels > 0:
-                ##### Nominal case : Ground Truth contains some pixels marked as building.  #####
+                # Nominal case : Ground Truth contains some pixels marked as building.
                 input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
@@ -403,25 +396,15 @@ def main():
                 time_random_forest = time.time()
 
                 final_predict = eoscale_manager.get_array(key_predict[0])
-                io_utils.save_image(
-                        final_predict[2],
-                        args.urbanmask,
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        tags=args.__dict__,
-                )
+                profile = eoscale_manager.get_profile(key_predict[0])
+                profile['count'] = 1
+
+                with rio.open(args.urbanmask, "w", **profile) as out_dataset:
+                    out_dataset.write(final_predict[2:])  # Last band
+
                 if args.save_mode == "debug":
-                    io_utils.save_image(
-                        final_predict[0],
-                        join(dirname(args.urbanmask), basename(args.urbanmask).replace(".tif", "_raw_predict.tif")),
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        tags=args.__dict__,
-                    )
+                    with rio.open(args.urbanmask.replace(".tif", "_raw_predict.tif"), "w", **profile) as out_dataset:
+                        out_dataset.write(final_predict[:1])  # First band
 
                 end_time = time.time()
 

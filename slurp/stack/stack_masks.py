@@ -32,20 +32,18 @@ LOW_VEG = 1
 HIGH_VEG = 2
 WATER = 3
 BUILDINGS = 4
-UNDEF_WATER_URBAN = 5  # Prediction of water, but also urban
+# UNDEF_WATER_URBAN = 5  # Prediction of water, but also urban
 BARE_GROUND = 6
-UNDEF_URBAN_BARE_GROUND = (
-    7  # Prediction of urban but smooth area (could be bare ground)
-)
-WATER_PRED = 8  # Prediction of water, but not in Peckel database
-SHADOW = 9
+# UNDEF_URBAN_BARE_GROUND = 7  # Prediction of urban but smooth area (could be bare ground)
+# WATER_PRED = 8  # Prediction of water, but not in Peckel database
+# SHADOW = 9
 BUILDINGS_FALSE_POSITIVE = 10
 
 
 # Elevation estimation in 2nd layer
 LOW = 1
 HIGH = 2
-NOT_CONFIDENT = 0
+# NOT_CONFIDENT = 0
 
 NODATA = 255
 

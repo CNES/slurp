@@ -90,7 +90,7 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 3
     profile["dtype"] = np.uint8
-    profile["compress"] = "lzw"
+    profile["compress"] = "deflate"
     profile["nodata"] = 255
     
     return profile
