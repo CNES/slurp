@@ -130,34 +130,23 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     :param list input_buffer: [valid_stack, vhr_image, ndvi, ndwi] + file_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
-    :returns: predicted mask
+    :returns: predicted mask (proba)
     """
     im_stack = np.concatenate((input_buffer[1:]), axis=0)
     valid_mask = input_buffer[0].astype(bool)
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
     # buffer_to_predict are non NODATA pixels, defined by all the primitives (R-G-B-NIR-NDVI-NDWI-[+ features]
 
-    classifier = params["classifier"]
-    if buffer_to_predict.shape[0] > 0:
+    prediction = np.zeros(valid_mask.shape)
+
+    if buffer_to_predict.shape[0] > 0:  # not only NO_DATA
+        classifier = params["classifier"]
         proba = classifier.predict_proba(buffer_to_predict)
+        prediction[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
+
         # Prediction, inspired by sklearn code to predict class
-        res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
-        res_classif[res_classif == 255] = 1
-
-        prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
-        # Class predicted
-        prediction[0][valid_mask[0]] = res_classif
-        # Proba for class 0 (background)
-        prediction[1][valid_mask[0]] = 100 * proba[:, 0]
-        # Proba for class 1 (buildings)
-        prediction[2][valid_mask[0]] = 100 * proba[:, 1]
-
-    else:
-        # corner case : only NO_DATA !
-        prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
-        prediction[0][valid_mask[0]].fill(255)
-        prediction[1][valid_mask[0]].fill(0)
-        prediction[2][valid_mask[0]].fill(0)
+        # res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
+        # res_classif[res_classif == 255] = 1
 
     return prediction
 
@@ -343,23 +332,14 @@ def main():
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.three_uint8_profile,
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
-                final_predict = eoscale_manager.get_array(key_predict[0])
-                profile = eoscale_manager.get_profile(key_predict[0])
-                profile['count'] = 1
-
-                with rio.open(args.urbanmask, "w", **profile) as out_dataset:
-                    out_dataset.write(final_predict[2:])  # Last band
-
-                if args.save_mode == "debug":
-                    with rio.open(args.urbanmask.replace(".tif", "_raw_predict.tif"), "w", **profile) as out_dataset:
-                        out_dataset.write(final_predict[:1])  # First band
+                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
 
                 end_time = time.time()
 
