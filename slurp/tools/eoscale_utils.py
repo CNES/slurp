@@ -18,6 +18,12 @@ def print_dataset_infos(name, profile, prefix=""):
     print()
 
 
+def concatenate_samples(output_scalars, chunk_output_scalars, tile):
+    output_scalars.append(chunk_output_scalars[0])
+
+
+# Profiles
+
 def single_float_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile['count'] = 1

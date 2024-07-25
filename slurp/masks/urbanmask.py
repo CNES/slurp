@@ -11,11 +11,9 @@ import traceback
 
 from os.path import isfile
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
 
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import io_utils, utils
+from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
@@ -46,37 +44,18 @@ def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict)
     return valid_stack
 
 
-def apply_watermask(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside water mask
 
     :param list input_buffer: VHR input image [valid_stack, watermask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments (not used but necessary for eoscale)
+    :param dict params: dictionary of arguments (not used but necessary for eoscale)
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
     valid_stack = np.logical_and(input_buffer[0], np.where(input_buffer[1] == 0, True, False))
 
     return valid_stack
-
-
-def print_feature_importance(classifier, layers):
-    """Compute feature importance."""
-    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
-
-    importances = classifier.feature_importances_
-    indices = np.argsort(importances)[::-1]
-
-    std = np.std(
-        [tree.feature_importances_ for tree in classifier.estimators_], axis=0
-    )
-
-    print("Feature ranking:")
-    for idx in indices:
-        print(
-            "  %4s (%f) (std=%f)"
-            % (feature_names[idx], importances[idx], std[idx])
-        )
 
     
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
@@ -142,30 +121,6 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         samples = np.transpose(im_stack[:, rows, cols])
     
     return samples
-
-
-def train_classifier(classifier, x_samples, y_samples):
-    """Create and train classifier on samples."""
-
-    start_time = time.time()
-    x_train, x_test, y_train, y_test = train_test_split(
-        x_samples, y_samples, test_size=0.2, random_state=42
-    )
-    classifier.fit(x_train, y_train)
-    print("Train time :", time.time() - start_time)
-
-    # Compute accuracy on train and test sets
-    x_train_prediction = classifier.predict(x_train)
-    x_test_prediction = classifier.predict(x_test)
-    
-    print(
-        "Accuracy on train set :",
-        accuracy_score(y_train, x_train_prediction),
-    )
-    print(
-        "Accuracy on test set :",
-        accuracy_score(y_test, x_test_prediction),
-    )
 
 
 def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
@@ -354,7 +309,7 @@ def main():
                                                       filter_parameters=vars(args),
                                                       nb_output_scalars=args.nb_valid_built_pixels+args.nb_valid_other_pixels,
                                                       context_manager=eoscale_manager,
-                                                      concatenate_filter=utils.concatenate_samples,
+                                                      concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
                                                       multiproc_context="fork",
                                                       filter_desc="Samples building processing...")
@@ -379,8 +334,8 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 
-                train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier, args.files_layers)
+                RF_utils.train_classifier(classifier, x_samples, y_samples)
+                RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
