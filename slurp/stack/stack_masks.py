@@ -15,6 +15,7 @@ from skimage.morphology import (binary_closing, binary_opening, binary_dilation,
 from skimage.filters import sobel
 from skimage import segmentation
 
+from slurp.post_process.morphology import morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils
 import eoscale.manager as eom
@@ -88,25 +89,6 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
     
     return seg, markers
-
-
-def morpho_clean(im_classif, params):
-        
-    if params["binary_closing"]:
-        # Closing can remove small dark spots (i.e. “pepper”) and connect small bright cracks.
-        im_classif = binary_closing(im_classif, disk(params["binary_closing"])).astype(np.uint8)
-
-    if params["binary_opening"]:
-        # Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks.
-        im_classif = binary_opening(im_classif, disk(params["binary_opening"])).astype(np.uint8)
-
-    if params["remove_small_holes"]:
-        im_classif = remove_small_holes(im_classif.astype(bool), params["remove_small_holes"], connectivity=2)
-        
-    if params["remove_small_objects"]:
-        im_classif = remove_small_objects(im_classif, params["remove_small_objects"], connectivity=2)
-        
-    return im_classif.astype(np.uint8)
     
 
 def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.ndarray:

@@ -12,12 +12,13 @@ from os.path import dirname, join
 import numpy as np
 from skimage.filters.rank import maximum
 from skimage.measure import label, regionprops
-from skimage.morphology import area_closing, binary_closing, remove_small_holes, square, disk
+from skimage.morphology import square
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from pylab import *
 
+from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
@@ -116,13 +117,14 @@ def post_process(input_buffer: list, input_profiles: list, params: dict) -> list
 
     # Closing
     if params["binary_closing"]:
-        im_classif[0, :, :] = binary_closing(im_classif[0, :, :].astype(bool), disk(params["binary_closing"])).astype(
-            np.uint8)
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool), "binary_closing", params["binary_closing"]
+        ).astype(np.uint8)
     elif params["area_closing"]:
-        im_classif[0, :, :] = area_closing(im_classif[0, :, :], params["area_closing"], connectivity=2)
+        im_classif[0, :, :] = apply_morpho(im_classif[0, :, :], "area_closing", params["area_closing"])
     elif params["remove_small_holes"]:
-        im_classif[0, :, :] = remove_small_holes(
-            im_classif[0, :, :].astype(bool), params["remove_small_holes"], connectivity=2
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool), "remove_small_holes", params["remove_small_holes"]
         ).astype(np.uint8)
 
     # Add nodata in im_classif

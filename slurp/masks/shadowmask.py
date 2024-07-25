@@ -10,8 +10,7 @@ import numpy as np
 import traceback
 
 from os import path
-from skimage.morphology import binary_opening, remove_small_objects, disk
-
+from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
@@ -41,9 +40,9 @@ def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) 
     # work on binary arrays
     final_shadow_mask = raw_shadow_mask
     if params["binary_opening"] > 0:
-        final_shadow_mask = binary_opening(raw_shadow_mask, disk(params["binary_opening"]))
+        final_shadow_mask = apply_morpho(final_shadow_mask, "binary_opening", params["binary_opening"])
     if params["remove_small_objects"] > 0:
-        final_shadow_mask = remove_small_objects(final_shadow_mask, params["remove_small_objects"], connectivity=2)
+        final_shadow_mask = apply_morpho(final_shadow_mask, "remove_small_objects", params["remove_small_objects"])
         
     raw_shadow_mask = np.where(raw_shadow_mask, 1, 0)
     final_shadow_mask = np.where(final_shadow_mask, 1, 0)

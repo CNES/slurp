@@ -13,8 +13,8 @@ from os.path import isfile
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from skimage.morphology import binary_dilation, binary_erosion, disk
 
+from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
@@ -29,18 +29,18 @@ except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
 
-def apply_vegetationmask(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside vegetation mask
 
     :param list input_buffer: VHR input image [valid_stack, vegetationmask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
+    :param dict params: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    non_veg = np.where(input_buffer[1] < args["vegmask_max_value"], True, False)
+    non_veg = np.where(input_buffer[1] < params["vegmask_max_value"], True, False)
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
-    non_veg_dilated = binary_dilation(non_veg[0], disk(args["veg_binary_dilation"]))
+    non_veg_dilated = apply_morpho(non_veg[0], "binary_dilation", params["veg_binary_dilation"])
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
 
     return valid_stack
@@ -107,7 +107,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
     mask_building_before_erosion = np.where(input_buffer[1] == params["value_classif"], True, False)
-    mask_building = [binary_erosion(mask_building_before_erosion[0], disk(params["gt_binary_erosion"]))]
+    mask_building = [apply_morpho(mask_building_before_erosion[0], "binary_erosion", params["gt_binary_erosion"])]
     mask_non_building = np.where(input_buffer[1] == 0, True, False)
     
     # Retrieve number of pixels for each class
