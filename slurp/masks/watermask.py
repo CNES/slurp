@@ -226,23 +226,6 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
-    if params["save_mode"] == "debug":
-        colormap = {
-            0: (0, 0, 0, 0),  # nodata
-            1: (0, 0, 255),  # eau
-            2: (255, 0, 0),  # autre
-            3: (0, 0, 0, 0),
-        }
-        RF_utils.save_indexes(
-            "samples.tif",
-            zip(rows_pekel, cols_pekel),
-            zip(rows_hand, cols_hand),
-            params["shape"],
-            params["crs"],
-            params["transform"],
-            params["rpc"],
-            colormap
-        )
 
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[2:]), axis=0)
@@ -601,12 +584,11 @@ def main():
                                                                multiproc_context="fork",
                                                                filter_desc="Post processing...")
 
-                # Save predict and classif image
-                eoscale_manager.write(key=im_classif[0], img_path=join(dirname(args.watermask), "predict.tif"))
                 eoscale_manager.write(key=im_classif[1], img_path=args.watermask)  # classif
+                if args.save_mode == "debug":
+                    eoscale_manager.write(key=im_classif[0], img_path=args.watermask.replace(".tif", "_raw_predict.tif"))
+
             else:
-                # no post-process : we save the same mask with two different names for compatibility purpose
-                eoscale_manager.write(key=key_predict[0], img_path=join(dirname(args.watermask), "predict.tif"))
                 eoscale_manager.write(key=key_predict[0], img_path=args.watermask)  # classif
 
             end_time = time.time()

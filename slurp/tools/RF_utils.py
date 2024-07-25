@@ -46,17 +46,3 @@ def train_classifier(classifier, x_samples, y_samples):
 
     print("Accuracy on train set :", accuracy_score(y_train, x_train_prediction))
     print("Accuracy on test set :", accuracy_score(y_test, x_test_prediction))
-
-
-def save_indexes(filename, element_idxs, other_idxs, shape, crs, transform, rpc, colormap):
-    """Save points used for learning into a file."""
-    img = np.zeros(shape, dtype=np.uint8)
-
-    for row, col in element_idxs:
-        img[row, col] = 1
-
-    for row, col in other_idxs:
-        img[row, col] = 2
-
-    img_dilat = maximum(img, square(5))
-    io_utils.save_image(img_dilat, filename, crs, transform, 0, rpc, colormap)

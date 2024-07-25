@@ -123,7 +123,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     return samples
 
 
-def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
     Random Forest prediction
 
@@ -137,18 +137,26 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
     # buffer_to_predict are non NODATA pixels, defined by all the primitives (R-G-B-NIR-NDVI-NDWI-[+ features]
 
-    prediction = np.zeros(valid_mask.shape)
-
-    if buffer_to_predict.shape[0] > 0:  # not only NO_DATA
-        classifier = params["classifier"]
+    classifier = params["classifier"]
+    if buffer_to_predict.shape[0] > 0:
         proba = classifier.predict_proba(buffer_to_predict)
-        prediction[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
-
         # Prediction, inspired by sklearn code to predict class
-        # res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
-        # res_classif[res_classif == 255] = 1
+        res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
+        res_classif[res_classif == 255] = 1
 
-    return prediction
+        prediction = np.zeros(valid_mask.shape)
+        prediction[0][valid_mask[0]] = res_classif
+
+        proba_buildings = np.zeros(valid_mask.shape)
+        proba_buildings[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
+
+    else:
+        # corner case : only NO_DATA !
+        prediction = np.zeros(valid_mask.shape)
+        prediction[0][valid_mask[0]].fill(255)
+        proba_buildings = np.zeros(valid_mask.shape)
+
+    return [prediction, proba_buildings]
 
 
 def getarguments():
@@ -332,14 +340,16 @@ def main():
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
+                                                                generate_output_profiles=eo_utils.double_int_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
-                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
+                eoscale_manager.write(key=key_predict[1], img_path=args.urbanmask)  # classif
+                if args.save_mode == "debug":
+                    eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"))
 
                 end_time = time.time()
 
