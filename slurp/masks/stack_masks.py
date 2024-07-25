@@ -10,12 +10,10 @@ import traceback
 import numpy as np
 import time
 
-from skimage.morphology import (binary_closing, binary_opening, binary_dilation, binary_erosion,
-                                remove_small_holes, remove_small_objects, disk)
 from skimage.filters import sobel
 from skimage import segmentation
 
-from slurp.post_process.morphology import morpho_clean
+from slurp.post_process.morphology import morpho_clean, apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils
 import eoscale.manager as eom
@@ -27,24 +25,10 @@ Final mask values
 - 1st layer : class
 - 2nd layer : estimation of elevation
 """
-BACKGROUND = 11
-
-LOW_VEG = 1
-HIGH_VEG = 2
-WATER = 3
-BUILDINGS = 4
-# UNDEF_WATER_URBAN = 5  # Prediction of water, but also urban
-BARE_GROUND = 6
-# UNDEF_URBAN_BARE_GROUND = 7  # Prediction of urban but smooth area (could be bare ground)
-# WATER_PRED = 8  # Prediction of water, but not in Peckel database
-# SHADOW = 9
-BUILDINGS_FALSE_POSITIVE = 10
-
 
 # Elevation estimation in 2nd layer
 LOW = 1
 HIGH = 2
-# NOT_CONFIDENT = 0
 
 NODATA = 255
 
@@ -57,34 +41,37 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
     
     # We set markers by reverse order of confidence
-    eroded_bare_ground = binary_erosion(vegmask[0] == 11, disk(params["building_erosion"]))
-    markers[0][eroded_bare_ground] = BARE_GROUND
+    eroded_bare_ground = apply_morpho(vegmask[0], "binary_erosion", params["building_erosion"])
+    markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
     
-    ground_truth_eroded = binary_erosion(wsf[0] == 255, disk(params["building_erosion"]))
+    ground_truth_eroded = apply_morpho(wsf[0] == 255, "binary_erosion", params["building_erosion"])
 
     # Bonus for pixels above ground truth
     urban_proba[0][ground_truth_eroded] += params["bonus_gt"]
     # Malus for pixels in shadow areas
     urban_proba[0][shadowmask[0] == 2] -= params["malus_shadow"]
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params["building_threshold"])
-    probable_buildings = binary_erosion(probable_buildings, disk(params["building_erosion"]))
+    probable_buildings = apply_morpho(probable_buildings, "binary_erosion", params["building_erosion"])
     
     false_positive = np.logical_and(
-        binary_dilation(wsf[0] == 255, disk(10)) == 0,
+        apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
         urban_proba[0] > params["building_threshold"]
     )
     
-    markers[0][probable_buildings] = BUILDINGS
-    markers[0][false_positive] = BUILDINGS_FALSE_POSITIVE
+    markers[0][probable_buildings] = params["value_classif_buildings"]
+    markers[0][false_positive] = params["value_classif_false_positive_buildings"]
 
-    markers[0][binary_erosion(vegmask[0] == 21, disk(params["building_erosion"]))] = LOW_VEG
-    markers[0][binary_erosion(vegmask[0] == 22, disk(params["building_erosion"]))] = HIGH_VEG
-    markers[0][binary_erosion(vegmask[0] == 23, disk(params["building_erosion"]))] = HIGH_VEG
+    eroded_low_veg = apply_morpho(vegmask[0] == 21, "binary_erosion", params["building_erosion"])
+    markers[0][eroded_low_veg] = params["value_classif_low_veg"]
+    eroded_middle_veg = apply_morpho(vegmask[0] == 22, "binary_erosion", params["building_erosion"])
+    markers[0][eroded_middle_veg] = params["value_classif_high_veg"]
+    eroded_high_veg = apply_morpho(vegmask[0] == 23, "binary_erosion", params["building_erosion"])
+    markers[0][eroded_high_veg] = params["value_classif_high_veg"]
     
-    # markers[shadowmask == 2] = BACKGROUND
-    markers[0][binary_erosion(shadowmask[0] == 2, disk(params["building_erosion"]))] = BACKGROUND
+    eroded_shadow = apply_morpho(shadowmask[0] == 2, "binary_erosion", params["building_erosion"])
+    markers[0][eroded_shadow] = params["value_classif_background"]
     
-    markers[watermask == 1] = BACKGROUND
+    markers[watermask == 1] = params["value_classif_background"]
 
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
     
@@ -112,22 +99,22 @@ def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.
         input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params
     )
 
-    clean_bare_ground = morpho_clean(segmentation == BARE_GROUND, params) == 1
-    stack[0][clean_bare_ground] = BARE_GROUND
+    clean_bare_ground = morpho_clean(segmentation == params["value_classif_bare_ground"], params) == 1
+    stack[0][clean_bare_ground] = params["value_classif_bare_ground"]
 
-    clean_buildings = morpho_clean(segmentation == BUILDINGS, params) == 1
-    stack[0][clean_buildings] = BUILDINGS
+    clean_buildings = morpho_clean(segmentation == params["value_classif_buildings"], params) == 1
+    stack[0][clean_buildings] = params["value_classif_buildings"]
 
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
-    stack[0][watermask[0] == 1] = WATER
+    stack[0][watermask[0] == 1] = params["value_classif_water"]
 
-    low_veg = segmentation == LOW_VEG
+    low_veg = segmentation == params["value_classif_low_veg"]
     clean_low_veg = morpho_clean(low_veg, params) == 1
-    stack[0][clean_low_veg] = LOW_VEG
+    stack[0][clean_low_veg] = params["value_classif_low_veg"]
 
-    high_veg = segmentation == HIGH_VEG
+    high_veg = segmentation == params["value_classif_high_veg"]
     clean_high_veg = morpho_clean(high_veg, params) == 1
-    stack[0][clean_high_veg] = HIGH_VEG
+    stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
     # Apply NODATA
     stack[0][np.logical_not(valid_stack[0])] = NODATA
@@ -189,6 +176,19 @@ def getarguments():
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Final mask")
+    group4.add_argument("-low_veg", dest="value_classif_low_veg", type=int,
+                        help="Output classification value for low vegetation")
+    group4.add_argument("-high_veg", dest="value_classif_high_veg", type=int,
+                        help="Output classification value for high vegetation")
+    group4.add_argument("-water", dest="value_classif_water", type=int, help="Output classification value for water")
+    group4.add_argument("-buildings", dest="value_classif_buildings", type=int,
+                        help="Output classification value for buildings")
+    group4.add_argument("-bare_ground", dest="value_classif_bare_ground", type=int,
+                        help="Output classification value for bare ground")
+    group4.add_argument("-false_pos_buildings", dest="value_classif_false_positive_buildings", type=int,
+                        help="Output classification value for buildings false positive")
+    group4.add_argument("-background", dest="value_classif_background", type=int,
+                        help="Output classification value for background")
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")

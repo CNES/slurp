@@ -114,6 +114,13 @@
         "binary_closing":3,
         "binary_opening":3,
         "remove_small_objects":300,
-        "remove_small_holes":300
+        "remove_small_holes":300,
+        "value_classif_low_veg": 1,
+        "value_classif_high_veg": 2,
+        "value_classif_water": 3,
+        "value_classif_buildings": 4,
+        "value_classif_bare_ground": 6,
+        "value_classif_false_positive_buildings": 10,
+        "value_classif_background": 11
     }
 }
