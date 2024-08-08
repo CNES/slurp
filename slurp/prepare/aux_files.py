@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+""" Brings together the auxiliary files reading functions """
+from os import path
+
 import numpy as np
 import otbApplication as otb
 import scipy
-from os import path
 
 from slurp.prepare import geometry
 

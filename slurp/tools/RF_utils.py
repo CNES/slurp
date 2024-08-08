@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
+"""Useful functions for Random Forest implementation"""
 import time
 
-from skimage.filters.rank import maximum
-from skimage.morphology import square
+import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-
-from slurp.tools import io_utils
 
 
 def print_feature_importance(classifier, layers):
@@ -25,10 +22,7 @@ def print_feature_importance(classifier, layers):
 
     print("Feature ranking:")
     for idx in indices:
-        print(
-            "  %4s (%f) (std=%f)"
-            % (feature_names[idx], importances[idx], std[idx])
-        )
+        print(f" {feature_names[idx]:4s} ({importances[idx]:f}) (std={std[idx]:f})")
 
 
 def train_classifier(classifier, x_samples, y_samples):

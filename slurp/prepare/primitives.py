@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
+"""Function to compute primitives"""
 
+import numpy as np
 
 def compute_ndxi(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """

@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+""" Module to rasterize image with OTB"""
 import os
 import traceback
 import argparse
-import otbApplication as otb
 import time
+import otbApplication as otb
+
 
 
 def rasterize(args):
+    """ Create a rasterize copy of the image passed in arguments  """
     start_time = time.time()
 
-    appReproj = otb.Registry.CreateApplication('VectorDataExtractROI')
+    appReproj = otb.Registry.CreateApplication("VectorDataExtractROI")
     appReproj.SetParameterString("io.vd", args.osm)
     appReproj.SetParameterString("io.in", args.im)
     appReproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
     appReproj.ExecuteAndWriteOutput()
 
-    appRaster = otb.Registry.CreateApplication('Rasterization')
+    appRaster = otb.Registry.CreateApplication("Rasterization")
     appRaster.SetParameterString("in", "tmp_OSM_data.sqlite")
     appRaster.SetParameterString("im", args.im)
     appRaster.SetParameterString("out", "raster")
@@ -54,39 +57,40 @@ def getarguments():
     """ Parse command line arguments. """
 
     parser = argparse.ArgumentParser(
-        description='Rasterize OSM layer with respect to an input image geographic extent and spacing'
+        description="Rasterize OSM layer with respect to an input image geographic extent and spacing"
     )
 
-    parser.add_argument('-osm', required=True, action='store', help='OSM building layer')
-    parser.add_argument('-im', required=True, action='store', help='Reference image')
-    parser.add_argument('-dilate', required=False, type=int, default=0,
-                        help='Dilatation radius (for line layers - roads, etc.')
-    parser.add_argument('-out', required=True, action='store', help='Result file')
+    parser.add_argument("-osm", required=True, action="store", help="OSM building layer")
+    parser.add_argument("-im", required=True, action="store", help="Reference image")
+    parser.add_argument("-dilate", required=False, type=int, default=0,
+                        help="Dilatation radius (for line layers - roads, etc.")
+    parser.add_argument("-out", required=True, action="store", help="Result file")
 
     return parser.parse_args()
 
 
 def main():
+    """Main function to rasterize"""
     try:
         arguments = getarguments()
         rasterize(arguments)
 
     except FileNotFoundError as fnfe_exception:
-        print('FileNotFoundError', fnfe_exception)
+        print("FileNotFoundError", fnfe_exception)
 
     except PermissionError as pe_exception:
-        print('PermissionError', pe_exception)
+        print("PermissionError", pe_exception)
 
     except ArithmeticError as ae_exception:
-        print('ArithmeticError', ae_exception)
+        print("ArithmeticError", ae_exception)
 
     except MemoryError as me_exception:
-        print('MemoryError', me_exception)
+        print("MemoryError", me_exception)
 
     except Exception as exception:  # pylint: disable=broad-except
-        print('oups...', exception)
+        print("oups...", exception)
         traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

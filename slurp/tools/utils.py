@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+""" Brings together some useful functions"""
 
-import numpy as np
 import time
-from skimage.morphology import binary_dilation, disk
+import numpy as np
 
 
 def convert_time(seconds):

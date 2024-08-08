@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
+""" Brings together functions that create valid mask"""
 
+import numpy as np
 
 def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
     """
@@ -27,7 +28,7 @@ def compute_valid_stack_clouds(input_buffer: list, input_profiles: list, args: d
     :returns: valid_mask (boolean numpy array, True = valid data, False = no data)
     """
     valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata_phr"], axis=0)
-    no_cloud = (input_buffer[1] == 0)
+    no_cloud = input_buffer[1] == 0
     valid_mask = np.logical_and(valid_phr, no_cloud)
 
     return valid_mask

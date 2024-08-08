@@ -1,12 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+""" Brings together the morphology functions """
+
 import numpy as np
 from skimage.morphology import (area_closing, binary_closing, binary_dilation, binary_erosion, binary_opening,
                                 remove_small_holes, remove_small_objects, disk)
 
 
 def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
+    """
+    Apply the selected morphology transformation
+    
+    :params array input_array: 
+    :params str key: Name of the morpho to apply
+    :params int value: (depend of the key selected)
+    """
+    
     if key == "area_closing":
         output_array = area_closing(input_array, value, connectivity=2)
     elif key == "binary_closing":
@@ -28,6 +38,13 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
 
 
 def morpho_clean(im_classif, params):
+    """
+    Apply the morphology transformation passed in arguments
+    
+    :params array im_classif: 
+    :param dict params: dictionary of arguments
+    """
+    
     im_classif = im_classif.astype(np.uint8)
 
     if params["binary_closing"]:

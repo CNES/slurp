@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import numpy as np
+
+"""  Brings together functions used by eoscale"""
 import copy
+import numpy as np
 
 
 def print_dataset_infos(name, profile, prefix=""):
@@ -25,28 +27,31 @@ def concatenate_samples(output_scalars, chunk_output_scalars, tile):
 # Profiles
 
 def single_float_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
-    profile['count'] = 1
-    profile['dtype'] = np.float32
+    profile["count"] = 1
+    profile["dtype"] = np.float32
     profile["compress"] = "deflate"
     
     return profile
 
 
 def single_bool_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
-    profile['count'] = 1
-    profile['dtype'] = bool
+    profile["count"] = 1
+    profile["dtype"] = bool
     profile["compress"] = "deflate"
     
     return profile
     
 
 def single_uint8_1b_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
-    profile['count'] = 1
-    profile['dtype'] = np.uint8
-    profile['nbits'] = 1
+    profile["count"] = 1
+    profile["dtype"] = np.uint8
+    profile["nbits"] = 1
     profile["compress"] = "deflate"
     profile["nodata"] = None
 
@@ -54,6 +59,7 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
 
 
 def single_uint8_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
@@ -64,6 +70,7 @@ def single_uint8_profile(input_profiles: list, map_params):
 
 
 def single_int16_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int16
@@ -74,6 +81,7 @@ def single_int16_profile(input_profiles: list, map_params):
 
 
 def single_uint16_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint16
@@ -84,6 +92,7 @@ def single_uint16_profile(input_profiles: list, map_params):
 
 
 def single_int32_profile(input_profiles: list, map_params):
+    """ Define profile for eoscale """
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int32
@@ -93,6 +102,7 @@ def single_int32_profile(input_profiles: list, map_params):
 
 
 def three_uint8_profile(input_profiles: list, map_params):
+    """ Define profiles for eoscale """
     profile = input_profiles[0]
     profile["count"] = 3
     profile["dtype"] = np.uint8
@@ -103,10 +113,11 @@ def three_uint8_profile(input_profiles: list, map_params):
 
 
 def double_int_profile(input_profiles: list, map_params):
+    """ Define profiles for eoscale """
     profile1 = input_profiles[0]
-    profile1['count'] = 1
-    profile1['dtype'] = np.uint8
-    profile1['nodata'] = 255
+    profile1["count"] = 1
+    profile1["dtype"] = np.uint8
+    profile1["nodata"] = 255
     profile1["compress"] = "deflate"
     
     # avoid to modify profile1

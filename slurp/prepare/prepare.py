@@ -6,17 +6,21 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
-import numpy as np
 import traceback
 from os import path
 
-from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, aux_files as aux
+import numpy as np
+
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
+from slurp.tools import io_utils, eoscale_utils as eo_utils
+from slurp.prepare import validity, primitives, aux_files as aux
+
 
 
 def getarguments():
+    """Parse command line arguments."""
+    
     parser = argparse.ArgumentParser(description="Compute auxiliary files needed for mask computation")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
@@ -61,11 +65,12 @@ def getarguments():
 
 
 def main():
-
+    """Main function that compute prepare date for mask computation"""
+        
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'ressources', 'pre_process']
+    keys = ["input", "aux_layers", "ressources", "pre_process"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

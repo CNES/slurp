@@ -6,15 +6,17 @@ This script computes a shadow mask
 """
 
 import argparse
-import numpy as np
 import traceback
-
 from os import path
+
+import numpy as np
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
+
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
+
 
 NO_DATA = 255
 
@@ -57,6 +59,9 @@ def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) 
 
 
 def getarguments():
+
+    """Parse command line arguments."""
+
     parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
@@ -91,10 +96,13 @@ def getarguments():
 
 
 def main():
+    
+    """Main function that compute Shadowmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'shadows']
+    keys = ["input", "aux_layers", "masks", "ressources", "post_process", "shadows"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

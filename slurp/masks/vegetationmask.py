@@ -3,23 +3,25 @@
 
 """ Compute vegetation mask of PHR image."""
 
+import time
+import traceback
 import argparse
+from math import sqrt, ceil
+from os.path import splitext
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import time
-import traceback
 
-from math import sqrt, ceil
-from os.path import splitext
 from sklearn.cluster import KMeans
 from skimage.segmentation import slic
 
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
+
 
 # Cython module to compute stats
 import stats as ts
@@ -43,11 +45,22 @@ def apply_map(pred, map_centroids):
 
 
 def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_group, filename):
+    """
+    Function use in save_mode "debug" to save a plot of pixel cluster class
+    
+    :param list pdf: list of clusters
+    :param str first_field: label of the first field
+    :param str second_field: label of the second field
+    :param int nb_first_group: 
+    :param int nb_second_group: 
+    :param str filename: path and name of the saved image genrated by this function
+    :returns: None (save a plot with param filename)
+    """
     serie1 = pdf.sort_values(by=first_field)[first_field]
     serie2 = pdf.sort_values(by=first_field)[second_field]
-    plt.plot(serie1[0:nb_first_group], serie2[0:nb_first_group], '*')
-    plt.plot(serie1[nb_first_group:nb_second_group], serie2[nb_first_group:nb_second_group], 'o')
-    plt.plot(serie1[nb_second_group:9], serie2[nb_second_group:9], '+')
+    plt.plot(serie1[0:nb_first_group], serie2[0:nb_first_group], "*")
+    plt.plot(serie1[nb_first_group:nb_second_group], serie2[nb_first_group:nb_second_group], "o")
+    plt.plot(serie1[nb_second_group:9], serie2[nb_second_group:9], "+")
     plt.title("Clusters in three groups (" + str(second_field) + " " + str(first_field) + ")")
     plt.savefig(filename)
     plt.close()
@@ -98,20 +111,19 @@ def segmentation_task(input_buffers: list, input_profiles: list, params: dict) -
     return segments
 
 
-def concat_seg(previousResult, outputAlgoComputer, tile):
+def concat_seg(previous_result, output_algo_computer, tile):
     """
     Concatenates SLIC segmentation in a single segmentation
     """
     # Computes max of previous result and adds this value to the current result :
     # prevents from computing a map with several identical labels !!
-    num_seg = np.max(previousResult[0])
+    num_seg = np.max(previous_result[0])
 
-    previousResult[0][:, tile.start_y:tile.end_y+1, tile.start_x:tile.end_x+1] = outputAlgoComputer[0][:, :, :] + num_seg
+    previous_result[0][:, tile.start_y:tile.end_y+1, tile.start_x:tile.end_x+1] = output_algo_computer[0][:, :, :] + num_seg
 
-    previousResult[0][:, tile.start_y:tile.end_y+1, tile.start_x:tile.end_x+1] = np.where(
-        outputAlgoComputer[0][:, :, :] == 0, 0, outputAlgoComputer[0][:, :, :] + num_seg
+    previous_result[0][:, tile.start_y:tile.end_y+1, tile.start_x:tile.end_x+1] = np.where(
+        output_algo_computer[0][:, :, :] == 0, 0, output_algo_computer[0][:, :, :] + num_seg
     )
-
 
 # Stats #
 
@@ -139,11 +151,18 @@ def compute_stats_image(input_buffer: list, input_profiles: list, params: dict) 
 
 
 def stats_concatenate(output_scalars, chunk_output_scalars, tile):
+    """
+    Concatenate the differents statistics on different sub-tiles parallelyzed by eoscale
+    
+    :param list output_scalars:
+    :param list chunk_output_scalars:
+    :param tile: bounding box of tile (not used but necessary for eoscale) 
+    """
+    
     # output_scalars[0] : sums of each segment
     output_scalars[0] += chunk_output_scalars[0]
     # output_scalars[1] : counter of each segment (nb pixels/segment)
     output_scalars[1] += chunk_output_scalars[1]
-
 
 # Clustering #
 
@@ -173,8 +192,8 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
     if params["debug"]:
         print(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
 
-    list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=['ndvi', 'ndwi'])
-    list_clusters_by_ndvi = list_clusters.sort_values(by='ndvi', ascending=True).index
+    list_clusters = pd.DataFrame.from_records(kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"])
+    list_clusters_by_ndvi = list_clusters.sort_values(by="ndvi", ascending=True).index
 
     map_centroid = []
 
@@ -183,10 +202,10 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
     if params["min_ndvi_veg"]:
         # Attribute veg class by threshold
         for t in range(kmeans_rad_indices.n_clusters):
-            if list_clusters.iloc[t]['ndvi'] > float(params["min_ndvi_veg"]):
+            if list_clusters.iloc[t]["ndvi"] > float(params["min_ndvi_veg"]):
                 map_centroid.append(VEG_CODE)
                 nb_clusters_veg += 1
-            elif list_clusters.iloc[t]['ndvi'] < float(params["max_ndvi_noveg"]):
+            elif list_clusters.iloc[t]["ndvi"] < float(params["max_ndvi_noveg"]):
                 if params["non_veg_clusters"]:
                     l_ndvi = list(list_clusters_by_ndvi)
                     v = l_ndvi.index(t)
@@ -257,8 +276,8 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
         if params["debug"]:
             print(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
 
-        list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=['mean_texture'])
-        list_clusters_by_texture = list_clusters.sort_values(by='mean_texture', ascending=True).index
+        list_clusters = pd.DataFrame.from_records(kmeans_texture.cluster_centers_, columns=["mean_texture"])
+        list_clusters_by_texture = list_clusters.sort_values(by="mean_texture", ascending=True).index
 
         # Attribute class
         map_centroid = []
@@ -273,7 +292,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
             if params["max_low_veg"]:
                 # Distinction veg class by threshold
                 params["nb_clusters_low_veg"] = int(
-                    list_clusters[list_clusters['mean_texture'] < params["max_low_veg"]].count()
+                    list_clusters[list_clusters["mean_texture'"] < params["max_low_veg"]].count()
                 )
             if params["nb_clusters_low_veg"] >= 7:
                 nb_clusters_high_veg = 9 - params["nb_clusters_low_veg"]
@@ -366,7 +385,7 @@ def getarguments():
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
 
-    parser.add_argument('-d', '--debug', action='store_true', help='Debug flag')
+    parser.add_argument("-d", "--debug", action="store_true", help="Debug flag")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -417,10 +436,12 @@ def getarguments():
 
 
 def main():
+    """Main function that compute Vegetationmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'vegetation']
+    keys = ["input", "aux_layers", "masks", "ressources", "post_process", "vegetation"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -468,7 +489,7 @@ def main():
                                                            multiproc_context="fork",
                                                            filter_desc="Segmentation processing...")
 
-            if args.save_mode == "all" or args.save_mode == "debug":
+            if args.save_mode in [ "all" , "debug"] :
                 eoscale_manager.write(key=future_seg[0], img_path=args.vegetationmask.replace(".tif", "_slic.tif"))
 
             time_seg = time.time()

@@ -4,20 +4,18 @@
 
 import argparse
 import gc
-import numpy as np
-import rasterio as rio
 import time
 import traceback
-
 from os.path import isfile
-from sklearn.ensemble import RandomForestClassifier
 
+import numpy as np
+
+from sklearn.ensemble import RandomForestClassifier
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
-
 
 try:
     from sklearnex import patch_sklearn
@@ -59,6 +57,14 @@ def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> n
 
     
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
+    """
+    Recover of row and columns indices selected on the valid pixel of the image
+    
+    :param int nb_samples: 
+    :param boolean numpy array valid_mask :
+    :param boolean numpy array mask_ground_truth :
+    :return: tuple of list , row indices and columns indices
+    """
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
@@ -123,7 +129,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     return samples
 
 
-def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
+def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
     Random Forest prediction
 
@@ -212,10 +218,13 @@ def getarguments():
 
 
 def main():
+    
+    """Main function that compute Urbanmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'urban']
+    keys = ["input", "aux_layers", "masks", "ressources", "urban"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -338,7 +347,7 @@ def main():
                 ######### Predict  ################
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
-                                                                image_filter=RF_prediction,
+                                                                image_filter=rf_prediction,
                                                                 filter_parameters={"classifier": classifier},
                                                                 generate_output_profiles=eo_utils.double_int_profile,
                                                                 stable_margin=0,

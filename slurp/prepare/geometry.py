@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+""" Brings together the geometry functions using OTB features"""
 
-import otbApplication as otb
 import time
-
+import otbApplication as otb
 
 def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
