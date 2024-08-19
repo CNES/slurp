@@ -175,7 +175,7 @@ def getarguments():
     
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments",required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -185,7 +185,7 @@ def getarguments():
     group1.add_argument("-watermask", help="Water mask")
     group1.add_argument("-urban_proba", dest="urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="World Settlement Footprint raster")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster  filename")
 
     group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
     group2.add_argument("-building_threshold", type=int, help="Threshold to consider building as detected")
@@ -195,7 +195,7 @@ def getarguments():
                         help="Bonus for pixels covered by GT, in the watershed regularization step "
                              "(ex : +30 to improve discrimination between building and background)")
     group2.add_argument("-malus_shadow", type=int,
-                        help="Malus for pixels in shadow, in the watershed regularization step")
+                        help="Value of the malus for pixels in shadow, in the watershed regularization step")
 
     group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group3.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
@@ -206,7 +206,7 @@ def getarguments():
                         help="The maximum area, in pixels, of a contiguous hole that will be filled")
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
-    group4.add_argument("-stackmask", help="Final mask")
+    group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument("-low_veg", dest="value_classif_low_veg", type=int,
                         help="Output classification value for low vegetation")
     group4.add_argument("-high_veg", dest="value_classif_high_veg", type=int,

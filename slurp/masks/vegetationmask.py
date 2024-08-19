@@ -401,7 +401,7 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Vegetation Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments" ,required=True)
 
     parser.add_argument("-d", "--debug", action="store_true", help="Debug flag")
 

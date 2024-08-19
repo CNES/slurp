@@ -188,7 +188,7 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Urban Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments" ,required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -196,7 +196,7 @@ def getarguments():
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
     group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted WSF filename")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster filename")
     group1.add_argument("-layers", nargs="+", dest="files_layers",
                         help="Add layers as additional features used by learning algorithm")
     group1.add_argument("-watermask", help="Watermask filename (facultative) : "
