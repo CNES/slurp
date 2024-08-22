@@ -28,14 +28,14 @@ def compute_stackmask(file, nb_workers):
     masks_folder = os.path.join(pytest.data_dir, "stack", os.path.basename(file).replace('.tif', ''))
     watermask = os.path.join(masks_folder, "watermask.tif")
     vegetationmask = os.path.join(masks_folder, "vegetationmask.tif")
-    urbanmask_proba = os.path.join(masks_folder, "urbanmask_proba.tif")
+    urbanmask = os.path.join(masks_folder, "urbanmask.tif")
     shadowmask = os.path.join(masks_folder, "shadowmask.tif")
     wsf = os.path.join(masks_folder, "wsf.tif")
     valid_stack = get_aux_path(file, "valid_stack")
         
     os.system(f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -stackmask {output_image} "
               f"-vegetationmask {vegetationmask} -watermask {watermask} "
-              f"-urbanmask {urbanmask_proba} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} ")
+              f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} ")
 
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during stackmask computation ?"
     return output_image
