@@ -5,20 +5,17 @@
 
 import argparse
 import gc
+import numpy as np
 import time
 import traceback
-from os.path import dirname, join
 
-import numpy as np
-from skimage.filters.rank import maximum
+from os.path import dirname, join
 from skimage.measure import label, regionprops
-from skimage.morphology import area_closing, binary_closing, remove_small_holes, square, disk
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
 from pylab import *
 
-from slurp.tools import io_utils, utils
+from slurp.post_process.morphology import apply_morpho
+from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
@@ -86,56 +83,6 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
     return mask_hand
 
 
-def post_process(input_buffer: list, input_profiles: list, params: dict) -> list:
-    """
-    Compute some filters on the prediction image.
-
-    :param list input_buffer: [im_predict, mask_hand, mask_pekel0, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments
-    :returns: predict mask and post-processed mask
-    """
-    buffer_shape = input_buffer[0].shape
-
-    # Filter with Hand
-    if params["hand_filter"]:
-        if not params["hand_strict"]:
-            input_buffer[0][np.logical_not(input_buffer[1])] = 0
-        else:
-            print("\nWARNING: hand_filter and hand_strict are incompatible.")
-
-    # Filter for final classification
-    if not params["no_pekel_filter"]:
-        mask = np.zeros(buffer_shape, dtype=bool)
-        if not params["no_pekel_filter"]:  # filter with pekel0
-            mask = np.zeros(buffer_shape, dtype=bool)
-            mask = np.logical_or(mask, input_buffer[2][0])  # problème de mask_pekel0 if "not defined"
-        im_classif = mask_filter(input_buffer[0], mask)
-    else:
-        im_classif = input_buffer[0]
-
-    # Closing
-    if params["binary_closing"]:
-        im_classif[0, :, :] = binary_closing(im_classif[0, :, :].astype(bool), disk(params["binary_closing"])).astype(
-            np.uint8)
-    elif params["area_closing"]:
-        im_classif[0, :, :] = area_closing(im_classif[0, :, :], params["area_closing"], connectivity=2)
-    elif params["remove_small_holes"]:
-        im_classif[0, :, :] = remove_small_holes(
-            im_classif[0, :, :].astype(bool), params["remove_small_holes"], connectivity=2
-        ).astype(np.uint8)
-
-    # Add nodata in im_classif
-    im_classif[np.logical_not(input_buffer[3])] = 255
-    im_classif[im_classif == 1] = params["value_classif"]
-
-    im_predict = input_buffer[0]
-    im_predict[np.logical_not(input_buffer[3])] = 255
-    im_predict[im_predict == 1] = params["value_classif"]
-
-    return [im_predict, im_classif]
-
-
 def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
     """Get random valid indexes from masks.
     Mask 1 is a validity mask
@@ -166,7 +113,7 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
-    if len(rows) >= nb_samples and nb_samples >= 1:
+    if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
         # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
         indices = np.arange(0, len(rows) - 1, len(rows) / nb_samples).astype(np.uint16)
@@ -216,59 +163,6 @@ def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
                     nb_idxs += 1
 
     return rows_idxs, cols_idxs
-
-
-def save_indexes(filename, water_idxs, other_idxs, shape, crs, transform, rpc, colormap):
-    """Save points used for learning into a file."""
-
-    img = np.zeros(shape, dtype=np.uint8)
-
-    for row, col in water_idxs:
-        img[row, col] = 1
-
-    for row, col in other_idxs:
-        img[row, col] = 2
-
-    img_dilat = maximum(img, square(5))
-    io_utils.save_image(img_dilat, filename, crs, transform, 0, rpc, colormap)
-
-    return
-
-
-def mask_filter(im_in, mask_ref):
-    """Remove water areas in im_in not in contact
-    with water areas in mask_ref.
-    """
-
-    im_label, nb_label = label(im_in, connectivity=2, return_num=True)
-
-    im_label_thresh = np.copy(im_label)
-    im_label_thresh[np.logical_not(mask_ref)] = 0
-    valid_labels = np.delete(np.unique(im_label_thresh), 0)
-
-    im_filtered = np.zeros(np.shape(mask_ref), dtype=np.uint8)
-    im_filtered[np.isin(im_label, valid_labels)] = 1
-
-    return im_filtered
-
-
-def print_feature_importance(classifier, layers):
-    """Compute feature importance."""
-    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
-
-    importances = classifier.feature_importances_
-    indices = np.argsort(importances)[::-1]
-
-    std = np.std(
-        [tree.feature_importances_ for tree in classifier.estimators_], axis=0
-    )
-
-    print("Feature ranking:")
-    for idx in indices:
-        print(
-            "  %4s (%f) (std=%f)"
-            % (feature_names[idx], importances[idx], std[idx])
-        )
 
 
 def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
@@ -332,51 +226,12 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
-    if params["save_mode"] == "debug":
-        colormap = {
-            0: (0, 0, 0, 0),  # nodata
-            1: (0, 0, 255),  # eau
-            2: (255, 0, 0),  # autre
-            3: (0, 0, 0, 0),
-        }
-        save_indexes(
-            "samples.tif",
-            zip(rows_pekel, cols_pekel),
-            zip(rows_hand, cols_hand),
-            params["shape"],
-            params["crs"],
-            params["transform"],
-            params["rpc"],
-            colormap
-        )
 
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[2:]), axis=0)
     samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
 
     return samples  # [x_samples, y_samples]
-
-
-def train_classifier(classifier, x_samples, y_samples):
-    """Create and train classifier on samples."""
-
-    start_time = time.time()
-    x_train, x_test, y_train, y_test = train_test_split(
-        x_samples, y_samples, test_size=0.2, random_state=42
-    )
-
-    classifier.fit(x_train, y_train)
-    print("Train time :", time.time() - start_time)
-
-    # Compute accuracy on train and test sets
-    print(
-        "Accuracy on train set :",
-        accuracy_score(y_train, classifier.predict(x_train)),
-    )
-    print(
-        "Accuracy on test set :",
-        accuracy_score(y_test, classifier.predict(x_test)),
-    )
 
 
 def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
@@ -400,6 +255,73 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
         prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
 
     return prediction
+
+
+def mask_filter(im_in, mask_ref):
+    """Remove water areas in im_in not in contact
+    with water areas in mask_ref.
+    """
+    im_label, nb_label = label(im_in, connectivity=2, return_num=True)
+
+    im_label_thresh = np.copy(im_label)
+    im_label_thresh[np.logical_not(mask_ref)] = 0
+    valid_labels = np.delete(np.unique(im_label_thresh), 0)
+
+    im_filtered = np.zeros(np.shape(mask_ref), dtype=np.uint8)
+    im_filtered[np.isin(im_label, valid_labels)] = 1
+
+    return im_filtered
+
+
+def post_process(input_buffer: list, input_profiles: list, params: dict) -> list:
+    """
+    Compute some filters on the prediction image.
+
+    :param list input_buffer: [im_predict, mask_hand, mask_pekel0, valid_stack]
+    :param list input_profiles: image profile (not used but necessary for eoscale)
+    :param dict params: dictionary of arguments
+    :returns: predict mask and post-processed mask
+    """
+    buffer_shape = input_buffer[0].shape
+
+    # Filter with Hand
+    if params["hand_filter"]:
+        if not params["hand_strict"]:
+            input_buffer[0][np.logical_not(input_buffer[1])] = 0
+        else:
+            print("\nWARNING: hand_filter and hand_strict are incompatible.")
+
+    # Filter for final classification
+    if not params["no_pekel_filter"]:
+        mask = np.zeros(buffer_shape, dtype=bool)
+        if not params["no_pekel_filter"]:  # filter with pekel0
+            mask = np.zeros(buffer_shape, dtype=bool)
+            mask = np.logical_or(mask, input_buffer[2][0])  # problème de mask_pekel0 if "not defined"
+        im_classif = mask_filter(input_buffer[0], mask)
+    else:
+        im_classif = input_buffer[0]
+
+    # Closing
+    if params["binary_closing"]:
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool), "binary_closing", params["binary_closing"]
+        ).astype(np.uint8)
+    if params["area_closing"]:
+        im_classif[0, :, :] = apply_morpho(im_classif[0, :, :], "area_closing", params["area_closing"])
+    if params["remove_small_holes"]:
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool), "remove_small_holes", params["remove_small_holes"]
+        ).astype(np.uint8)
+
+    # Add nodata in im_classif
+    im_classif[np.logical_not(input_buffer[3])] = 255
+    im_classif[im_classif == 1] = params["value_classif"]
+
+    im_predict = input_buffer[0]
+    im_predict[np.logical_not(input_buffer[3])] = 255
+    im_predict[im_predict == 1] = params["value_classif"]
+
+    return [im_predict, im_classif]
 
 
 def getarguments():
@@ -477,7 +399,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'water']
+    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'water']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -618,7 +540,7 @@ def main():
                                                       filter_parameters=vars(args),
                                                       nb_output_scalars=args.nb_samples_water + args.nb_samples_other,
                                                       context_manager=eoscale_manager,
-                                                      concatenate_filter=utils.concatenate_samples,
+                                                      concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
                                                       multiproc_context="fork",
                                                       filter_desc="Samples building processing...")
@@ -634,8 +556,8 @@ def main():
                 samples = np.concatenate(samples[:])  # A revoir si possible
                 x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
                 y_samples = samples[:, 0]  # mask_pekel
-                train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier, args.files_layers)
+                RF_utils.train_classifier(classifier, x_samples, y_samples)
+                RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
@@ -662,12 +584,11 @@ def main():
                                                                multiproc_context="fork",
                                                                filter_desc="Post processing...")
 
-                # Save predict and classif image
-                eoscale_manager.write(key=im_classif[0], img_path=join(dirname(args.watermask), "predict.tif"))
                 eoscale_manager.write(key=im_classif[1], img_path=args.watermask)  # classif
+                if args.save_mode == "debug":
+                    eoscale_manager.write(key=im_classif[0], img_path=args.watermask.replace(".tif", "_raw_predict.tif"))
+
             else:
-                # no post-process : we save the same mask with two different names for compatibility purpose
-                eoscale_manager.write(key=key_predict[0], img_path=join(dirname(args.watermask), "predict.tif"))
                 eoscale_manager.write(key=key_predict[0], img_path=args.watermask)  # classif
 
             end_time = time.time()

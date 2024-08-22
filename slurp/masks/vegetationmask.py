@@ -14,8 +14,8 @@ from math import sqrt, ceil
 from os.path import splitext
 from sklearn.cluster import KMeans
 from skimage.segmentation import slic
-from skimage.morphology import binary_dilation, remove_small_objects, disk, remove_small_holes
 
+from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
@@ -337,23 +337,21 @@ def clean_task(input_buffers: list, input_profiles: list, params: dict) -> np.nd
 
     if params["remove_small_objects"]:
         high_veg_binary = np.where(im_classif > LOW_VEG_CLASS, True, False)
-        high_veg_binary = remove_small_holes(
-            high_veg_binary.astype(bool), params["remove_small_objects"], connectivity=2
+        high_veg_binary = apply_morpho(
+            high_veg_binary.astype(bool), "remove_small_holes", params["remove_small_objects"]
         ).astype(np.uint8)
         im_classif[np.logical_and(im_classif == LOW_VEG_CLASS, high_veg_binary == 1)] = UNDEFINED_TEXTURE_CLASS
 
     low_veg_binary = np.where(im_classif == LOW_VEG_CLASS, True, False)
 
     if params["remove_small_holes"]:
-        low_veg_binary = remove_small_holes(
-            low_veg_binary.astype(bool), params["remove_small_holes"], connectivity=2
+        low_veg_binary = apply_morpho(
+            low_veg_binary.astype(bool), "remove_small_holes", params["remove_small_holes"]
         ).astype(np.uint8)
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
 
     if params["binary_dilation"]:
-        low_veg_binary = binary_dilation(
-            low_veg_binary, disk(params["binary_dilation"])
-        ).astype(np.uint8)
+        low_veg_binary = apply_morpho(low_veg_binary, "binary_dilation", params["binary_dilation"]).astype(np.uint8)
         im_classif[np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)] = LOW_VEG_CLASS
 
     return im_classif
@@ -422,7 +420,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'vegetation']
+    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'vegetation']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

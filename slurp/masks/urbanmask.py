@@ -5,16 +5,15 @@
 import argparse
 import gc
 import numpy as np
+import rasterio as rio
 import time
 import traceback
 
-from os.path import dirname, join, basename, isfile
+from os.path import isfile
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from skimage.morphology import binary_dilation, binary_erosion, disk
 
-from slurp.tools import io_utils, utils
+from slurp.post_process.morphology import apply_morpho
+from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
@@ -28,61 +27,42 @@ except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
 
-def apply_vegetationmask(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside vegetation mask
 
     :param list input_buffer: VHR input image [valid_stack, vegetationmask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
+    :param dict params: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    non_veg = np.where(input_buffer[1] < args["vegmask_max_value"], True, False)
+    non_veg = np.where(input_buffer[1] < params["vegmask_max_value"], True, False)
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
-    non_veg_dilated = binary_dilation(non_veg[0], disk(args["veg_binary_dilation"]))
+    non_veg_dilated = apply_morpho(non_veg[0], "binary_dilation", params["veg_binary_dilation"])
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
 
     return valid_stack
 
 
-def apply_watermask(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside water mask
 
     :param list input_buffer: VHR input image [valid_stack, watermask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments (not used but necessary for eoscale)
+    :param dict params: dictionary of arguments (not used but necessary for eoscale)
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
     valid_stack = np.logical_and(input_buffer[0], np.where(input_buffer[1] == 0, True, False))
 
     return valid_stack
 
-
-def print_feature_importance(classifier, layers):
-    """Compute feature importance."""
-    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
-
-    importances = classifier.feature_importances_
-    indices = np.argsort(importances)[::-1]
-
-    std = np.std(
-        [tree.feature_importances_ for tree in classifier.estimators_], axis=0
-    )
-
-    print("Feature ranking:")
-    for idx in indices:
-        print(
-            "  %4s (%f) (std=%f)"
-            % (feature_names[idx], importances[idx], std[idx])
-        )
-
     
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
-    if len(rows) >= nb_samples and nb_samples >= 1:
+    if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
         # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
         indices = np.arange(0, len(rows)-1, int(len(rows)/nb_samples))
@@ -106,7 +86,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
     mask_building_before_erosion = np.where(input_buffer[1] == params["value_classif"], True, False)
-    mask_building = [binary_erosion(mask_building_before_erosion[0], disk(params["gt_binary_erosion"]))]
+    mask_building = [apply_morpho(mask_building_before_erosion[0], "binary_erosion", params["gt_binary_erosion"])]
     mask_non_building = np.where(input_buffer[1] == 0, True, False)
     
     # Retrieve number of pixels for each class
@@ -138,44 +118,19 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     if rows == [] or cols == []:
         samples = np.zeros(shape=(0, im_stack.shape[0]))
     else:
-        
         samples = np.transpose(im_stack[:, rows, cols])
     
     return samples
 
 
-def train_classifier(classifier, x_samples, y_samples):
-    """Create and train classifier on samples."""
-
-    start_time = time.time()
-    x_train, x_test, y_train, y_test = train_test_split(
-        x_samples, y_samples, test_size=0.2, random_state=42
-    )
-    classifier.fit(x_train, y_train)
-    print("Train time :", time.time() - start_time)
-
-    # Compute accuracy on train and test sets
-    x_train_prediction = classifier.predict(x_train)
-    x_test_prediction = classifier.predict(x_test)
-    
-    print(
-        "Accuracy on train set :",
-        accuracy_score(y_train, x_train_prediction),
-    )
-    print(
-        "Accuracy on test set :",
-        accuracy_score(y_test, x_test_prediction),
-    )
-
-
-def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
     Random Forest prediction
 
     :param list input_buffer: [valid_stack, vhr_image, ndvi, ndwi] + file_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
-    :returns: predicted mask
+    :returns: predicted mask (proba)
     """
     im_stack = np.concatenate((input_buffer[1:]), axis=0)
     valid_mask = input_buffer[0].astype(bool)
@@ -189,22 +144,19 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
         res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
         res_classif[res_classif == 255] = 1
 
-        prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
-        # Class predicted
+        prediction = np.zeros(valid_mask.shape)
         prediction[0][valid_mask[0]] = res_classif
-        # Proba for class 0 (background)
-        prediction[1][valid_mask[0]] = 100 * proba[:, 0]
-        # Proba for class 1 (buildings)
-        prediction[2][valid_mask[0]] = 100 * proba[:, 1]
+
+        proba_buildings = np.zeros(valid_mask.shape)
+        proba_buildings[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
 
     else:
         # corner case : only NO_DATA !
-        prediction = np.zeros((3, valid_mask.shape[1], valid_mask.shape[2]))
+        prediction = np.zeros(valid_mask.shape)
         prediction[0][valid_mask[0]].fill(255)
-        prediction[1][valid_mask[0]].fill(0)
-        prediction[2][valid_mask[0]].fill(0)
+        proba_buildings = np.zeros(valid_mask.shape)
 
-    return prediction
+    return [prediction, proba_buildings]
 
 
 def getarguments():
@@ -263,7 +215,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'urban']
+    keys = ['input', 'aux_layers', 'masks', 'resources', 'urban']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -276,7 +228,6 @@ def main():
     args = argparse.Namespace(**argsdict)
     
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
-       
         try:
             
             t0 = time.time()
@@ -287,12 +238,6 @@ def main():
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
             eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
-
-            args.nodata_phr = profile_phr["nodata"]
-            args.shape = (profile_phr["height"], profile_phr["width"])
-            args.crs = profile_phr["crs"]
-            args.transform = profile_phr["transform"]
-            args.rpc = None
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
@@ -345,7 +290,7 @@ def main():
                 for i in range(len(args.files_layers))
             ]
             
-            # Calcul of valid pixels
+            # Calculation of valid pixels
             nb_valid_pixels = np.count_nonzero(valid_stack)
             args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
             args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
@@ -354,14 +299,14 @@ def main():
             non_building_areas = False
             
             if args.nb_valid_built_pixels > args.nb_samples_urban and args.nb_valid_other_pixels > 0:
-                ##### Nominal case : Ground Truth contains some pixels marked as building.  #####
+                # Nominal case : Ground Truth contains some pixels marked as building.
                 input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
                                                       image_filter=build_samples,
                                                       filter_parameters=vars(args),
                                                       nb_output_scalars=args.nb_valid_built_pixels+args.nb_valid_other_pixels,
                                                       context_manager=eoscale_manager,
-                                                      concatenate_filter=utils.concatenate_samples,
+                                                      concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
                                                       multiproc_context="fork",
                                                       filter_desc="Samples building processing...")
@@ -386,8 +331,8 @@ def main():
                 )
                 print("RandomForest parameters:\n", classifier.get_params(), "\n")
                 
-                train_classifier(classifier, x_samples, y_samples)
-                print_feature_importance(classifier, args.files_layers)
+                RF_utils.train_classifier(classifier, x_samples, y_samples)
+                RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 ######### Predict  ################
@@ -395,33 +340,16 @@ def main():
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=RF_prediction,
                                                                 filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.three_uint8_profile,
+                                                                generate_output_profiles=eo_utils.double_int_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
-                final_predict = eoscale_manager.get_array(key_predict[0])
-                io_utils.save_image(
-                        final_predict[2],
-                        args.urbanmask,
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        tags=args.__dict__,
-                )
+                eoscale_manager.write(key=key_predict[1], img_path=args.urbanmask)  # classif
                 if args.save_mode == "debug":
-                    io_utils.save_image(
-                        final_predict[0],
-                        join(dirname(args.urbanmask), basename(args.urbanmask).replace(".tif", "_raw_predict.tif")),
-                        args.crs,
-                        args.transform,
-                        255,
-                        args.rpc,
-                        tags=args.__dict__,
-                    )
+                    eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"))
 
                 end_time = time.time()
 

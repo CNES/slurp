@@ -35,7 +35,7 @@ def compute_stackmask(file, nb_workers):
         
     os.system(f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -stackmask {output_image} "
               f"-vegetationmask {vegetationmask} -watermask {watermask} "
-              f"-urban_proba {urbanmask_proba} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} ")
+              f"-urbanmask {urbanmask_proba} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} ")
 
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during stackmask computation ?"
     return output_image
