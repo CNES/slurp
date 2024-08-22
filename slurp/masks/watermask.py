@@ -55,16 +55,10 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     :returns: Pekel masks
     """
     if params["hand_strict"]:
-        if not params["no_pekel_filter"]:
-            [mask_pekel, mask_pekelxx] = utils.compute_mask(
-                input_buffer[0],
-                [params["thresh_pekel"], params["strict_thresh"]]
-            )
-        else:
-            [mask_pekel, mask_pekelxx] = utils.compute_mask(
-                input_buffer[0],
-                [params["thresh_pekel"], params["strict_thresh"]]
-            )
+        [mask_pekel, mask_pekelxx] = utils.compute_mask(
+            input_buffer[0],
+            [params["thresh_pekel"], params["strict_thresh"]]
+        )
         return [mask_pekel, mask_pekelxx]
 
     if not params["no_pekel_filter"]:
