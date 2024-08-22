@@ -36,12 +36,16 @@ def prepare_vegetationmask(file, nb_workers):
     return valid_stack, ndvi, ndwi, texture
 
 
-def compute_vegetationmask(file, nb_workers):
+def compute_vegetationmask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, texture=None):
     output_image = get_output_path(file, "vegetationmask", remove=True)
-    valid_stack = get_aux_path(file, "valid_stack")
-    ndvi = get_aux_path(file, "ndvi")
-    ndwi = get_aux_path(file, "ndwi")
-    texture = get_aux_path(file, "texture")
+    if valid_stack is None:
+        valid_stack = get_aux_path(file, "valid_stack")
+    if ndvi is None:
+        ndvi = get_aux_path(file, "ndvi")
+    if ndwi is None:
+        ndwi = get_aux_path(file, "ndwi")
+    if texture is None:
+        texture = get_aux_path(file, "texture")
     
     os.system(f"slurp_vegetationmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
               f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture}")
@@ -76,4 +80,16 @@ def test_validation_vegetationmask(predict_file):
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_vegetationmask(file):
     output_image = compute_vegetationmask(file, 1)
+    validate_mask(output_image, "Vegetation")
+    
+    
+@pytest.mark.all
+@pytest.mark.parametrize("file", input_files)
+def test_prepare_computation_and_validation_vegetationmask(file):
+    valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(file, 1)
+    validate_mask(valid_stack, "Prepare")
+    validate_mask(ndvi, "Prepare")
+    validate_mask(ndwi, "Prepare")
+    validate_mask(texture, "Prepare")
+    output_image = compute_vegetationmask(file, 1, valid_stack, ndvi, ndwi, texture)
     validate_mask(output_image, "Vegetation")

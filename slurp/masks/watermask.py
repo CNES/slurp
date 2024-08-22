@@ -23,6 +23,7 @@
 
 import argparse
 import gc
+import numpy as np
 import time
 import traceback
 

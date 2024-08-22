@@ -1,22 +1,17 @@
 {
   "input":
     {
-      "file_vhr": "absolute_path_to_image.tif",
-      "pekel" : null,
-      "pekel_obs": null,
-      "wsf": null,
-      "hand": null,
-      "cloud_mask": null
+      "file_vhr": "absolute_path_to_image.tif"
     },
 
   "aux_layers":
     {
+      "valid_stack": null,
+      "file_ndvi": null,
+      "file_ndwi": null,
       "extracted_pekel": null,
       "extracted_hand":null,
       "extracted_wsf":null,
-      "file_ndvi": null,
-      "file_ndwi": null,
-      "valid_stack": null,
       "file_texture": null,
       "mnh": null
     },
@@ -30,19 +25,24 @@
       "stackmask": null
     },
 
-  "ressources":
+  "resources":
     {
       "n_workers": 8,
       "save_mode": "none",
       "n_jobs": 1
     },
 
-  "pre_process":
+  "prepare":
     {
       "red": 1,
-      "nir": 4,
       "green": 2,
+      "nir": 4,
+      "cloud_mask": null,
       "pekel_method": "all",
+      "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+      "pekel_obs": null,
+      "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+      "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
       "texture_rad": 5
     },
 

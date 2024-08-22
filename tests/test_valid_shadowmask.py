@@ -27,9 +27,10 @@ def prepare_shadowmask(file, nb_workers):
     return valid_stack
 
 
-def compute_shadowmask(file, nb_workers):
+def compute_shadowmask(file, nb_workers, valid_stack=None):
     output_image = get_output_path(file, "shadowmask", remove=True)
-    valid_stack = get_aux_path(file, "valid_stack")
+    if valid_stack is None:
+        valid_stack = get_aux_path(file, "valid_stack")
     os.system(f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
               f"-shadowmask {output_image} -valid {valid_stack}")
     assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during shadowmask computation ?"
@@ -59,4 +60,13 @@ def test_validation_shadowmask(predict_file):
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_shadowmask(file):
     output_image = compute_shadowmask(file, 1)
+    validate_mask(output_image, "Shadow")
+    
+    
+@pytest.mark.all
+@pytest.mark.parametrize("file", input_files)
+def test_prepare_computation_and_validation_shadowmask(file):
+    valid_stack = prepare_shadowmask(file, 1)
+    validate_mask(valid_stack, "Prepare")
+    output_image = compute_shadowmask(file, 1, valid_stack)
     validate_mask(output_image, "Shadow")

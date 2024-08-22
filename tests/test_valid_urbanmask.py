@@ -39,13 +39,17 @@ def prepare_urbanmask(file, nb_workers):
     return valid_stack, ndvi, ndwi, wsf
 
 
-def compute_urbanmask(file, nb_workers):
+def compute_urbanmask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, wsf=None):
     output_image = get_output_path(file, "urbanmask")
     remove_file(output_image)
-    valid_stack = get_aux_path(file, "valid_stack")
-    ndvi = get_aux_path(file, "ndvi")
-    ndwi = get_aux_path(file, "ndwi")
-    wsf = get_aux_path(file, "wsf")
+    if valid_stack is None:
+        valid_stack = get_aux_path(file, "valid_stack")
+    if ndvi is None:
+        ndvi = get_aux_path(file, "ndvi")
+    if ndwi is None: 
+        ndwi = get_aux_path(file, "ndwi")
+    if wsf is None:
+        wsf = get_aux_path(file, "wsf")
 
     os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
               f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
@@ -81,4 +85,16 @@ def test_validation_urbanmask(predict_file):
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_urbanmask(file):
     output_image = compute_urbanmask(file, 1)
+    validate_mask(output_image, "Urban", valid_pixels=False)
+    
+
+@pytest.mark.all
+@pytest.mark.parametrize("file", input_files)
+def test_prepare_computation_and_validation_urbanmask(file):
+    valid_stack, ndvi, ndwi, wsf = prepare_urbanmask(file, 1)
+    validate_mask(valid_stack, "Prepare")
+    validate_mask(ndvi, "Prepare")
+    validate_mask(ndwi, "Prepare")
+    validate_mask(wsf, "Prepare")
+    output_image = compute_urbanmask(file, 1, valid_stack, ndvi, ndwi, wsf)
     validate_mask(output_image, "Urban", valid_pixels=False)

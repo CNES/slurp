@@ -76,7 +76,7 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     ground_truth_eroded = apply_morpho(wsf[0] == 255, "binary_erosion", params["building_erosion"])
 
     # Bonus for pixels above ground truth
-    urban_proba[0][ground_truth_eroded] += params["bonus_gt"]
+    urbanmask[0][ground_truth_eroded] += params["bonus_gt"]
     # Malus for pixels in shadow areas
     urban_proba[0][shadowmask[0] == 2] -= params["malus_shadow"]
     probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params["building_threshold"])
@@ -109,8 +109,8 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
 
 def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
     """
-    key_image, key_validstack, key_watermask, key_vegmask, key_urban_proba, key_shadowmask, key_wsf
-    0          1              2              3             4                5               6
+    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf
+    0          1              2              3             4              5               6
     """
     input_image = input_buffer[0]
     valid_stack = input_buffer[1]
@@ -183,7 +183,7 @@ def getarguments():
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-vegetationmask", help="Vegetation mask")
     group1.add_argument("-watermask", help="Water mask")
-    group1.add_argument("-urban_proba", dest="urbanmask", help="Urban mask probabilities")
+    group1.add_argument("-urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
     group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster  filename")
 
@@ -251,14 +251,14 @@ def main():
             key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
             key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
             key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
-            key_urban_proba = eoscale_manager.open_raster(raster_path=args.urbanmask)
+            key_urbanmask = eoscale_manager.open_raster(raster_path=args.urbanmask)
             key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
             key_wsf = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
             key_validstack = eoscale_manager.open_raster(raster_path=args.valid_stack)
                 
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
-            inputs_final = [key_image, key_validstack, key_watermask, key_vegmask, key_urban_proba, key_shadowmask, key_wsf]
+            inputs_final = [key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf]
             final_mask = eoexe.n_images_to_m_images_filter(inputs=inputs_final,
                                                            image_filter=post_process,
                                                            filter_parameters=vars(args),
