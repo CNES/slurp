@@ -175,7 +175,7 @@ def getarguments():
     
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments",required=True)
+    parser.add_argument("main_config", help="First JSON file, load basis arguments")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
