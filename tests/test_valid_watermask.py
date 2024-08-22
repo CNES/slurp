@@ -43,13 +43,18 @@ def prepare_watermask(file, nb_workers):
     return valid_stack, ndvi, ndwi, pekel, hand
 
 
-def compute_watermask(file, nb_workers):
+def compute_watermask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, pekel=None, hand=None):
     output_image = get_output_path(file, "watermask", remove=True)
-    valid_stack = get_aux_path(file, "valid_stack")
-    ndvi = get_aux_path(file, "ndvi")
-    ndwi = get_aux_path(file, "ndwi")
-    pekel = get_aux_path(file, "pekel")
-    hand = get_aux_path(file, "hand")
+    if valid_stack is None:
+        valid_stack = get_aux_path(file, "valid_stack")
+    if ndvi is None:
+        ndvi = get_aux_path(file, "ndvi")
+    if ndwi is None:
+        ndwi = get_aux_path(file, "ndwi")
+    if pekel is None:
+        pekel = get_aux_path(file, "pekel")
+    if hand is None:
+        hand = get_aux_path(file, "hand")
 
     os.system(f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
               f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand}")
@@ -86,4 +91,17 @@ def test_validation_watermask(predict_file):
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_watermask(file):
     output_image = compute_watermask(file, 1)
+    validate_mask(output_image, "Water")
+    
+    
+@pytest.mark.all
+@pytest.mark.parametrize("file", input_files)
+def test_prepare_computation_and_validation_watermask(file):
+    valid_stack, ndvi, ndwi, pekel, hand = prepare_watermask(file, 1)
+    validate_mask(valid_stack, "Prepare")
+    validate_mask(ndvi, "Prepare")
+    validate_mask(ndwi, "Prepare")
+    validate_mask(pekel, "Prepare")
+    validate_mask(hand, "Prepare")
+    output_image = compute_watermask(file, 1, valid_stack, ndvi, ndwi, pekel, hand)
     validate_mask(output_image, "Water")

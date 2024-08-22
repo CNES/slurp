@@ -10,8 +10,7 @@ import numpy as np
 import traceback
 
 from os import path
-from skimage.morphology import binary_opening, remove_small_objects, disk
-
+from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils
 from slurp.tools import eoscale_utils as eo_utils
 import eoscale.manager as eom
@@ -20,7 +19,7 @@ import eoscale.eo_executors as eoexe
 NO_DATA = 255
 
 
-def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
+def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Compute shadow mask
 
@@ -41,9 +40,9 @@ def compute_mask(input_buffers: list, input_profiles: list, params: dict) -> np.
     # work on binary arrays
     final_shadow_mask = raw_shadow_mask
     if params["binary_opening"] > 0:
-        final_shadow_mask = binary_opening(raw_shadow_mask, disk(params["binary_opening"]))
+        final_shadow_mask = apply_morpho(final_shadow_mask, "binary_opening", params["binary_opening"])
     if params["remove_small_objects"] > 0:
-        final_shadow_mask = remove_small_objects(final_shadow_mask, params["remove_small_objects"], connectivity=2)
+        final_shadow_mask = apply_morpho(final_shadow_mask, "remove_small_objects", params["remove_small_objects"])
         
     raw_shadow_mask = np.where(raw_shadow_mask, 1, 0)
     final_shadow_mask = np.where(final_shadow_mask, 1, 0)
@@ -66,13 +65,14 @@ def getarguments():
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
-    group1.add_argument("-watermask", help="Watermask filename : shadow mask will exclude water areas")
+    group1.add_argument("-watermask", help="Watermask filename : if given shadow mask will exclude water areas")
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
     group2.add_argument("-th_rgb", type=float, help="Relative shadow threshold for RGB bands")
     group2.add_argument("-th_nir", type=float, help="Relative shadow threshold for NIR band")
     group2.add_argument("-absolute_threshold", type=float, help="Compute shadow mask with a unique absolute threshold")
-    group2.add_argument("-percentile", type=float, help="Percentile value to cut histogram and estimate shadow threshold")
+    group2.add_argument("-percentile", type=float,
+                        help="Percentile value to cut histogram and estimate shadow threshold")
 
     group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group3.add_argument("-binary_opening", type=int, help="Size of disk structuring element")
@@ -91,11 +91,10 @@ def getarguments():
 
 
 def main():
-   
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'ressources', 'post_process', 'shadows']
+    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'shadows']
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -122,14 +121,22 @@ def main():
                 # Compute threshold for each band
                 th_bands = np.zeros(4)
                 for cpt in range(3):
-                    min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
-                    max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
-                    th_bands[cpt]  = min_band + args.th_rgb * (max_percentile - min_band)
+                    min_band = np.percentile(
+                        local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile
+                    )
+                    max_percentile = np.percentile(
+                        local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100 - args.percentile
+                    )
+                    th_bands[cpt] = min_band + args.th_rgb * (max_percentile - min_band)
                     
                 cpt = 3
-                min_band = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile)
-                max_percentile = np.percentile(local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100-args.percentile)
-                th_bands[cpt]  = min_band + args.th_nir * (max_percentile - min_band)
+                min_band = np.percentile(
+                    local_phr[cpt][np.where(local_phr[cpt] != nodata)], args.percentile
+                )
+                max_percentile = np.percentile(
+                    local_phr[cpt][np.where(local_phr[cpt] != nodata)], 100 - args.percentile
+                )
+                th_bands[cpt] = min_band + args.th_nir * (max_percentile - min_band)
             else:
                 # Use an absolute threshold instead of relative threshold
                 # Useful when using calibrated images
@@ -153,7 +160,7 @@ def main():
                 eoscale_manager.get_array(key=key_watermask).fill(0)
             
             mask_shadow = eoexe.n_images_to_m_images_filter(inputs=[key_phr, key_valid_stack, key_watermask],
-                                                            image_filter=compute_mask,
+                                                            image_filter=compute_shadowmask,
                                                             filter_parameters=params,
                                                             generate_output_profiles=eo_utils.single_uint8_profile,
                                                             stable_margin=args.remove_small_objects,

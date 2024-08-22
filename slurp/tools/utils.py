@@ -39,7 +39,3 @@ def compute_mask_threshold(input_buffers: list, input_profiles: list, params: di
     mask = np.where(input_buffers[1][0] != 1, 255, mask)
 
     return mask
-
-
-def concatenate_samples(output_scalars, chunk_output_scalars, tile):
-    output_scalars.append(chunk_output_scalars[0])
