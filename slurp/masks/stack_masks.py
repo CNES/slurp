@@ -49,13 +49,13 @@ HIGH = 2
 NODATA = 255
 
 
-def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params):
+def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
     
     """
     
     
     :param array input_image: VHR input image
-    :param array urban_proba: Urbanmask created by the dedicated script 
+    :param array urbanmask: Urbanmask created by the dedicated script 
     :param array wsf: WSF file from post_process function
     :param array vegmask: Vegetationnmask created by the dedicated script
     :param array watermask: Watermask created by the dedicated script
@@ -78,13 +78,13 @@ def watershed_regul_buildings(input_image, urban_proba, wsf, vegmask, watermask,
     # Bonus for pixels above ground truth
     urbanmask[0][ground_truth_eroded] += params["bonus_gt"]
     # Malus for pixels in shadow areas
-    urban_proba[0][shadowmask[0] == 2] -= params["malus_shadow"]
-    probable_buildings = np.logical_and(ground_truth_eroded, urban_proba[0] > params["building_threshold"])
+    urbanmask[0][shadowmask[0] == 2] -= params["malus_shadow"]
+    probable_buildings = np.logical_and(ground_truth_eroded, urbanmask[0] > params["building_threshold"])
     probable_buildings = apply_morpho(probable_buildings, "binary_erosion", params["building_erosion"])
     
     false_positive = np.logical_and(
         apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
-        urban_proba[0] > params["building_threshold"]
+        urbanmask[0] > params["building_threshold"]
     )
     
     markers[0][probable_buildings] = params["value_classif_buildings"]
@@ -116,7 +116,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     valid_stack = input_buffer[1]
     watermask   = input_buffer[2]
     vegmask     = input_buffer[3]
-    urban_proba = input_buffer[4]
+    urbanmask   = input_buffer[4]
     shadowmask  = input_buffer[5]
     wsf = input_buffer[6]
 
@@ -125,7 +125,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
 
     # Improve buildings detection using a watershed / markers regularization
     seg, markers = watershed_regul_buildings(
-        input_image, urban_proba, wsf, vegmask, watermask, shadowmask, params
+        input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
 
     clean_bare_ground = morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
@@ -233,7 +233,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "ressources", "post_process", "stack"]
+    keys = ["input", "aux_layers", "masks", "resources", "post_process", "stack"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
