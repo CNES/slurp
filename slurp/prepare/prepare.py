@@ -1,22 +1,43 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 This script compute all files needed for masks calculation
 """
 
 import argparse
-import numpy as np
 import traceback
 from os import path
 
-from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, aux_files as aux
+import numpy as np
+
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
+from slurp.tools import io_utils, eoscale_utils as eo_utils
+from slurp.prepare import validity, primitives, aux_files as aux
+
 
 
 def getarguments():
+    """Parse command line arguments."""
+    
     parser = argparse.ArgumentParser(description="Compute auxiliary files needed for mask computation")
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
@@ -61,11 +82,12 @@ def getarguments():
 
 
 def main():
-
+    """Main function that compute prepare date for mask computation"""
+        
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['prepare', 'aux_layers', 'resources']
+    keys = ["input","prepare", "aux_layers", "resources"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

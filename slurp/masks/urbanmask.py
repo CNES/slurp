@@ -1,23 +1,39 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """ Compute building and road masks from VHR images thanks to OSM layers """
 
 import argparse
 import gc
-import numpy as np
-import rasterio as rio
 import time
 import traceback
-
 from os.path import isfile
-from sklearn.ensemble import RandomForestClassifier
 
+import numpy as np
+
+from sklearn.ensemble import RandomForestClassifier
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
-
 
 try:
     from sklearnex import patch_sklearn
@@ -59,6 +75,14 @@ def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> n
 
     
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
+    """
+    Recover of row and columns indices selected on the valid pixel of the image
+    
+    :param int nb_samples: 
+    :param boolean numpy array valid_mask :
+    :param boolean numpy array mask_ground_truth :
+    :return: tuple of list , row indices and columns indices
+    """
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
@@ -123,7 +147,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     return samples
 
 
-def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
+def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
     Random Forest prediction
 
@@ -164,7 +188,7 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Urban Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments" ,required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -172,7 +196,7 @@ def getarguments():
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
     group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted WSF filename")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster filename")
     group1.add_argument("-layers", nargs="+", dest="files_layers",
                         help="Add layers as additional features used by learning algorithm")
     group1.add_argument("-watermask", help="Watermask filename (facultative) : "
@@ -212,10 +236,13 @@ def getarguments():
 
 
 def main():
+    
+    """Main function that compute Urbanmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'resources', 'urban']
+    keys = ["input", "aux_layers", "masks", "resources", "urban"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -338,7 +365,7 @@ def main():
                 ######### Predict  ################
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
-                                                                image_filter=RF_prediction,
+                                                                image_filter=rf_prediction,
                                                                 filter_parameters={"classifier": classifier},
                                                                 generate_output_profiles=eo_utils.double_int_profile,
                                                                 stable_margin=0,

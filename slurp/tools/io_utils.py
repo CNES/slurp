@@ -1,10 +1,30 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+""" Brings together useful functions common to the different scripts  """
+import json
 
 import rasterio as rio
 import matplotlib.pyplot as plt
 import numpy as np
-import json
+
 
 
 def read_json(main_config_file: str, keys: list, user_config_file: str = None) -> dict:
@@ -18,7 +38,7 @@ def read_json(main_config_file: str, keys: list, user_config_file: str = None) -
     """
     # Read the JSON data from the main config
     try:
-        with open(main_config_file, 'r') as json_file1:
+        with open(main_config_file, "r") as json_file1:
             full_args = json.load(json_file1)
             argsdict = full_args[keys[0]]
             for key in keys[1:]:
@@ -32,7 +52,7 @@ def read_json(main_config_file: str, keys: list, user_config_file: str = None) -
     if user_config_file:
         # Read the JSON data from the input file
         try:
-            with open(user_config_file, 'r') as json_file2:
+            with open(user_config_file, "r") as json_file2:
                 full_args = json.load(json_file2)
                 for k in full_args.keys():
                     if k in keys:

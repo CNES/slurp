@@ -1,30 +1,46 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 """
 This script stacks existing masks
-"""
 
-import argparse
-import traceback
-import numpy as np
-import time
-
-from skimage.filters import sobel
-from skimage import segmentation
-
-from slurp.post_process.morphology import morpho_clean, apply_morpho
-from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
-
-
-"""
 Final mask values 
 - 1st layer : class
 - 2nd layer : estimation of elevation
 """
+
+import argparse
+import traceback
+import time
+
+import numpy as np
+from skimage.filters import sobel
+from skimage import segmentation
+
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
+from slurp.post_process.morphology import morpho_clean, apply_morpho
+from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools import io_utils
+
 
 # Elevation estimation in 2nd layer
 LOW = 1
@@ -34,6 +50,19 @@ NODATA = 255
 
 
 def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
+    
+    """
+    
+    
+    :param array input_image: VHR input image
+    :param array urbanmask: Urbanmask created by the dedicated script 
+    :param array wsf: WSF file from post_process function
+    :param array vegmask: Vegetationnmask created by the dedicated script
+    :param array watermask: Watermask created by the dedicated script
+    :param array shadowmask: Shadowmask created by the dedicated script
+    :param dict params: dictionary of arguments
+    :return: tuple of segmentation value and markers
+    """
     # Compute mono image from RGB image
     im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
     edges = sobel(im_mono)
@@ -78,41 +107,41 @@ def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, s
     return seg, markers
     
 
-def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
+def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
     """
     key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf
     0          1              2              3             4              5               6
     """
-    input_image = inputBuffer[0]
-    valid_stack = inputBuffer[1]
-    watermask   = inputBuffer[2]
-    vegmask     = inputBuffer[3]
-    urbanmask = inputBuffer[4]
-    shadowmask  = inputBuffer[5]
-    wsf = inputBuffer[6]
+    input_image = input_buffer[0]
+    valid_stack = input_buffer[1]
+    watermask   = input_buffer[2]
+    vegmask     = input_buffer[3]
+    urbanmask   = input_buffer[4]
+    shadowmask  = input_buffer[5]
+    wsf = input_buffer[6]
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
     stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
 
     # Improve buildings detection using a watershed / markers regularization
-    segmentation, markers = watershed_regul_buildings(
+    seg, markers = watershed_regul_buildings(
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
 
-    clean_bare_ground = morpho_clean(segmentation == params["value_classif_bare_ground"], params) == 1
+    clean_bare_ground = morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
     stack[0][clean_bare_ground] = params["value_classif_bare_ground"]
 
-    clean_buildings = morpho_clean(segmentation == params["value_classif_buildings"], params) == 1
+    clean_buildings = morpho_clean(seg == params["value_classif_buildings"], params) == 1
     stack[0][clean_buildings] = params["value_classif_buildings"]
 
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
     stack[0][watermask[0] == 1] = params["value_classif_water"]
 
-    low_veg = segmentation == params["value_classif_low_veg"]
+    low_veg = seg == params["value_classif_low_veg"]
     clean_low_veg = morpho_clean(low_veg, params) == 1
     stack[0][clean_low_veg] = params["value_classif_low_veg"]
 
-    high_veg = segmentation == params["value_classif_high_veg"]
+    high_veg = seg == params["value_classif_high_veg"]
     clean_high_veg = morpho_clean(high_veg, params) == 1
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
@@ -142,9 +171,11 @@ def post_process(inputBuffer: list,  input_profiles: list,  params: dict) -> np.
 
 
 def getarguments():
+    """Parse command line arguments."""
+    
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments",required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -154,7 +185,7 @@ def getarguments():
     group1.add_argument("-watermask", help="Water mask")
     group1.add_argument("-urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="World Settlement Footprint raster")
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster  filename")
 
     group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
     group2.add_argument("-building_threshold", type=int, help="Threshold to consider building as detected")
@@ -164,7 +195,7 @@ def getarguments():
                         help="Bonus for pixels covered by GT, in the watershed regularization step "
                              "(ex : +30 to improve discrimination between building and background)")
     group2.add_argument("-malus_shadow", type=int,
-                        help="Malus for pixels in shadow, in the watershed regularization step")
+                        help="Value of the malus for pixels in shadow, in the watershed regularization step")
 
     group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group3.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
@@ -175,7 +206,7 @@ def getarguments():
                         help="The maximum area, in pixels, of a contiguous hole that will be filled")
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
-    group4.add_argument("-stackmask", help="Final mask")
+    group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument("-low_veg", dest="value_classif_low_veg", type=int,
                         help="Output classification value for low vegetation")
     group4.add_argument("-high_veg", dest="value_classif_high_veg", type=int,
@@ -197,10 +228,12 @@ def getarguments():
 
 
 def main():
+    """Main function that stacks the masks compute before"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'stack']
+    keys = ["input", "aux_layers", "masks", "resources", "post_process", "stack"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

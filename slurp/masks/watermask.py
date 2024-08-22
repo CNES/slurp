@@ -1,5 +1,23 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 """ Compute water mask of PHR image with help of Pekel and Hand images."""
 
@@ -9,16 +27,16 @@ import numpy as np
 import time
 import traceback
 
-from os.path import dirname, join
+import numpy as np
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
-from pylab import *
 
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
+
 
 try:
     from sklearnex import patch_sklearn
@@ -38,19 +56,13 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     :returns: Pekel masks
     """
     if params["hand_strict"]:
-        if not params["no_pekel_filter"]:
-            [mask_pekel, mask_pekelxx] = utils.compute_mask(
-                input_buffer[0],
-                [params["thresh_pekel"], params["strict_thresh"]]
-            )
-        else:
-            [mask_pekel, mask_pekelxx] = utils.compute_mask(
-                input_buffer[0],
-                [params["thresh_pekel"], params["strict_thresh"]]
-            )
+        [mask_pekel, mask_pekelxx] = utils.compute_mask(
+            input_buffer[0],
+            [params["thresh_pekel"], params["strict_thresh"]]
+        )
         return [mask_pekel, mask_pekelxx]
 
-    elif not params["no_pekel_filter"]:
+    if not params["no_pekel_filter"]:
         [mask_pekel, mask_pekel0] = utils.compute_mask(
             input_buffer[0],
             [params["thresh_pekel"], 0])
@@ -110,6 +122,14 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
 
 
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
+    """
+    Retrieve row and columns indices selected on the valid pixel of the image
+    
+    :param int nb_samples: number of samples selected
+    :param boolean numpy array valid_mask :
+    :param boolean numpy array mask_ground_truth :
+    :return: tuple of list , row indices and columns indices
+    """
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
     _, rows, cols = np.where(valid_samples)
 
@@ -128,6 +148,16 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
 
 
 def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
+    """
+    Retrieve row and columns indices selected on the valid pixel of the image
+    
+    :param int nb_indexes: number of samples selected
+    :param int pct_area: importance of area for selecting number of samples in each water surface
+    :param int minimum: minimum number of samples in each water surface
+    :param boolean numpy array mask:
+    :return: tuple of list , row indices and columns indices
+    
+    """
     rows_idxs = []
     cols_idxs = []
 
@@ -234,7 +264,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     return samples  # [x_samples, y_samples]
 
 
-def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Random Forest prediction
 
@@ -250,7 +280,7 @@ def RF_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     classifier = params["classifier"]
     prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
     if buffer_to_predict.shape[1] == 0:
-        print(f"WARNING > zone with NO DATA")
+        print("WARNING > zone with NO DATA")
     else:
         prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
 
@@ -329,7 +359,7 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Water Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments" ,required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -396,10 +426,12 @@ def getarguments():
 
 
 def main():
+    """Main function that compute Urbanmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'water']
+    keys = ["input", "aux_layers", "masks", "resources", "post_process", "water"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -563,7 +595,7 @@ def main():
                 ######### Predict  ################
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
-                                                                image_filter=RF_prediction,
+                                                                image_filter=rf_prediction,
                                                                 filter_parameters={"classifier": classifier},
                                                                 generate_output_profiles=eo_utils.single_float_profile,
                                                                 stable_margin=0,

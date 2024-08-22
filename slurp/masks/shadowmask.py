@@ -1,20 +1,40 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 """
 This script computes a shadow mask
 """
 
 import argparse
-import numpy as np
 import traceback
-
 from os import path
+
+import numpy as np
+import eoscale.manager as eom
+import eoscale.eo_executors as eoexe
+
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils
 from slurp.tools import eoscale_utils as eo_utils
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
+
 
 NO_DATA = 255
 
@@ -57,9 +77,12 @@ def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) 
 
 
 def getarguments():
+
+    """Parse command line arguments."""
+
     parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument("main_config", help="First JSON file, load basis arguments" ,required=True)
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -91,10 +114,13 @@ def getarguments():
 
 
 def main():
+    
+    """Main function that compute Shadowmask"""
+    
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ['input', 'aux_layers', 'masks', 'resources', 'post_process', 'shadows']
+    keys = ["input", "aux_layers", "masks", "resources", "post_process", "shadows"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None

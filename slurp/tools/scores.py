@@ -1,13 +1,32 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+""" Module to compute scores on produced masks """
 
 import traceback
 import argparse
 import time
 from os.path import dirname, join
 
-from sklearn.metrics import (accuracy_score, log_loss, confusion_matrix, f1_score,  precision_score, recall_score,
-                             jaccard_score)
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, jaccard_score)
 import rasterio as rio
 from rasterio import features
 from rasterio.windows import Window
@@ -19,19 +38,21 @@ from slurp.tools import io_utils
 
 
 def generate_polygons_in_gdf(im, crs, transform):
+    """ Generate polygons in a geodata-frame """
     buildings = np.array(list(features.shapes(im, transform=transform)))
     mask = (buildings[:, 1] == 1.0)
     buildings = buildings[mask]
     # print(buildings.shape)
     geometry = np.array([shape(buildings[i][0]) for i in range(0, len(buildings))])
     gdf = gpd.GeoDataFrame(
-        {'id': list(range(0, len(geometry))), 'geometry': geometry},
+        {"id": list(range(0, len(geometry))), "geometry": geometry},
         crs=crs
     )
     return gdf
 
 
 def get_union_gdf(gdf, gdf_ref, gdf_predict, crs):
+    """ Concatenate geodataframe"""
     polys = []    
     indexes = gdf.dropna()["id_1"].unique()
     for index in indexes:
@@ -41,13 +62,14 @@ def get_union_gdf(gdf, gdf_ref, gdf_predict, crs):
         gdf_unary = pd.concat([gdf_unary, gdf_predict.iloc[index_predict.values]["geometry"]])
         polys.append(gdf_unary.unary_union)
     gdf_union = gpd.GeoDataFrame(
-        {'id_1': indexes.astype("int"), 'geometry': polys},
+        {"id_1": indexes.astype("int"), "geometry": polys},
         crs=crs
     )
     return gdf_union
 
 
 def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, crs_predict, transform_predict):
+    """ Count the number of buildings polygons """
     start_time = time.time()
     print("## BUILDINGS ANALYSIS ##")
     
@@ -77,7 +99,7 @@ def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, c
     # Intersection and union calculation
     if args.union:
         gdf_intersect["area_inter"] = gdf_intersect.area
-        gdf_intersect_area = gdf_intersect.groupby('id_1')["area_inter"].sum().reset_index()
+        gdf_intersect_area = gdf_intersect.groupby("id_1")["area_inter"].sum().reset_index()
         gdf_union = get_union_gdf(gdf_intersect, gdf_ref, gdf_predict, crs_ref)
         gdf_union["area_union"] = gdf_union.area
 
@@ -87,22 +109,23 @@ def buildings_count(args, im_ref, im_predict, dir_out, crs_ref, transform_ref, c
 
         # Generate stack GeoDataFrame
         df_merged = gdf_intersect_area.merge(
-            gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on='id_1', right_on='index'
+            gdf_ref_filtered.geometry.area.reset_index(name="area_ref"), left_on="id_1", right_on="index"
         ).drop(columns="index")
-        df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on='id_1', right_on='id_1')
+        df_merged = df_merged.merge(gdf_union[["id_1", "area_union"]], left_on="id_1", right_on="id_1")
         
         # Scores
         detected_buildings = len(df_merged[100 * df_merged["area_inter"] / df_merged["area_ref"] > args.thresh_overlay])
-        print(f'Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}')
+        print(f"Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}")
         df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
         iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
-        print(f'Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}')
-        print("Mean IoU {:.2f}".format(df_merged["iou"].mean()))
+        print(f"Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}")
+        print(f"Mean IoU {df_merged['iou'].mean():.2f}")
         
     print("Buildings count execution time :", time.time() - start_time) 
 
 
 def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
+    """ Merged and saved ref image with predicted image """
     start_time = time.time()
     im_merged = np.add(im_ref, 2*im_predict)
     
@@ -119,18 +142,20 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
 
 
 def get_score(im_ref, im_predict):
+    """ Print the different scores computed"""
+    
     start_time = time.time()
     print("## SCORES ##")
     
-    print("Accuracy >>> {:.2f}".format(accuracy_score(im_ref, im_predict)))     
+    print(f"Accuracy >>> {accuracy_score(im_ref, im_predict):.2f}")     
     precision = precision_score(im_ref, im_predict)
-    print("Precision >>> {:.2f}".format(precision)) 
+    print(f"Precision >>> {precision:.2f}") 
     recall = recall_score(im_ref, im_predict)
-    print("Recall >>> {:.2f}".format(recall))
+    print(f"Recall >>> {recall:.2f}")
     f1 = 2 * precision * recall / (precision + recall)
-    print("F1 >>> {:.2f}".format(f1))
+    print(f"F1 >>> {f1:.2f}")
     
-    print("Jaccard >>> {:.2f}".format(jaccard_score(im_ref, im_predict)))    
+    print(f"Jaccard >>> {jaccard_score(im_ref, im_predict):.2f}")    
     # print("Log loss >>>", log_loss(im_ref, im_predict))
     # print("Confusion matrix >>>", confusion_matrix(im_ref, im_predict))
     # print("F1 >>>", f1_score(im_ref, im_predict))
@@ -175,6 +200,7 @@ def getarguments():
 
 
 def main():
+    """ Main function that compute scores"""
     try:
         args = getarguments()                 
         
@@ -245,21 +271,21 @@ def main():
         get_score(im_ref_1d, im_predict_1d)
 
     except FileNotFoundError as fnfe_exception:
-        print('FileNotFoundError', fnfe_exception)
+        print("FileNotFoundError", fnfe_exception)
 
     except PermissionError as pe_exception:
-        print('PermissionError', pe_exception)
+        print("PermissionError", pe_exception)
 
     except ArithmeticError as ae_exception:
-        print('ArithmeticError', ae_exception)
+        print("ArithmeticError", ae_exception)
 
     except MemoryError as me_exception:
-        print('MemoryError', me_exception)
+        print("MemoryError", me_exception)
 
     except Exception as exception:  # pylint: disable=broad-except
-        print('oups...', exception)
+        print("oups...", exception)
         traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

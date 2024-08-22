@@ -1,5 +1,25 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+""" Brings together the morphology functions """
 
 import numpy as np
 from skimage.morphology import (area_closing, binary_closing, binary_dilation, binary_erosion, binary_opening,
@@ -7,6 +27,14 @@ from skimage.morphology import (area_closing, binary_closing, binary_dilation, b
 
 
 def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
+    """
+    Apply the selected morphology transformation
+    
+    :params array input_array: 
+    :params str key: Name of the morpho to apply
+    :params int value: (depend of the key selected)
+    """
+    
     if key == "area_closing":
         output_array = area_closing(input_array, value, connectivity=2)
     elif key == "binary_closing":
@@ -28,6 +56,13 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
 
 
 def morpho_clean(im_classif, params):
+    """
+    Apply the morphology transformation passed in arguments
+    
+    :params array im_classif: 
+    :param dict params: dictionary of arguments
+    """
+    
     im_classif = im_classif.astype(np.uint8)
 
     if params["binary_closing"]:
