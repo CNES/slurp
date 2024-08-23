@@ -34,7 +34,6 @@ from slurp.tools import io_utils, eoscale_utils as eo_utils
 from slurp.prepare import validity, primitives, aux_files as aux
 
 
-
 def getarguments():
     """Parse command line arguments."""
     
@@ -46,6 +45,9 @@ def getarguments():
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-sensor_mode", type=bool, default=False, help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
+    group1.add_argument("-dtm", help="Digital Terrain Model, used only in sensor mode")
+    group1.add_argument("-geoid_file", help="Geoid file, used only in sensor mode")
     group1.add_argument("-valid", dest="valid_stack", help="Path to store the valid stack file")
     group1.add_argument("-cloud_mask", help="Path to the input cloud mask")
 
@@ -60,7 +62,8 @@ def getarguments():
     group3.add_argument("-pekel_method",
                         help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery")
     group3.add_argument("-pekel", help="Path of the global Pekel file")
-    group3.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
+    group3.add_argument("-pekel_obs", help="Month of the desired Pekel file (pekel_method = month)")
+    group3.add_argument("-pekel_monthly_occurrence", help="Path of the root of monthly occurrence Pekel files")
     group3.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
     group3.add_argument("-hand", help="Path of the global HAND file")
     group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
@@ -85,7 +88,8 @@ def main():
     """Main function that compute prepare date for mask computation"""
         
     argparse_dict = vars(getarguments())
-
+    print(f"DBG> {argparse_dict}")
+    
     # Read the JSON files
     keys = ["input","prepare", "aux_layers", "resources"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
@@ -169,9 +173,11 @@ def main():
             if args.pekel and args.extracted_pekel:
                 if args.overwrite or not path.isfile(args.extracted_pekel):
                     if args.pekel_method == "month":
-                        aux.pekel_month_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.pekel_obs)
+                        file_pekel = path.join(args.pekel_monthly_occurrence,"has_observations"+str(args.pekel_obs),"has_observations"+str(args.pekel_obs)+".vrt")
+                        print(f"DBG> {file_pekel=}")
+                        aux.aux_file_recovery(args.file_vhr, file_pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
                     elif args.pekel_method == "all":
-                        aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel)
+                        aux.aux_file_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
                     else:
                         raise Exception("Method for Pekel extraction not accepted. Use 'month' or 'all'")
                 else:
@@ -182,7 +188,8 @@ def main():
             # Hand
             if args.hand and args.extracted_hand:
                 if args.overwrite or not path.isfile(args.extracted_hand):
-                    aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand)
+                    aux.aux_file_recovery(args.file_vhr, args.hand, args.extracted_hand,
+                                          args.sensor_mode, args.dtm, args.geoid_file)
                 else:
                     print("Not extracting Hand : the file already exists.")
             else:
@@ -191,7 +198,8 @@ def main():
             # WSF
             if args.wsf and args.extracted_wsf:
                 if args.overwrite or not path.isfile(args.extracted_wsf):
-                    aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf)
+                    aux.aux_file_recovery(args.file_vhr, args.wsf, args.extracted_wsf,
+                                          args.sensor_mode, args.dtm, args.geoid_file)
                 else:
                     print("Not extracting WSF : the file already exists.")
             else:
