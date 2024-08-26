@@ -31,7 +31,7 @@ import numpy as np
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, aux_files as aux
+from slurp.prepare import validity, primitives, analyse_glcm  as aux
 
 
 
@@ -72,7 +72,10 @@ def getarguments():
     group5 = parser.add_argument_group(description="*** AUX FILES FOR VEGETATION MASK ***")
     group5.add_argument("-file_texture", help="Path to store the texture file")
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
-    
+    group5.add_argument("-analyse_glcm", type = bool, help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+    group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
+    group5.add_argument("-update_config", type = bool, help=" If True, update the VEG_CLUSTERS and LOW_VEG_CLUSTERS parameters in the 'user_config' file (create them if they don't exist) with the adviced value by analyse_glcm")
+                        
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int, help="Number of CPU")
 
@@ -221,6 +224,15 @@ def main():
                     print("Not computing texture file : the file already exists.")
             else:
                 print("Pass texture computation")
+                
+            # Global land cover map
+            if args.analyse_glcm :
+                if args.update_config :
+                    config_file= args.user_config
+                else :
+                    config_file="None"
+                    
+                aux.analyse_glcm(args.land_cover_map,args.file_vhr, config_file)
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
@@ -234,7 +246,7 @@ def main():
         except MemoryError as me_exception:
             print("MemoryError", me_exception)
 
-        except Exception as exception:  # pylint: disable=broad-except
+        except Exception as exception:  
             print("oups...", exception)
             traceback.print_exc()
 
