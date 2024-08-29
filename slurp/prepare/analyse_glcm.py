@@ -1,13 +1,28 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
+#
+# This file is part of SLURP
+# (see https://github.com/CNES/slurp).
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-""" Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation"""
-# ligne test :
-# python analyse_glcm.py /work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt /work/CAMPUS/etudes/Masques_CO3D/Data/Images/Toulouse/xt_PHR_uint16.tif
+""" 
+Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation
+"""
 
 import traceback
-import argparse
-import json
 
 import numpy as np
 
@@ -45,11 +60,11 @@ def get_advices(veg, low_veg, high_veg, nb_total):
     return nb_clusters_veg, nb_clusters_low_veg
     
         
-def compute_stats(args):
+def compute_stats(map_lc, im):
     """ Compute ratio of vegetation, low vegetation and vegetation in the ROI  """
     
     app_roi = otb.Registry.CreateApplication("ExtractROI")
-    params_roi = {"out":"fake.tif","mode":"fit","mode.fit.im":args.im,"in":args.map}
+    params_roi = {"out":"fake.tif","mode":"fit","mode.fit.im":im,"in": map_lc}
     app_roi.SetParameters(params_roi)
     app_roi.Execute()
     data_map = app_roi.GetVectorImageAsNumpyArray("out")
@@ -93,53 +108,17 @@ def compute_stats(args):
 
     print(f"export VEG_CLUSTERS={nb_clusters_veg}")
     print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
-    
-    if args.save is not None:
-        app_s_impose = otb.Registry.CreateApplication("Superimpose")
-        params_s_impose = {"inr":args.im, "inm":args.map, "out":str(args.save), "interpolator":"nn"}
-        app_s_impose.SetParameters(params_s_impose)
-        app_s_impose.ExecuteAndWriteOutput()
+
     
     return nb_clusters_veg, nb_clusters_low_veg
-        
-def update_json(config_file, nb_clusters_veg, nb_clusters_low_veg):
-    """ If 'config_file_to_update' is passed, overwrite  nb_clusters_veg and nb_clusters_low_veg arguments with the value adviced """
-    
-    with open(config_file, "r", encoding="utf8") as file:
-        dict_config=json.load(file)
-        dict_config["vegetation"].update({"nb_clusters_veg": nb_clusters_veg,
-                                          "nb_clusters_low_veg": nb_clusters_low_veg })
-    with open(config_file, "w", encoding="utf8") as file:
-        json.dump(dict_config, file)
-    
-    
-def getarguments():
-    """ Parse command line arguments. """
-
-    parser = argparse.ArgumentParser(description="Compute stats on a global land cover map")
-
-    parser.add_argument("map", help="Input land cover map")
-    parser.add_argument("im", help="Input image : will crop and compute stats over this region of interest")
-    parser.add_argument("-config_file_to_update", type=str, default="None", help= "Update the VEG_CLUSTERS and LOW_VEG_CLUSTERS parameters in the JSON file (create them if they don't exist)")
-    parser.add_argument(
-         "-save",
-         default=None,
-         required=False,
-         action="store",
-         dest="save",
-         help="Crop and save input land cover map"
-     )
-     
-    return parser.parse_args()
 
 
-def analyse_glcm(map, im, config_file_to_update):
+def analyse_glcm(map_lc, im):
     """ Main function """ 
     try:
-        nb_clusters_veg, nb_clusters_low_veg = compute_stats(map, im)
+        nb_clusters_veg, nb_clusters_low_veg = compute_stats(map_lc, im)
         
-        if config_file_to_update != "None":
-            update_json(config_file_to_update, nb_clusters_veg, nb_clusters_low_veg)
+        return nb_clusters_veg, nb_clusters_low_veg
 
     except FileNotFoundError as fnfe_exception:
         print("FileNotFoundError", fnfe_exception)

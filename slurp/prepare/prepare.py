@@ -25,14 +25,14 @@ This script compute all files needed for masks calculation
 import argparse
 import traceback
 from os import path
+import json
 
 import numpy as np
 
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, analyse_glcm  as aux
-
+from slurp.prepare import validity, primitives, aux_files, analyse_glcm  as aux
 
 
 def getarguments():
@@ -42,6 +42,7 @@ def getarguments():
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
     parser.add_argument("-w", "--overwrite", action="store_true", help="Recompute files even if exists")
+    parser.add_argument("-effective_used_config", type=str, help="")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
@@ -74,7 +75,6 @@ def getarguments():
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
     group5.add_argument("-analyse_glcm", type = bool, help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
-    group5.add_argument("-update_config", type = bool, help=" If True, update the VEG_CLUSTERS and LOW_VEG_CLUSTERS parameters in the 'user_config' file (create them if they don't exist) with the adviced value by analyse_glcm")
                         
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int, help="Number of CPU")
@@ -227,12 +227,21 @@ def main():
                 
             # Global land cover map
             if args.analyse_glcm :
-                if args.update_config :
-                    config_file= args.user_config
-                else :
-                    config_file="None"
-                    
-                aux.analyse_glcm(args.land_cover_map,args.file_vhr, config_file)
+                nb_clusters_veg, nb_clusters_low_veg = aux.analyse_glcm(args.land_cover_map, args.file_vhr)
+                argsdict.update({"nb_clusters_veg": nb_clusters_veg,
+                                "nb_clusters_low_veg": nb_clusters_low_veg })
+                
+            # Write effective used config
+            with open(args.main_config, "r", encoding="utf8") as json_file:
+                final_used_config= json.load(json_file)
+                for key in final_used_config:
+                    for sub_key in final_used_config[key]:
+                        if sub_key in argsdict :
+                            final_used_config[key].update({sub_key: argsdict[sub_key]})
+                        
+            with open(args.effective_used_config, "w", encoding="utf8") as file_to_save :
+                json.dump(final_used_config, file_to_save, indent=4)
+                
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

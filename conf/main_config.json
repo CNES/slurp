@@ -1,11 +1,12 @@
 {
   "input":
 	{
-      "file_vhr": "absolute_path_to_image.tif"
+      "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Toulouse/xt_PHR.tif"
 	},
 
   "aux_layers":
 	{
+      "effective_used_config": "out/effective_used_config.json", 
       "valid_stack": "out/valid_stack.tif",
       "file_ndvi" : "out/ndvi.tif",
       "file_ndwi" : "out/ndwi.tif",
@@ -43,7 +44,9 @@
       "pekel_obs": null,
       "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
       "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
-      "texture_rad": 5
+      "texture_rad": 5,
+      "analyse_glcm": true,
+      "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt"
 	},
 
   "post_process":
