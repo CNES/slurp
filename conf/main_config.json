@@ -6,7 +6,7 @@
 	},
 
   "aux_layers":
-	{
+	{ 
       "valid_stack": "out/valid_stack.tif",
       "file_ndvi" : "out/ndvi.tif",
       "file_ndwi" : "out/ndwi.tif",
@@ -35,19 +35,22 @@
 
   "prepare":
 	{
-      "red": 1,
-      "green": 2,
-      "nir": 4,
-      "cloud_mask": null,
-      "pekel_method": "all",
+	    "red": 1,
+	    "green": 2,
+	    "nir": 4,
+	    "cloud_mask": null,
+	    "pekel_method": "all",
 	    "pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
 	    "pekel_monthly_occurrence": "/work/datalake/static_aux/MASQUES/PEKEL/data2021/MonthlyRecurrence",
-      "pekel_obs": null,
-      "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
-      "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
+	    "pekel_obs": null,
+	    "hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+	    "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
 	    "texture_rad": 5,
 	    "dtm":null,
 	    "geoid_file":"/softs/projets/3d/geoids/egm96.grd"
+	    "analyse_glcm": true,
+	    "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt",
+	    "effective_used_config": "out/used_config.json"
 	},
 
   "post_process":
