@@ -45,7 +45,7 @@
       "wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt",
       "texture_rad": 5,
       "analyse_glcm": false,
-      "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt" 
+	"land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt", 
       "effective_used_config": "out/effective_used_config.json"
     },
 
