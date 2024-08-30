@@ -33,7 +33,6 @@ import eoscale.eo_executors as eoexe
 from slurp.tools import io_utils, eoscale_utils as eo_utils
 from slurp.prepare import validity, primitives, aux_files as aux
 
-
 def getarguments():
     """Parse command line arguments."""
     
@@ -82,7 +81,6 @@ def getarguments():
     args = parser.parse_args()
 
     return args
-
 
 def main():
     """Main function that compute prepare date for mask computation"""
@@ -230,6 +228,8 @@ def main():
             else:
                 print("Pass texture computation")
 
+            eoscale_manager._release_all()
+                
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
@@ -246,6 +246,8 @@ def main():
             print("oups...", exception)
             traceback.print_exc()
 
+    print("End of prepare step")
+            
 
 if __name__ == "__main__":
     main()

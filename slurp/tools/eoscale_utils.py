@@ -93,6 +93,7 @@ def single_int16_profile(input_profiles: list, map_params):
     profile["dtype"] = np.int16
     profile["nodata"] = 32767
     profile["compress"] = "deflate"
+    profile["driver"] = "GTiff"
     
     return profile
 

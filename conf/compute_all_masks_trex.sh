@@ -11,7 +11,7 @@
 # OUTPUT_DIR folder containing the outputs
 # Compute all the masks for a given image and archive them in a tar
 # Example of command to lauch the script :
-# sbatch --export="PHR_IM=path_to_VHR_uint16_image.tif,OUTPUT_DIR=path_to_outputmasks_directory,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2" compute_all_masks.sh
+# sbatch --export="PHR_IM=path_to_VHR_uint16_image.tif,OUTPUT_DIR=path_to_outputmasks_directory,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2,OPT_PREPARE=''" compute_all_masks.sh
 
 
 . ~/bin/init_slurp.sh
@@ -34,7 +34,7 @@ main_config="/home/qt/tanguyy/SRC/slurp/conf/main_config.json"
 echo "Launch SLURP from `pwd`"
 
 # Prepare
-slurp_prepare ${main_config} -file_vhr ${TMPDIR}/${filename}
+slurp_prepare ${main_config} -file_vhr ${TMPDIR}/${filename} ${OPT_PREPARE}
 # Watermask
 slurp_watermask ${main_config} -file_vhr ${TMPDIR}/${filename} 
 

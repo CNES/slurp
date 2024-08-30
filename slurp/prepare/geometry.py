@@ -25,6 +25,7 @@ georeferenced geometry (with superimpose) or Sharloc, to project images into sen
 
 import time
 import rasterio as rio
+import numpy as np
 
 def superimpose(file_in: str, file_ref: str, file_out: str):
     import otbApplication as otb
@@ -217,7 +218,8 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
 
     ext_data = rio.open(input_data)
     profile = data_img.profile
-    profile.update({'count': 1, 'dtype': ext_data.profile['dtype']})
+    # force GTiff as output
+    profile.update({'count': 1, 'dtype': ext_data.profile['dtype'], 'driver': "GTiff"})
     
     dst2 = rio.open(projected_data, 'w', **profile)
     dst2.write(reshaped_image, indexes=1)
