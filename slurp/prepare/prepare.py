@@ -32,8 +32,8 @@ import numpy as np
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, aux_files  as aux
-from slurp.prepare import analyse_glcm  as glcm
+from slurp.prepare import validity, primitives, analyse_glcm
+from slurp.prepare import aux_files  as aux
 
 def getarguments():
     """Parse command line arguments."""
@@ -227,7 +227,7 @@ def main():
                 
             # Global land cover map
             if args.analyse_glcm :
-                nb_clusters_veg, nb_clusters_low_veg = glcm.analyse_glcm(args.land_cover_map, args.file_vhr)
+                nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.analyse_glcm(args.land_cover_map, args.file_vhr)
                 argsdict.update({"nb_clusters_veg": nb_clusters_veg,
                                 "nb_clusters_low_veg": nb_clusters_low_veg })
                 
