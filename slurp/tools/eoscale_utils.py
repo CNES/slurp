@@ -34,6 +34,7 @@ def print_dataset_infos(name, profile, prefix=""):
     print(prefix, "Image nodata :", profile["nodata"])
     print(prefix, "Image crs :", profile["crs"])
     print(prefix, "Image transform :", profile["transform"])
+    print(prefix, "Image driver :", profile["driver"])
     print()
 
 
@@ -49,7 +50,7 @@ def single_float_profile(input_profiles: list, map_params):
     profile["count"] = 1
     profile["dtype"] = np.float32
     profile["compress"] = "deflate"
-    
+    profile["driver"] = "GTiff"
     return profile
 
 
@@ -59,6 +60,7 @@ def single_bool_profile(input_profiles: list, map_params):
     profile["count"] = 1
     profile["dtype"] = bool
     profile["compress"] = "deflate"
+    profile["driver"] = "GTiff"
     
     return profile
     
@@ -71,6 +73,7 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
     profile["nbits"] = 1
     profile["compress"] = "deflate"
     profile["nodata"] = None
+    profile["driver"] = "GTiff"
 
     return profile
 
@@ -82,6 +85,7 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile["dtype"] = np.uint8
     profile["compress"] = "deflate"
     profile["nodata"] = 255
+    profile["driver"] = "GTiff"
     
     return profile
 
@@ -93,6 +97,7 @@ def single_int16_profile(input_profiles: list, map_params):
     profile["dtype"] = np.int16
     profile["nodata"] = 32767
     profile["compress"] = "deflate"
+    profile["driver"] = "GTiff"
     
     return profile
 
@@ -104,6 +109,7 @@ def single_uint16_profile(input_profiles: list, map_params):
     profile["dtype"] = np.uint16
     profile["nodata"] = 32767
     profile["compress"] = "deflate"
+    profile["driver"] = "GTiff"
     
     return profile
 
@@ -114,6 +120,7 @@ def single_int32_profile(input_profiles: list, map_params):
     profile["count"] = 1
     profile["dtype"] = np.int32
     profile["compress"] = "deflate"
+    profile["driver"] = "GTiff"
 
     return profile
 
@@ -125,6 +132,7 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile["dtype"] = np.uint8
     profile["compress"] = "deflate"
     profile["nodata"] = 255
+    profile["driver"] = "GTiff"
     
     return profile
 
@@ -136,6 +144,7 @@ def double_int_profile(input_profiles: list, map_params):
     profile1["dtype"] = np.uint8
     profile1["nodata"] = 255
     profile1["compress"] = "deflate"
+    profile["driver"] = "GTiff"
     
     # avoid to modify profile1
     profile2 = copy.deepcopy(profile1)
