@@ -1,7 +1,7 @@
 {
   "input":
 	{
-      "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Toulouse/xt_PHR.tif"
+      "file_vhr": "/path/to/your/4bands/VHR/input_image.tif"
 	},
 
   "aux_layers":
