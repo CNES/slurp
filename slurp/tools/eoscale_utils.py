@@ -144,7 +144,7 @@ def double_int_profile(input_profiles: list, map_params):
     profile1["dtype"] = np.uint8
     profile1["nodata"] = 255
     profile1["compress"] = "deflate"
-    profile["driver"] = "GTiff"
+    profile1["driver"] = "GTiff"
     
     # avoid to modify profile1
     profile2 = copy.deepcopy(profile1)
