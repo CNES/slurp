@@ -30,8 +30,15 @@ import otbApplication as otb
 
 
 def get_advices(veg, low_veg, high_veg, nb_total):
-    
-    """ Return adviced number of clusters for vegetation and high vegetation regarding ratio of these classes in the image """
+    """
+    Returns adviced number of clusters for vegetation and high vegetation regarding ratio of these classes in the image
+
+    :param int veg: number of pixels corresponding to vegetation
+    :param int low_veg: number of pixels corresponding to low vegetation
+    :param int high_veg: number of pixels corresponding to high vegetation
+    :param int nb_total: total number of pixels
+    :returns: number of clusters for vegetation and low vegetation
+    """
     pct_veg = 100*veg/nb_total
     if pct_veg == 0:
         return 0, 0
@@ -61,40 +68,46 @@ def get_advices(veg, low_veg, high_veg, nb_total):
     
         
 def compute_stats(map_lc, im):
-    """ Compute ratio of vegetation, low vegetation and vegetation in the ROI  """
+    """
+    Compute ratio of vegetation, low vegetation and vegetation in the ROI
+
+    :param str map_lc: path to the LandCover file
+    :param str im: path to the input image
+    :returns: number of clusters for vegetation and low vegetation
+    """
     
     app_roi = otb.Registry.CreateApplication("ExtractROI")
-    params_roi = {"out":"fake.tif","mode":"fit","mode.fit.im":im,"in": map_lc}
+    params_roi = {"out": "fake.tif", "mode": "fit", "mode.fit.im": im, "in": map_lc}
     app_roi.SetParameters(params_roi)
     app_roi.Execute()
     data_map = app_roi.GetVectorImageAsNumpyArray("out")
     print(f"{data_map.shape}")
 
-    legend = {10:"Tree cover" ,
-            20:"Shrubland" ,
-            30:"Grassland" ,
-            40:"Cropland",
-            50:"Built-up",
-            60:"Bare / Sparse vegetation" ,
-            70:"Snow and ice" ,
-            80:"Permanent water bodies" ,
-            90:"Herbaceous wetland",
-            95:"Mangroves",
-            100:"Moss and lichen"
-             }
+    legend = {10: "Tree cover",
+              20: "Shrubland",
+              30: "Grassland",
+              40: "Cropland",
+              50: "Built-up",
+              60: "Bare / Sparse vegetation",
+              70: "Snow and ice",
+              80: "Permanent water bodies",
+              90: "Herbaceous wetland",
+              95: "Mangroves",
+              100: "Moss and lichen"
+              }
     width = data_map.shape[0]
     height = data_map.shape[1]
 
     nb_total = width * height
     unique, counts = np.unique(data_map, return_counts=True)
 
-    veg, low_veg, high_veg = 0,0,0
+    veg, low_veg, high_veg = 0, 0, 0
     for v, c in zip(unique, counts):
         print(f"{v} : {c} pixels ({100*c/nb_total:.1f}%) - class {legend[v]}")
         if v in [10, 20, 30, 40, 90, 95, 100]:
             veg += c
 
-        if v in [20, 30, 40, 90, 100 ]:
+        if v in [20, 30, 40, 90, 100]:
             low_veg += c
 
         if v in [10, 95]:
@@ -108,7 +121,6 @@ def compute_stats(map_lc, im):
 
     print(f"export VEG_CLUSTERS={nb_clusters_veg}")
     print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
-
     
     return nb_clusters_veg, nb_clusters_low_veg
 

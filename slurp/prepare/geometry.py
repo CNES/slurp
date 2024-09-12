@@ -23,6 +23,7 @@
 import time
 import otbApplication as otb
 
+
 def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Superimpose using OTB
