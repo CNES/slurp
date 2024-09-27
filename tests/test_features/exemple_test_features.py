@@ -39,3 +39,4 @@ def test_percentile(percentile):
 def test_percentile(th_rgb,th_nir):
     command = write_command_compute_shadowmask(1) + f"-th_nir {th_nir} -th_rgb {th_rgb}"
     os.system(command)
+    

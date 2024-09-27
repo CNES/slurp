@@ -21,9 +21,33 @@ def write_command_compute_vegetationmask(nb_workers, valid_stack=None):
     return f"slurp_vegetationmask {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -vegetationmask {output_image} -valid {valid_stack} "
 
 @pytest.mark.features
-@pytest.mark.parametrize("non_veg_clusters",'null' )
-def test_vegmask_max_value(non_veg_clusters):
-    command = write_command_compute_urbanmask(1) + f"-non_veg_clusters {non_veg_clusters}"
+def test_vegmask_max_value():
+    command = write_command_compute_vegetationmask(1) + f"-non_veg_clusters {True}"
     os.system(command)
     
-def 
+@pytest.mark.features
+def test_texture_mode():
+    command = write_command_compute_vegetationmask(1) + f"-texture_mode 'no'"
+    os.system(command)
+
+@pytest.mark.features
+@pytest.mark.parametrize("min_ndvi_veg,max_ndvi_noveg", [(0.5,2),(2,0.5)])
+def test_percentile(min_ndvi_veg,max_ndvi_noveg):
+    command = write_command_compute_vegetationmask(1) + f"-min_ndvi_veg {min_ndvi_veg} -max_ndvi_noveg {max_ndvi_noveg}"
+    os.system(command)
+
+@pytest.mark.features
+@pytest.mark.parametrize("nb_clusters_veg,nb_clusters_low_veg", [(3,0),(0,5)])
+def test_nb_clusters(nb_clusters_veg,nb_clusters_low_veg):
+    command = write_command_compute_vegetationmask(1) + f"-nb_clusters_veg {nb_clusters_veg} -nb_clusters_low_veg {nb_clusters_low_veg}"
+    os.system(command)
+    
+@pytest.mark.features
+def test_max_low_veg():
+    command = write_command_compute_vegetationmask(1) + f"-max_low_veg 3 "
+    os.system(command)
+    
+@pytest.mark.features
+def test_debug():
+    command = write_command_compute_vegetationmask(1) + f"-debug True "
+    os.system(command)    
