@@ -66,7 +66,7 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     """
     Function use in save_mode "debug" to save a plot of pixel cluster class
     
-    :param list pdf: list of clusters
+    :param pd.DataFrame pdf: list of clusters
     :param str first_field: label of the first field
     :param str second_field: label of the second field
     :param int nb_first_group: 
@@ -143,7 +143,9 @@ def concat_seg(previous_result, output_algo_computer, tile):
         output_algo_computer[0][:, :, :] == 0, 0, output_algo_computer[0][:, :, :] + num_seg
     )
 
+
 # Stats #
+
 
 def compute_stats_image(input_buffer: list, input_profiles: list, params: dict) -> list:
     """
@@ -182,7 +184,9 @@ def stats_concatenate(output_scalars, chunk_output_scalars, tile):
     # output_scalars[1] : counter of each segment (nb pixels/segment)
     output_scalars[1] += chunk_output_scalars[1]
 
+
 # Clustering #
+
 
 def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarray:
     """
@@ -507,7 +511,7 @@ def main():
                                                            multiproc_context="fork",
                                                            filter_desc="Segmentation processing...")
 
-            if args.save_mode in [ "all" , "debug"] :
+            if args.save_mode in ["all", "debug"]:
                 eoscale_manager.write(key=future_seg[0], img_path=args.vegetationmask.replace(".tif", "_slic.tif"))
 
             time_seg = time.time()

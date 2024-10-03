@@ -26,7 +26,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-
 def read_json(main_config_file: str, keys: list, user_config_file: str = None) -> dict:
     """
     Read JSON config files
@@ -91,9 +90,10 @@ def save_image(
     tags=None,
     **kwargs,
 ):
-    """Save 1 band numpy image to file with deflate compression.
+    """
+    Save 1 band numpy image to file with deflate compression.
     Note that rio.dtype is string so convert np.dtype to string.
-    rpc must be a dictionnary.
+    rpc must be a dictionary.
     """
     
     dataset = rio.open(
@@ -125,12 +125,11 @@ def save_image(
     del dataset
 
 
-def save_image_n_bands(
-    image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs
-):
-    """Save n bands numpy image to file with lzw compression.
+def save_image_n_bands(image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs):
+    """
+    Save n bands numpy image to file with lzw compression.
     Note that rio.dtype is string so convert np.dtype to string.
-    rpc must be a dictionnary.
+    rpc must be a dictionary.
     """
 
     with rio.open(
@@ -161,7 +160,7 @@ def show_images(image1, title1, image2, title2, **kwargs):
     """Show 2 images with matplotlib."""
 
     fig, axes = plt.subplots(
-        nrows=1, ncols=2, figsize=(14, 7), sharex=True, sharey=True
+        nrows=1, ncols=2, figsize=(14, 7), sharex="all", sharey="all"
     )
 
     axes[0].imshow(image1, cmap=plt.gray(), **kwargs)
@@ -179,7 +178,7 @@ def show_images(image1, title1, image2, title2, **kwargs):
 def show_histograms(image1, title1, image2, title2, **kwargs):
     """Compute and show 2 histograms with matplotlib."""
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 7), sharey=True)
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 7), sharey="all")
 
     hist1, ignored = np.histogram(image1, bins=201, range=(-1000, 1000))
     hist2, ignored = np.histogram(image2, bins=201, range=(-1000, 1000))
@@ -224,9 +223,7 @@ def show_histograms2(image1, title1, image2, title2, **kwargs):
     plt.show()
 
 
-def show_histograms4(
-    image1, title1, image2, title2, image3, title3, image4, title4, **kwargs
-):
+def show_histograms4(image1, title1, image2, title2, image3, title3, image4, title4, **kwargs):
     """Compute and show 4 histograms with matplotlib."""
 
     fig, axe = plt.subplots(nrows=1, ncols=1, figsize=(14, 7))

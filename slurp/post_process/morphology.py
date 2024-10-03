@@ -32,7 +32,7 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
     
     :params array input_array: 
     :params str key: Name of the morpho to apply
-    :params int value: (depend of the key selected)
+    :params int value: (depends of the key selected)
     """
     
     if key == "area_closing":
@@ -59,7 +59,7 @@ def morpho_clean(im_classif, params):
     """
     Apply the morphology transformation passed in arguments
     
-    :params array im_classif: 
+    :param np.ndarray im_classif: input array
     :param dict params: dictionary of arguments
     """
     

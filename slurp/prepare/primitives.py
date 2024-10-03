@@ -23,6 +23,7 @@
 
 import numpy as np
 
+
 def compute_ndxi(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
     """
     Compute Normalize Difference X Index.

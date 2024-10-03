@@ -27,44 +27,43 @@ import time
 import otbApplication as otb
 
 
-
 def rasterize(args):
-    """ Create a rasterize copy of the image passed in arguments  """
+    """ Create a rasterized copy of the image passed in arguments  """
     start_time = time.time()
 
-    appReproj = otb.Registry.CreateApplication("VectorDataExtractROI")
-    appReproj.SetParameterString("io.vd", args.osm)
-    appReproj.SetParameterString("io.in", args.im)
-    appReproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
-    appReproj.ExecuteAndWriteOutput()
+    app_reproj = otb.Registry.CreateApplication("VectorDataExtractROI")
+    app_reproj.SetParameterString("io.vd", args.osm)
+    app_reproj.SetParameterString("io.in", args.im)
+    app_reproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
+    app_reproj.ExecuteAndWriteOutput()
 
-    appRaster = otb.Registry.CreateApplication("Rasterization")
-    appRaster.SetParameterString("in", "tmp_OSM_data.sqlite")
-    appRaster.SetParameterString("im", args.im)
-    appRaster.SetParameterString("out", "raster")
-    appRaster.SetParameterString("mode", "binary")
-    appRaster.SetParameterFloat("mode.binary.foreground", 1)
-    appRaster.Execute()
+    app_raster = otb.Registry.CreateApplication("Rasterization")
+    app_raster.SetParameterString("in", "tmp_OSM_data.sqlite")
+    app_raster.SetParameterString("im", args.im)
+    app_raster.SetParameterString("out", "raster")
+    app_raster.SetParameterString("mode", "binary")
+    app_raster.SetParameterFloat("mode.binary.foreground", 1)
+    app_raster.Execute()
 
-    appSI = otb.Registry.CreateApplication("Superimpose")
-    appSI.SetParameterString("inr", args.im)
-    appSI.SetParameterInputImage("inm", appRaster.GetParameterOutputImage("out"))
+    app_si = otb.Registry.CreateApplication("Superimpose")
+    app_si.SetParameterString("inr", args.im)
+    app_si.SetParameterInputImage("inm", app_raster.GetParameterOutputImage("out"))
     if args.dilate > 0:
-        appSI.SetParameterString("out", "superimpose")
-        appSI.Execute()
+        app_si.SetParameterString("out", "superimpose")
+        app_si.Execute()
         print("Dilatation of vector data / write final result")
-        appMorpho = otb.Registry.CreateApplication("BinaryMorphologicalOperation")
-        appMorpho.SetParameterInputImage("in", appSI.GetParameterOutputImage("out"))
-        appMorpho.SetParameterInt("xradius", args.dilate)
-        appMorpho.SetParameterInt("yradius", args.dilate)
-        appMorpho.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
-        appMorpho.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
-        appMorpho.ExecuteAndWriteOutput()
+        app_morpho = otb.Registry.CreateApplication("BinaryMorphologicalOperation")
+        app_morpho.SetParameterInputImage("in", app_si.GetParameterOutputImage("out"))
+        app_morpho.SetParameterInt("xradius", args.dilate)
+        app_morpho.SetParameterInt("yradius", args.dilate)
+        app_morpho.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        app_morpho.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
+        app_morpho.ExecuteAndWriteOutput()
     else:
         print("Write final result")
-        appSI.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
-        appSI.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
-        appSI.ExecuteAndWriteOutput()
+        app_si.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
+        app_si.ExecuteAndWriteOutput()
 
     os.system("rm tmp_OSM_data.sqlite")
 

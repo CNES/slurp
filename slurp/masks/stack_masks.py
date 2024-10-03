@@ -50,16 +50,15 @@ NODATA = 255
 
 
 def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
-    
     """
+    Clean and apply watershed regulation for buildings
     
-    
-    :param array input_image: VHR input image
-    :param array urbanmask: Urbanmask created by the dedicated script 
-    :param array wsf: WSF file from post_process function
-    :param array vegmask: Vegetationnmask created by the dedicated script
-    :param array watermask: Watermask created by the dedicated script
-    :param array shadowmask: Shadowmask created by the dedicated script
+    :param np.ndarray input_image: VHR input image
+    :param np.ndarray urbanmask: Urbanmask created by the dedicated script
+    :param np.ndarray wsf: WSF file from post_process function
+    :param np.ndarray vegmask: Vegetationnmask created by the dedicated script
+    :param np.ndarray watermask: Watermask created by the dedicated script
+    :param np.ndarray shadowmask: Shadowmask created by the dedicated script
     :param dict params: dictionary of arguments
     :return: tuple of segmentation value and markers
     """

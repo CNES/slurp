@@ -259,7 +259,7 @@ def main():
             
             t0 = time.time()
 
-            ################ Build stack with all layers #######
+            # Build stack with all layers #
             
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
@@ -307,7 +307,7 @@ def main():
   
             time_stack = time.time()
             
-            ################ Build samples #################
+            # BUILD SAMPLES
                                    
             # Recover useful features
             valid_stack = eoscale_manager.get_array(key_valid_stack)
@@ -350,7 +350,7 @@ def main():
                 time_samples = time.time()
 
             if building_areas and non_building_areas:
-                ################ Train classifier from samples #########
+                # Train classifier from samples
 
                 classifier = RandomForestClassifier(
                     n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced",
@@ -362,7 +362,7 @@ def main():
                 RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
-                ######### Predict  ################
+                # Predict
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=rf_prediction,
@@ -388,7 +388,7 @@ def main():
                 print("***")   
                 
             elif args.nb_valid_built_pixels >= nb_valid_pixels:
-                #### Corner case : no "non building pixels"
+                # Corner case : no "non building pixels"
                 print(f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****")
                 
                 profile = eoscale_manager.get_profile(key_phr)
@@ -402,7 +402,7 @@ def main():
                 eoscale_manager.write(key=final_classif_key, img_path=args.urbanmask)
                 
             else:
-                #### Corner case : no "building pixels" --> void mask (0)
+                # Corner case : no "building pixels" --> void mask (0)
                 print(f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****")
                 
                 profile = eoscale_manager.get_profile(key_phr)
