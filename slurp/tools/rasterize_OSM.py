@@ -26,6 +26,8 @@ import argparse
 import time
 import otbApplication as otb
 
+from slurp.tools.constant import COMPRESSION
+
 
 def rasterize(args):
     """ Create a rasterized copy of the image passed in arguments  """
@@ -56,12 +58,12 @@ def rasterize(args):
         app_morpho.SetParameterInputImage("in", app_si.GetParameterOutputImage("out"))
         app_morpho.SetParameterInt("xradius", args.dilate)
         app_morpho.SetParameterInt("yradius", args.dilate)
-        app_morpho.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        app_morpho.SetParameterString("out", str(args.out+f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"))
         app_morpho.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
         app_morpho.ExecuteAndWriteOutput()
     else:
         print("Write final result")
-        app_si.SetParameterString("out", str(args.out+"?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE"))
+        app_si.SetParameterString("out", str(args.out+f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"))
         app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
         app_si.ExecuteAndWriteOutput()
 

@@ -22,6 +22,8 @@
 import copy
 import numpy as np
 
+from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_int8, NODATA_int16
+
 
 def print_dataset_infos(name, profile, prefix=""):
     """Print information about rasterio dataset."""
@@ -59,8 +61,8 @@ def single_bool_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = bool
-    profile["compress"] = "deflate"
-    profile["driver"] = "GTiff"
+    profile["compress"] = COMPRESSION.lower()
+    profile["driver"] = DRIVER
     
     return profile
     
@@ -71,9 +73,9 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
     profile["count"] = 1
     profile["dtype"] = np.uint8
     profile["nbits"] = 1
-    profile["compress"] = "deflate"
+    profile["compress"] = COMPRESSION.lower()
     profile["nodata"] = None
-    profile["driver"] = "GTiff"
+    profile["driver"] = DRIVER
 
     return profile
 
@@ -83,9 +85,9 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
-    profile["compress"] = "deflate"
-    profile["nodata"] = 255
-    profile["driver"] = "GTiff"
+    profile["compress"] = COMPRESSION.lower()
+    profile["nodata"] = NODATA_int8
+    profile["driver"] = DRIVER
     
     return profile
 
@@ -95,9 +97,9 @@ def single_int16_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int16
-    profile["nodata"] = 32767
-    profile["compress"] = "deflate"
-    profile["driver"] = "GTiff"
+    profile["nodata"] = NODATA_int16
+    profile["compress"] = COMPRESSION.lower()
+    profile["driver"] = DRIVER
     
     return profile
 
@@ -107,9 +109,9 @@ def single_uint16_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint16
-    profile["nodata"] = 32767
-    profile["compress"] = "deflate"
-    profile["driver"] = "GTiff"
+    profile["nodata"] = NODATA_int16
+    profile["compress"] = COMPRESSION.lower()
+    profile["driver"] = DRIVER
     
     return profile
 
@@ -130,21 +132,21 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 3
     profile["dtype"] = np.uint8
-    profile["compress"] = "deflate"
-    profile["nodata"] = 255
-    profile["driver"] = "GTiff"
+    profile["compress"] = COMPRESSION.lower()
+    profile["nodata"] = NODATA_int8
+    profile["driver"] = DRIVER
     
     return profile
 
 
-def double_int_profile(input_profiles: list, map_params):
+def double_uint8_profile(input_profiles: list, map_params):
     """ Define profiles for eoscale """
     profile1 = input_profiles[0]
     profile1["count"] = 1
     profile1["dtype"] = np.uint8
-    profile1["nodata"] = 255
-    profile1["compress"] = "deflate"
-    profile1["driver"] = "GTiff"
+    profile1["nodata"] = NODATA_int8
+    profile1["compress"] = COMPRESSION.lower()
+    profile1["driver"] = DRIVER
     
     # avoid to modify profile1
     profile2 = copy.deepcopy(profile1)

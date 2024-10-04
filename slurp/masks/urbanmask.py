@@ -34,6 +34,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools.constant import NODATA_int8
 
 try:
     from sklearnex import patch_sklearn
@@ -151,13 +152,14 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> lis
     """
     Random Forest prediction
 
-    :param list input_buffer: [valid_stack, vhr_image, ndvi, ndwi] + file_layers
+    :param list input_buffer: [original_valid_stack (without water and veg masks), valid_stack, vhr_image, ndvi, ndwi] + file_layers
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: predicted mask (proba)
     """
-    im_stack = np.concatenate((input_buffer[1:]), axis=0)
-    valid_mask = input_buffer[0].astype(bool)
+    im_stack = np.concatenate((input_buffer[2:]), axis=0)
+    nodata_mask = (1 - input_buffer[0]).astype(bool)
+    valid_mask = input_buffer[1].astype(bool)
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
     # buffer_to_predict are non NODATA pixels, defined by all the primitives (R-G-B-NIR-NDVI-NDWI-[+ features]
 
@@ -170,17 +172,34 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> lis
 
         prediction = np.zeros(valid_mask.shape)
         prediction[0][valid_mask[0]] = res_classif
+        prediction[0][nodata_mask[0]] = NODATA_int8
 
         proba_buildings = np.zeros(valid_mask.shape)
         proba_buildings[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
+        proba_buildings[0][nodata_mask[0]] = NODATA_int8
 
     else:
         # corner case : only NO_DATA !
-        prediction = np.zeros(valid_mask.shape)
-        prediction[0][valid_mask[0]].fill(255)
-        proba_buildings = np.zeros(valid_mask.shape)
+        prediction = np.full(valid_mask.shape, NODATA_int8)
+        proba_buildings = np.full(valid_mask.shape, NODATA_int8)
 
-    return [prediction, proba_buildings]
+    return [proba_buildings, prediction]
+
+
+def add_nodata(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+    """
+    Add nodata to the predicted mask
+
+    :param list input_buffer: [original_valid_stack (without water and veg masks)]
+    :param list input_profiles: image profile (not used but necessary for eoscale)
+    :param dict params: dictionary of arguments
+    :returns: updated predicted mask (proba)
+    """
+    nodata_mask = (1 - input_buffer[0]).astype(bool)
+    proba_buildings = np.full(nodata_mask.shape, params["fill_value"])
+    proba_buildings[nodata_mask] = NODATA_int8
+
+    return proba_buildings
 
 
 def getarguments():
@@ -267,7 +286,8 @@ def main():
             eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
-            key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
+            key_original_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
+            key_valid_stack = key_original_valid_stack
 
             # Global validity mask construction
             if args.vegetationmask and isfile(args.vegetationmask):
@@ -363,20 +383,20 @@ def main():
                 gc.collect()
 
                 # Predict
-                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
+                input_for_prediction = [key_original_valid_stack, key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=rf_prediction,
                                                                 filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.double_int_profile,
+                                                                generate_output_profiles=eo_utils.double_uint8_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
-                eoscale_manager.write(key=key_predict[1], img_path=args.urbanmask)  # classif
+                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)  # classif
                 if args.save_mode == "debug":
-                    eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"))
+                    eoscale_manager.write(key=key_predict[1], img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"))
 
                 end_time = time.time()
 
@@ -390,30 +410,32 @@ def main():
             elif args.nb_valid_built_pixels >= nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 print(f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****")
-                
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                profile["nodata"] = 255
-                final_classif_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=final_classif_key).fill(100)
+
+                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_original_valid_stack],
+                                                                image_filter=add_nodata,
+                                                                filter_parameters={"fill_value": 100},
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
+                                                                context_manager=eoscale_manager,
+                                                                multiproc_context="fork",
+                                                                filter_desc="Add nodata...")
                 
                 # Save proba mask
-                eoscale_manager.write(key=final_classif_key, img_path=args.urbanmask)
+                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
                 
             else:
                 # Corner case : no "building pixels" --> void mask (0)
                 print(f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****")
-                
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                profile["nodata"] = 255
-                final_classif_key = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=final_classif_key).fill(0)
+
+                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_original_valid_stack],
+                                                                image_filter=add_nodata,
+                                                                filter_parameters={"fill_value": 0},
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
+                                                                context_manager=eoscale_manager,
+                                                                multiproc_context="fork",
+                                                                filter_desc="Add nodata...")
 
                 # Save proba mask
-                eoscale_manager.write(key=final_classif_key, img_path=args.urbanmask)
+                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

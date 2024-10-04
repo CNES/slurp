@@ -20,10 +20,11 @@
 
 """ Brings together useful functions common to the different scripts  """
 import json
-
 import rasterio as rio
 import matplotlib.pyplot as plt
 import numpy as np
+
+from slurp.tools.constant import COMPRESSION, DRIVER
 
 
 def read_json(main_config_file: str, keys: list, user_config_file: str = None) -> dict:
@@ -99,8 +100,8 @@ def save_image(
     dataset = rio.open(
         file,
         "w",
-        driver="GTiff",
-        compress="deflate",
+        driver=DRIVER,
+        compress=COMPRESSION.lower(),
         height=image.shape[0],
         width=image.shape[1],
         count=1,
@@ -135,8 +136,8 @@ def save_image_n_bands(image, file, crs=None, transform=None, nodata=None, rpc=N
     with rio.open(
         file,
         "w",
-        driver="GTiff",
-        compress="lzw",
+        driver=DRIVER,
+        compress=COMPRESSION.lower(),
         height=image.shape[1],
         width=image.shape[2],
         count=image.shape[0],
