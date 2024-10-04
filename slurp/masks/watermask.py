@@ -100,6 +100,7 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
     Get random valid indexes from masks.
     Mask 1 is a validity mask
     """
+    np.random.seed(712)  # reproductible results
     rows_idxs = []
     cols_idxs = []
 
@@ -110,7 +111,6 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
         width = mask_1.shape[1]
 
         while nb_idxs < nb_indexes:
-            np.random.seed(712)  # reproductible results
             row = np.random.randint(0, height)
             col = np.random.randint(0, width)
 
@@ -249,7 +249,9 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples, input_buffer[0], valid_water_pixels[0])
 
         # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0], input_buffer[1])
+        rows_hand, cols_hand = get_random_indexes_from_masks(
+            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
+        )
 
     else:
         raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
