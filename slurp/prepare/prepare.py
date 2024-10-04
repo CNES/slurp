@@ -33,7 +33,8 @@ import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 from slurp.tools import io_utils, eoscale_utils as eo_utils
 from slurp.prepare import validity, primitives, analyse_glcm
-from slurp.prepare import aux_files  as aux
+from slurp.prepare import aux_files as aux
+
 
 def getarguments():
     """Parse command line arguments."""
@@ -77,7 +78,8 @@ def getarguments():
     group5 = parser.add_argument_group(description="*** AUX FILES FOR VEGETATION MASK ***")
     group5.add_argument("-file_texture", help="Path to store the texture file")
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
-    group5.add_argument("-analyse_glcm", type = bool, help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+    group5.add_argument("-analyse_glcm", type=bool,
+                        help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
                         
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
@@ -94,7 +96,7 @@ def main():
     print(f"DBG> {argparse_dict}")
     
     # Read the JSON files
-    keys = ["input","prepare", "aux_layers", "resources"]
+    keys = ["input", "prepare", "aux_layers", "resources"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -234,22 +236,21 @@ def main():
                 print("Pass texture computation")
                 
             # Global land cover map
-            if args.analyse_glcm :
+            if args.analyse_glcm:
                 nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.analyse_glcm(args.land_cover_map, args.file_vhr)
                 argsdict.update({"nb_clusters_veg": nb_clusters_veg,
-                                "nb_clusters_low_veg": nb_clusters_low_veg })
+                                "nb_clusters_low_veg": nb_clusters_low_veg})
                 
             # Write effective used config
             with open(args.main_config, "r", encoding="utf8") as json_file:
-                final_used_config= json.load(json_file)
+                final_used_config = json.load(json_file)
                 for key in final_used_config:
                     for sub_key in final_used_config[key]:
-                        if sub_key in argsdict :
+                        if sub_key in argsdict:
                             final_used_config[key].update({sub_key: argsdict[sub_key]})
                         
-            with open(args.effective_used_config, "w", encoding="utf8") as file_to_save :
+            with open(args.effective_used_config, "w", encoding="utf8") as file_to_save:
                 json.dump(final_used_config, file_to_save, indent=4)
-                
 
             eoscale_manager._release_all()
                 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding: utf8
 #
 # Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
@@ -17,24 +18,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# pyproject.toml main python packaging configuration
+# profiles
+NODATA_int8 = 255
+NODATA_int16 = 32767
+COMPRESSION = "DEFLATE"
+DRIVER = "GTiff"
 
-[build-system]
-# setup with setuptools and setuptools_scm (git automatic versioning)
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "Cython"]
-build-backend = "setuptools.build_meta"
+# Stack - Elevation estimation in 2nd layer
+LOW = 1
+HIGH = 2
 
-# Tools configuration supporting pyproject.toml
-
-[tool.setuptools_scm]
-# Enable version inference: https://pypi.org/project/setuptools-scm/#description
-
-[tool.black]
-# https://github.com/psf/black
-line-length = 80
-exclude = "(.eggs|.git|.mypy_cache|.nox|.tox|_build|build|dist|venv)"
-
-[tool.isort]
-# https://github.com/PyCQA/isort
-profile = 'black'
-line_length = 80
+# Vegetation clustering
+NB_CLUSTERS = 9

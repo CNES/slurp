@@ -26,9 +26,10 @@ georeferenced geometry (with superimpose) or Sharloc, to project images into sen
 import time
 import rasterio as rio
 import numpy as np
+from slurp.tools.constant import COMPRESSION
 
-def superimpose(file_in: str, file_ref: str, file_out: str):
-    import otbApplication as otb
+
+def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Superimpose using OTB
 
@@ -53,8 +54,8 @@ def superimpose(file_in: str, file_ref: str, file_out: str):
     app.SetParameterString("inm", file_in)
     app.SetParameterString("inr", file_ref)
     app.SetParameterString("interpolator", "nn")
-    app.SetParameterString("out", file_out + "?&writerpctags=true&gdal:co:COMPRESS=DEFLATE")
-    app.SetParameterOutputImagePixelType("out", output_dtype)
+    app.SetParameterString("out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}")
+    app.SetParameterOutputImagePixelType("out", type_out)
     app.ExecuteAndWriteOutput()
 
     print("Superimpose in", time.time() - start_time, "seconds.")
@@ -88,8 +89,8 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
     app.SetParameterFloat("background", 0)
     app.SetParameterString("mode", "binary")
     app.SetParameterFloat("mode.binary.foreground", 1)
-    app.SetParameterString("out", file_out + "?&writerpctags=true&gdal:co:COMPRESS=DEFLATE")
-    app.SetParameterOutputImagePixelType("out", output_dtype)
+    app.SetParameterString("out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}")
+    app.SetParameterOutputImagePixelType("out", type_out)
     app.ExecuteAndWriteOutput()
 
     print("Rasterize in", time.time() - start_time, "seconds.")

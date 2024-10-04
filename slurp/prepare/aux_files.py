@@ -26,6 +26,7 @@ import rasterio as rio
 import numpy as np
 import scipy
 from slurp.prepare import geometry
+from slurp.tools.constant import NODATA_int16
 
 
 def aux_file_recovery(file_ref: str, global_data: str, reprojected_data: str, sensor_mode: bool, dtm_file: str = "", geoid_file: str = ""):
@@ -92,5 +93,6 @@ def texture_task(input_buffers: list, input_profiles: list, params: dict) -> np.
     """
     masked_band = np.ma.array(input_buffers[0][params["nir"] - 1], mask=np.logical_not(input_buffers[1]))
     texture = std_convoluted(masked_band.astype(float), params["texture_rad"], params["min_value"], params["max_value"])
+    texture[np.logical_not(input_buffers[1][0])] = NODATA_int16
 
     return texture
