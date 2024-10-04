@@ -35,6 +35,7 @@ import pandas as pd
 from shapely.geometry import shape
 import numpy as np
 from slurp.tools import io_utils
+from slurp.tools.constant import NODATA_int8
 
 
 def generate_polygons_in_gdf(im, crs, transform):
@@ -134,7 +135,7 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
             path_out,
             crs,
             transform,
-            255,
+            NODATA_int8,
             rpc,
         )
 

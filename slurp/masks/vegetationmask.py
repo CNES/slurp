@@ -39,6 +39,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools.constant import NODATA_int8, NB_CLUSTERS
 
 
 # Cython module to compute stats
@@ -78,7 +79,7 @@ def display_clusters(pdf, first_field, second_field, nb_first_group, nb_second_g
     serie2 = pdf.sort_values(by=first_field)[second_field]
     plt.plot(serie1[0:nb_first_group], serie2[0:nb_first_group], "*")
     plt.plot(serie1[nb_first_group:nb_second_group], serie2[nb_first_group:nb_second_group], "o")
-    plt.plot(serie1[nb_second_group:9], serie2[nb_second_group:9], "+")
+    plt.plot(serie1[nb_second_group:NB_CLUSTERS], serie2[nb_second_group:NB_CLUSTERS], "+")
     plt.title("Clusters in three groups (" + str(second_field) + " " + str(first_field) + ")")
     plt.savefig(filename)
     plt.close()
@@ -205,7 +206,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
     if params["debug"]:
         print(f"K-Means on radiometric indices ({nb_polys} elements")
 
-    kmeans_rad_indices = KMeans(n_clusters=9, init="k-means++", n_init=5, verbose=0, random_state=712)
+    kmeans_rad_indices = KMeans(n_clusters=NB_CLUSTERS, init="k-means++", n_init=5, verbose=0, random_state=712)
     pred_veg = kmeans_rad_indices.fit_predict(
         np.stack(
             (stats[0:nb_polys], stats[nb_polys: 2 * nb_polys]), axis=1
@@ -242,7 +243,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
         # Attribute class by thirds
         nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
         if params["nb_clusters_veg"] >= 7:
-            nb_clusters_no_veg = 9 - params["nb_clusters_veg"]
+            nb_clusters_no_veg = NB_CLUSTERS - params["nb_clusters_veg"]
             nb_clusters_veg = params["nb_clusters_veg"]
 
         for t in range(kmeans_rad_indices.n_clusters):
@@ -253,7 +254,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                     map_centroid.append(v)
                 else:
                     map_centroid.append(NO_VEG_CODE)  # 0
-            elif t in list_clusters_by_ndvi[nb_clusters_no_veg: 9 - params["nb_clusters_veg"]]:
+            elif t in list_clusters_by_ndvi[nb_clusters_no_veg: NB_CLUSTERS - params["nb_clusters_veg"]]:
                 map_centroid.append(UNDEFINED_VEG)  # 10
             else:
                 map_centroid.append(VEG_CODE)  # 20
@@ -262,7 +263,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
 
     figure_name = splitext(params["vegetationmask"])[0] + "_centroids_veg.png"
     if params["save_mode"] == "debug":
-        display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (9 - nb_clusters_veg), figure_name)
+        display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (NB_CLUSTERS - nb_clusters_veg), figure_name)
 
     # Analysis texture
     if params["texture_mode"] != "no":
@@ -292,7 +293,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
         if params["debug"]:
             print("K-Means on texture : " + str(len(data_textures)) + " elements")
 
-        kmeans_texture = KMeans(n_clusters=9, init="k-means++", n_init=5, verbose=0, random_state=712)
+        kmeans_texture = KMeans(n_clusters=NB_CLUSTERS, init="k-means++", n_init=5, verbose=0, random_state=712)
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
 
         if params["debug"]:
@@ -317,11 +318,11 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                     list_clusters[list_clusters["mean_texture'"] < params["max_low_veg"]].count()
                 )
             if params["nb_clusters_low_veg"] >= 7:
-                nb_clusters_high_veg = 9 - params["nb_clusters_low_veg"]
+                nb_clusters_high_veg = NB_CLUSTERS - params["nb_clusters_low_veg"]
             for t in range(kmeans_texture.n_clusters):
                 if t in list_clusters_by_texture[:params["nb_clusters_low_veg"]]:
                     map_centroid.append(LOW_TEXTURE_CODE)
-                elif t in list_clusters_by_texture[9 - nb_clusters_high_veg:]:
+                elif t in list_clusters_by_texture[NB_CLUSTERS - nb_clusters_high_veg:]:
                     map_centroid.append(HIGH_TEXTURE_CODE)
                 else:
                     map_centroid.append(MIDDLE_TEXTURE_CODE)
@@ -329,10 +330,10 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
             figure_name = splitext(params["vegetationmask"])[0] + "_centroids_texture.png"
             if params["save_mode"] == "debug":
                 if params["texture_mode"] == "debug":
-                    display_clusters(list_clusters, "mean_texture", "mean_texture", 0, 9, figure_name)
+                    display_clusters(list_clusters, "mean_texture", "mean_texture", 0, NB_CLUSTERS, figure_name)
                 else:
                     display_clusters(list_clusters, "mean_texture", "mean_texture", params["nb_clusters_low_veg"],
-                                     (9 - nb_clusters_high_veg), figure_name)
+                                     (NB_CLUSTERS - nb_clusters_high_veg), figure_name)
 
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(pred_texture, map_centroid)
@@ -360,7 +361,7 @@ def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     final_mask = ts_stats.finalize(input_buffers[0], clustering)
 
     # Add nodata in final_mask (input_buffers[1] : valid mask)
-    final_mask[np.logical_not(input_buffers[1][0])] = 255
+    final_mask[np.logical_not(input_buffers[1][0])] = NODATA_int8
 
     return final_mask
 
@@ -419,8 +420,8 @@ def getarguments():
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
     group2.add_argument("-texture_mode", choices=["yes", "no", "debug"],
-                        help="Labelize vegetation with (yes) or without (no) distinction low/high, "
-                             "or get all 9 vegetation clusters without distinction low/high (debug)")
+                        help=f"Labelize vegetation with (yes) or without (no) distinction low/high, "
+                             f"or get all {NB_CLUSTERS} vegetation clusters without distinction low/high (debug)")
     group2.add_argument("-filter_texture", type=int, help="Percentile for texture (between 1 and 99)")
     group2.add_argument("-save", choices=["none", "debug"], dest="save_mode",
                         help="Save all files (debug) or only output mask (none)")
@@ -429,14 +430,14 @@ def getarguments():
                         help="Balance between color and space proximity (see skimage.slic documentation)")
 
     group3 = parser.add_argument_group(description="*** CLUSTERING ***")
-    group3.add_argument("-nb_clusters_veg", type=int, help="Nb of clusters considered as vegetation (1-9)")
+    group3.add_argument("-nb_clusters_veg", type=int, help=f"Nb of clusters considered as vegetation (1-{NB_CLUSTERS})")
     group3.add_argument("-min_ndvi_veg", type=int,
                         help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)")
     group3.add_argument("-max_ndvi_noveg", type=int,
                         help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)")
     group3.add_argument("-non_veg_clusters", action="store_true",
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
-    group3.add_argument("-nb_clusters_low_veg", type=int, help="Nb of clusters considered as low vegetation (1-9)")
+    group3.add_argument("-nb_clusters_low_veg", type=int, help=f"Nb of clusters considered as low vegetation (1-{NB_CLUSTERS})")
     group3.add_argument("-max_low_veg", type=int,
                         help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
 
