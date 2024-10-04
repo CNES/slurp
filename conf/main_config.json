@@ -1,7 +1,7 @@
 {
   "input":
 	{
-	    "file_vhr": "absolute_path_to_image.tif",
+	    "file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
 	    "sensor_mode": false
 	},
 

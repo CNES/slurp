@@ -34,6 +34,7 @@ def print_dataset_infos(name, profile, prefix=""):
     print(prefix, "Image nodata :", profile["nodata"])
     print(prefix, "Image crs :", profile["crs"])
     print(prefix, "Image transform :", profile["transform"])
+    print(prefix, "Image driver :", profile["driver"])
     print()
 
 
@@ -50,7 +51,7 @@ def single_float_profile(input_profiles: list, map_params):
     profile["dtype"] = np.float32
     profile["compress"] = "deflate"
     profile["driver"] = "GTiff"
-    
+
     return profile
 
 
