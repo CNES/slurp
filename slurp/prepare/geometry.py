@@ -149,7 +149,7 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     print(f"DBG> {all_coords.shape=}")
     
     # Load Shareloc direct loc function
-    image = Image(sensor_image)
+    image = Image(sensor_image, vertical_direction="north")
     print(f"DBG> {sensor_image=} {input_data=} {dtm_file=} {geoid_file=}")
     dtm_image = dtm_reader(
         dtm_file,
