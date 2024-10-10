@@ -91,6 +91,7 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
     app.SetParameterFloat("mode.binary.foreground", 1)
     app.SetParameterString("out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}")
     app.SetParameterOutputImagePixelType("out", type_out)
+
     app.ExecuteAndWriteOutput()
 
     print("Rasterize in", time.time() - start_time, "seconds.")
@@ -135,23 +136,18 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     col, row = np.meshgrid(x, y)
     grid_nb_cols, grid_nb_rows = col.shape
 
-    print(f"DBG> {col.shape=} {x=} {y=}")
-    
     epi_lp = np.vstack((col.flatten(), row.flatten()))
     epi_pos_left = epi_lp.transpose()
     # Full image
-    print(f"DBG> {pix_col=} {pix_row=}")
     all_x = np.arange(0, nb_col, pix_col)
     all_y = np.arange(0, nb_row, pix_row)
     all_col, all_row = np.meshgrid(all_x, all_y)
     all_coords = np.vstack((all_col.flatten(), all_row.flatten())).transpose()
-    print(f"DBG> {nb_col=} {pix_col=} {all_x=}")
-    print(f"DBG> {all_col=}")
-    print(f"DBG> {all_coords.shape=}")
     
     # Load Shareloc direct loc function
+    # force shareloc to use north for vertical direction (compatible with images with
+    # positive or negative y spacing
     image = Image(sensor_image, vertical_direction="north")
-    print(f"DBG> {sensor_image=} {input_data=} {dtm_file=} {geoid_file=}")
     dtm_image = dtm_reader(
         dtm_file,
         geoid_file,
@@ -168,14 +164,13 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
         dtm_image.transform
     )
     loc_optim = Localization(geom_model_optim, elevation=dtm_optim, image=image, epsg=4326)
-    print(f"DBG> {loc_optim=}")
+
     # Get bbox pixel coordinates in lat/lon
     coords_bbox_min = None
     coords_bbox_max = None
     alt_min = dtm_optim.get_alt_min()
     alt_max = dtm_optim.get_alt_max()
-    print(f"dtm min {alt_min} dtm max {alt_max}")
-
+    
     for coord in bbox:
         # row /col
         latlon_alt_min = loc_optim.direct(coord[1], coord[0], h=alt_min, using_geotransform=True)
@@ -187,8 +182,6 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     min_lat =  np.minimum(np.min(coords_bbox_min[:,1]), np.min(coords_bbox_max[:,1]))
     max_lat =  np.maximum(np.max(coords_bbox_min[:,1]), np.max(coords_bbox_max[:,1]))
 
-    print(f"DBG> {coords_bbox_max=}")
-    
     # Direct localization of resampled image to get associated terrain coordinates
     coords_4326 = None
     for pix_x, pix_y in epi_pos_left:
@@ -200,8 +193,7 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     coords_lon = coords_4326[:,0].reshape((grid_nb_cols,grid_nb_rows))
     coords_lat = coords_4326[:,1].reshape((grid_nb_cols,grid_nb_rows))
 
-    print(f"DBG> {coords_lon=} {coords_lat=}")
-    
+        
     # interpolate positions on image coordinates
     grid_positions = (y, x)
 
@@ -228,10 +220,6 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     image_data = image_roi.data[values[0,:], values[1,:]]
 
     # DBG
-    print(f"DBG> {image_roi.data=}")
-    print(f"DBG> {indexes=}")
-    print(f"DBG> {values[0,:]=}  {values[1,:]=}")
-    print(f"DBG> {image_roi.data.shape=} {image_data.shape=} {nb_row=} {nb_col=}")
     reshaped_image = np.reshape(image_data, (nb_row, nb_col))
 
     ext_data = rio.open(input_data)
