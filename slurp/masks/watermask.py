@@ -27,6 +27,7 @@ import numpy as np
 import time
 import traceback
 
+from os import path, makedirs
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
 
@@ -444,11 +445,13 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-
+    
+    # Create output folder
+    makedirs(path.dirname(args.watermask), exist_ok=True)
+    
+    # Mask calculation 
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
-
         try:
-
             t0 = time.time()
 
             # --Build stack with all layers-- #

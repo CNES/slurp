@@ -24,7 +24,7 @@ This script compute all files needed for masks calculation
 
 import argparse
 import traceback
-from os import path
+from os import path, makedirs
 import json
 
 import numpy as np
@@ -110,6 +110,7 @@ def main():
 
             # Valid stack
             if args.overwrite or not path.isfile(args.valid_stack):
+                makedirs(path.dirname(args.valid_stack), exist_ok=True)
                 if args.cloud_mask:
                     key_cloud_mask = eoscale_manager.open_raster(raster_path=args.cloud_mask)
                     key_valid_stack = eoexe.n_images_to_m_images_filter(
@@ -140,6 +141,7 @@ def main():
 
             # NDVI
             if args.overwrite or not path.isfile(args.file_ndvi):
+                makedirs(path.dirname(args.file_ndvi), exist_ok=True)
                 key_ndvi = eoexe.n_images_to_m_images_filter(
                     inputs=[key_phr, key_valid_stack[0]],
                     image_filter=primitives.compute_ndxi,
@@ -156,6 +158,7 @@ def main():
 
             # NDWI
             if args.overwrite or not path.isfile(args.file_ndwi):
+                makedirs(path.dirname(args.file_ndwi), exist_ok=True)
                 key_ndwi = eoexe.n_images_to_m_images_filter(
                     inputs=[key_phr, key_valid_stack[0]],
                     image_filter=primitives.compute_ndxi,
@@ -173,6 +176,7 @@ def main():
             # Pekel
             if args.pekel and args.extracted_pekel:
                 if args.overwrite or not path.isfile(args.extracted_pekel):
+                    makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
                     if args.pekel_method == "month":
                         aux.pekel_month_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.pekel_obs)
                     elif args.pekel_method == "all":
@@ -187,6 +191,7 @@ def main():
             # Hand
             if args.hand and args.extracted_hand:
                 if args.overwrite or not path.isfile(args.extracted_hand):
+                    makedirs(path.dirname(args.extracted_hand), exist_ok=True)
                     aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand)
                 else:
                     print("Not extracting Hand : the file already exists.")
@@ -196,6 +201,7 @@ def main():
             # WSF
             if args.wsf and args.extracted_wsf:
                 if args.overwrite or not path.isfile(args.extracted_wsf):
+                    makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
                     aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf)
                 else:
                     print("Not extracting WSF : the file already exists.")
@@ -205,6 +211,7 @@ def main():
             # Texture
             if args.texture_rad:
                 if args.overwrite or not path.isfile(args.file_texture):
+                    makedirs(path.dirname(args.file_texture), exist_ok=True)
                     params = {
                         "nir": args.nir,
                         "texture_rad": args.texture_rad,
@@ -240,7 +247,8 @@ def main():
                     for sub_key in final_used_config[key]:
                         if sub_key in argsdict:
                             final_used_config[key].update({sub_key: argsdict[sub_key]})
-                        
+            
+            makedirs(path.dirname(args.effective_used_config), exist_ok=True)
             with open(args.effective_used_config, "w", encoding="utf8") as file_to_save:
                 json.dump(final_used_config, file_to_save, indent=4)
 

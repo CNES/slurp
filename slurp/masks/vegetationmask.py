@@ -25,7 +25,7 @@ import time
 import traceback
 import argparse
 from math import sqrt, ceil
-from os.path import splitext
+from os import path, makedirs
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -261,7 +261,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
 
     clustering = apply_map(pred_veg, map_centroid)
 
-    figure_name = splitext(params["vegetationmask"])[0] + "_centroids_veg.png"
+    figure_name = path.splitext(params["vegetationmask"])[0] + "_centroids_veg.png"
     if params["save_mode"] == "debug":
         display_clusters(list_clusters, "ndvi", "ndwi", nb_clusters_no_veg, (NB_CLUSTERS - nb_clusters_veg), figure_name)
 
@@ -279,11 +279,11 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
             plt.clf()
             bins_center = (bins[:-1] + bins[1:]) / 2
             plt.plot(bins_center, values, color="blue")
-            plt.savefig(splitext(params["vegetationmask"])[0] + "_histogram_texture.png")
+            plt.savefig(path.splitext(params["vegetationmask"])[0] + "_histogram_texture.png")
             plt.close()
             index_max = np.argmax(bins_center > threshold_max) + 1
             plt.plot(bins_center[:index_max], values[:index_max], color="blue")
-            plt.savefig(splitext(params["vegetationmask"])[0] + "_histogram_texture_cut" + str(
+            plt.savefig(path.splitext(params["vegetationmask"])[0] + "_histogram_texture_cut" + str(
                 params["filter_texture"]) + ".png")
             plt.close()
 
@@ -327,7 +327,7 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
                 else:
                     map_centroid.append(MIDDLE_TEXTURE_CODE)
 
-            figure_name = splitext(params["vegetationmask"])[0] + "_centroids_texture.png"
+            figure_name = path.splitext(params["vegetationmask"])[0] + "_centroids_texture.png"
             if params["save_mode"] == "debug":
                 if params["texture_mode"] == "debug":
                     display_clusters(list_clusters, "mean_texture", "mean_texture", 0, NB_CLUSTERS, figure_name)
@@ -475,7 +475,11 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-
+    
+    # Create output folder
+    makedirs(path.dirname(args.vegetationmask), exist_ok=True)
+    
+    # Mask calculation    
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
 
         try:
