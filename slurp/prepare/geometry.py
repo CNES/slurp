@@ -29,7 +29,8 @@ import numpy as np
 from slurp.tools.constant import COMPRESSION
 
 
-def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
+def superimpose(file_in: str, file_ref: str, file_out: str):
+    import otbApplication as otb
     """
     Superimpose using OTB
 
@@ -55,7 +56,7 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     app.SetParameterString("inr", file_ref)
     app.SetParameterString("interpolator", "nn")
     app.SetParameterString("out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}")
-    app.SetParameterOutputImagePixelType("out", type_out)
+    app.SetParameterOutputImagePixelType("out", output_dtype)
     app.ExecuteAndWriteOutput()
 
     print("Superimpose in", time.time() - start_time, "seconds.")
