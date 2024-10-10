@@ -25,7 +25,7 @@ This script computes a shadow mask
 
 import argparse
 import traceback
-from os import path
+from os import path, makedirs
 
 import numpy as np
 import eoscale.manager as eom
@@ -130,6 +130,10 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
     
+    # Create output folder
+    makedirs(path.dirname(args.shadowmask), exist_ok=True)
+    
+    # Mask calculation
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
         try:
 

@@ -28,10 +28,11 @@ Final mask values
 """
 
 import argparse
+import numpy as np
 import traceback
 import time
 
-import numpy as np
+from os import path, makedirs
 from skimage.filters import sobel
 from skimage import segmentation
 
@@ -230,6 +231,10 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
     
+    # Create output folder
+    makedirs(path.dirname(args.stackmask), exist_ok=True)
+    
+    # Mask calculation     
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
         try:
             t0 = time.time()

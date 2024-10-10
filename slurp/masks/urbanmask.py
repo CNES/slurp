@@ -24,7 +24,7 @@ import argparse
 import gc
 import time
 import traceback
-from os.path import isfile
+from os import path, makedirs
 
 import numpy as np
 
@@ -273,6 +273,10 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
     
+    # Create output folder
+    makedirs(path.dirname(args.urbanmask), exist_ok=True)
+    
+    # Mask calculation    
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
         try:
             
@@ -290,7 +294,7 @@ def main():
             key_valid_stack = key_original_valid_stack
 
             # Global validity mask construction
-            if args.vegetationmask and isfile(args.vegetationmask):
+            if args.vegetationmask and path.isfile(args.vegetationmask):
                 key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_vegmask],
@@ -304,7 +308,7 @@ def main():
                 )
                 key_valid_stack = key_valid_stack[0]
 
-            if args.watermask and isfile(args.watermask):
+            if args.watermask and path.isfile(args.watermask):
                 key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_watermask],
