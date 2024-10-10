@@ -53,6 +53,7 @@ def single_float_profile(input_profiles: list, map_params):
     profile["dtype"] = np.float32
     profile["compress"] = "deflate"
     profile["driver"] = "GTiff"
+
     return profile
 
 

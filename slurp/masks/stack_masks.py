@@ -190,14 +190,6 @@ def getarguments():
     group2.add_argument("-malus_shadow", type=int,
                         help="Value of the malus for pixels in shadow, in the watershed regularization step")
 
-    group3 = parser.add_argument_group(description="*** POST PROCESSING ***")
-    group3.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
-    group3.add_argument("-binary_opening", type=int, help="Size of disk structuring element")
-    group3.add_argument("-remove_small_objects", type=int,
-                        help="The maximum area, in pixels, of a contiguous object that will be removed")
-    group3.add_argument("-remove_small_holes", type=int, action="store",
-                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
-
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument("-low_veg", dest="value_classif_low_veg", type=int,

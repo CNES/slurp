@@ -22,100 +22,33 @@
 """ Brings together the auxiliary files reading functions """
 from os import path
 
+import rasterio as rio
 import numpy as np
-import otbApplication as otb
 import scipy
-
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_int16
 
 
-def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str):
+def aux_file_recovery(file_ref: str, global_data: str, reprojected_data: str, sensor_mode: bool, dtm_file: str = "", geoid_file: str = ""):
     """
-    Recover Occurrence Pekel image in uint8
+    Recover Global Data and reproject it into input reference image geometry (geo or sensor)
 
     :param str file_ref: path to the input reference image
-    :param str pekel_ref: path to the input Pekel global image (tile or .vrt)
-    :param str file_out: path for the recovered Pekel image
-    :returns: Pekel image recovered
+    :param str global_data: path to the input Pekel global image (tile or .vrt)
+    :param str reprojected_data: path for the recovered Pekel image
+    :param bool sensor_mode: true if file_ref is in sensor mode (not georeferenced)
+    :returns: global data cropped onto target image geometry
     """
-    print(f"Recover Occurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
-
-    geometry.superimpose(
-        pekel_ref,
-        file_ref,
-        file_out,
-        otb.ImagePixelType_uint8
-    )
-
-
-def pekel_month_recovery(file_ref: str, pekel_ref: str, file_out: str, pekel_obs_ref: str = None):
-    """
-    Recover Monthly Recurrence Pekel image.
-    monthlyRecurrence and has_observations are signed int8 but coded on int16.
-
-    :param str file_ref: path to the input reference image
-    :param str pekel_ref: path of the monthly global Pekel VRT file
-    :param str file_out: path for the recovered monthly recurrence Pekel image
-    :param str pekel_obs_ref: path of the has observations monthly global Pekel VRT file (facultative)
-    :returns: Pekel image recovered
-    """
-    print(f"Recover Monthly Recurrence Pekel file {pekel_ref=} to {file_out=} onto {file_ref=} geometry")
-
-    geometry.superimpose(
-        pekel_ref,
-        file_ref,
-        file_out,
-        otb.ImagePixelType_int16
-    )
-
-    if pekel_obs_ref:
-        file_mask_out = path.join(path.dirname(file_out), "has_observations.tif")
-        print(f"Recover Monthly Recurrence Pekel file {pekel_obs_ref=} to {file_mask_out=} onto {file_ref=} geometry")
+    print(f"Recover file {global_data=} to {reprojected_data=} onto {file_ref=} geometry")
+    if sensor_mode:
+        geometry.sensor_projection(global_data, file_ref, dtm_file, geoid_file, reprojected_data)
+    else:
         geometry.superimpose(
-            pekel_obs_ref,
+            global_data,
             file_ref,
-            file_mask_out,
-            otb.ImagePixelType_int16
+            reprojected_data
         )
-
-
-def hand_recovery(file_ref: str, hand_ref: str, file_out: str):
-    """
-    Recover HAND image
-
-    :param str file_ref: path to the input reference image
-    :param str hand_ref: path to the input Pekel global image (tile or .vrt)
-    :param str file_out: path for the recovered HAND image
-    :returns: HAND image recovered
-    """
-    print(f"Recover Occurrence Hand file {hand_ref=} to {file_out=} onto {file_ref=} geometry")
-
-    geometry.superimpose(
-        hand_ref,
-        file_ref,
-        file_out,
-        otb.ImagePixelType_float
-    )
-
-
-def wsf_recovery(file_ref: str, wsf_ref: str, file_out: str):
-    """
-    Recover WSF image in uint16
-
-    :param str file_ref: path to the input reference image
-    :param str wsf_ref: path to the global World Settlement Footprint vrt file
-    :param str file_out: path for the recovered WSF image
-    :returns: WSF image recovered
-    """
-    print(f"Recover WSF file {wsf_ref=} to {file_out=} onto {file_ref=} geometry")
-    geometry.superimpose(
-        wsf_ref,
-        file_ref,
-        file_out,
-        otb.ImagePixelType_uint16
-    )
-
+                
 
 def std_convoluted(im: np.ndarray, N: int, min_value: float, max_value: float) -> np.ndarray:
     """
