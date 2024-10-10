@@ -23,8 +23,12 @@
 from os import path
 
 import numpy as np
-import otbApplication as otb
 import scipy
+
+try:
+    import otbApplication as otb
+except:
+    print("OTB is not installed")
 
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_int16
