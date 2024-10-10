@@ -28,21 +28,26 @@ from tests.utils import get_files_to_process, get_output_path, get_aux_path
 from tests.validation import validate_mask
 
 # Input images in sensor geometry
-input_files = glob.glob(pytest.sensor_goem_dir + "/*.tif")
+input_images = glob.glob(pytest.sensor_goem_dir + "/*.tif")
+DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
+# Create correct object for parametrize loop
+input_files = []
+for i in range(len(input_files)):
+     input_files.append( (input_images[i],DTMs[i]) )
+        
 # Images to validate
 predict_pekel = glob.glob(os.path.join(pytest.output_dir + "/pekel*.tif"))
 predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
 
-def prepare_sensor_geom(file, nb_workers):
+def prepare_sensor_geom(file, dtm, nb_workers):
     filename = os.path.basename(file)
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
     wsf = get_output_path(file, "wsf", remove=True)
     pekel = get_output_path(file, "pekel", remove=True)
-    dtm = "/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"  
-    #dtm =os.path.join(pytest.sensor_goem_dir, "DTM/DTM_" + filename)
+  
     if not pytest.wsf:
         raise Exception("Please add a global wsf file in 'config_tests.json' to run this test")
 
@@ -53,14 +58,15 @@ def prepare_sensor_geom(file, nb_workers):
     assert os.path.exists(ndvi), f"The file {ndvi} has not been created. Error during NDVI computation ?"
     assert os.path.exists(ndwi), f"The file {ndwi} has not been created. Error during NDWI computation ?"
     assert os.path.exists(wsf), f"The file {wsf} has not been created. Error during WSF extraction ?"
+    assert os.path.exists(pekel), f"The file {pekel} has not been created. Error during WSF extraction ?"
     
-    return valid_stack, ndvi, ndwi, wsf
+    return valid_stack, ndvi, ndwi, wsf, pekel
 
 
 @pytest.mark.prepare
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_sensor_geom(file):
-    valid_stack, ndvi, ndwi, wsf = prepare_sensor_geom(file, 1)
+@pytest.mark.parametrize("file, dtm", input_files)
+def test_prepare_sensor_geom(file ,dtm):
+    valid_stack, ndvi, ndwi, wsf, pekel = prepare_sensor_geom(file, 1)
     
 @pytest.mark.validation
 @pytest.mark.parametrize("file_pekel", predict_pekel)
