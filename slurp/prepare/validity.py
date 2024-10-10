@@ -23,6 +23,7 @@
 
 import numpy as np
 
+
 def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image

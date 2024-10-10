@@ -27,7 +27,6 @@ import numpy as np
 import time
 import traceback
 
-import numpy as np
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
 
@@ -36,6 +35,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils, RF_utils
 from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools.constant import NODATA_int8
 
 
 try:
@@ -96,9 +96,11 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
 
 
 def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
-    """Get random valid indexes from masks.
+    """
+    Get random valid indexes from masks.
     Mask 1 is a validity mask
     """
+    np.random.seed(712)  # reproductible results
     rows_idxs = []
     cols_idxs = []
 
@@ -109,7 +111,6 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
         width = mask_1.shape[1]
 
         while nb_idxs < nb_indexes:
-            #np.random.seed(712)  # reproductible results
             row = np.random.randint(0, height)
             col = np.random.randint(0, width)
 
@@ -281,16 +282,15 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
 
     classifier = params["classifier"]
     prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
-    if buffer_to_predict.shape[1] == 0:
-        print("WARNING > zone with NO DATA")
-    else:
+    if buffer_to_predict.shape[0] > 0:  # not only NO DATA
         prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
 
     return prediction
 
 
 def mask_filter(im_in, mask_ref):
-    """Remove water areas in im_in not in contact
+    """
+    Remove water areas in im_in not in contact
     with water areas in mask_ref.
     """
     im_label, nb_label = label(im_in, connectivity=2, return_num=True)
@@ -346,11 +346,11 @@ def post_process(input_buffer: list, input_profiles: list, params: dict) -> list
         ).astype(np.uint8)
 
     # Add nodata in im_classif
-    im_classif[np.logical_not(input_buffer[3])] = 255
+    im_classif[np.logical_not(input_buffer[3])] = NODATA_int8
     im_classif[im_classif == 1] = params["value_classif"]
 
     im_predict = input_buffer[0]
-    im_predict[np.logical_not(input_buffer[3])] = 255
+    im_predict[np.logical_not(input_buffer[3])] = NODATA_int8
     im_predict[im_predict == 1] = params["value_classif"]
 
     return [im_predict, im_classif]
@@ -424,7 +424,7 @@ def getarguments():
     return parser.parse_args()
 
 
-################ Main function ################
+# --Main function-- #
 
 
 def main():
@@ -451,7 +451,7 @@ def main():
 
             t0 = time.time()
 
-            ################ Build stack with all layers #######
+            # --Build stack with all layers-- #
 
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
@@ -473,7 +473,7 @@ def main():
 
             time_stack = time.time()
 
-            ################ Build samples ##################
+            # --Build samples-- #
 
             # Pekel
             key_pekel = eoscale_manager.open_raster(raster_path=args.extracted_pekel)
@@ -485,7 +485,7 @@ def main():
             mask_pekel = eoexe.n_images_to_m_images_filter(inputs=[key_pekel],
                                                            image_filter=compute_pekel_mask,
                                                            filter_parameters=vars(args),
-                                                           generate_output_profiles=eo_utils.double_int_profile,
+                                                           generate_output_profiles=eo_utils.double_uint8_profile,
                                                            stable_margin=0,
                                                            context_manager=eoscale_manager,
                                                            multiproc_context="fork",
@@ -495,7 +495,7 @@ def main():
             # If there are not enough water samples, we return a void mask
             not_enough_water_samples = False
 
-            ### Check pekel mask
+            # Check pekel mask
             # - if there are too few values : we threshold NDWI to detect water areas
             # - if there are even no "supposed water areas" : stop machine learning process (flag select_samples=False)
             local_mask_pekel = eoscale_manager.get_array(mask_pekel[0])
@@ -582,7 +582,7 @@ def main():
 
                 time_samples = time.time()
 
-                ################ Train classifier from samples ########
+                # --Train classifier from samples-- #
                 classifier = RandomForestClassifier(
                     n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=712, n_jobs=1
                 )
@@ -594,7 +594,7 @@ def main():
                 RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
-                ######### Predict  ################
+                # --Predict-- #
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=rf_prediction,
@@ -607,12 +607,12 @@ def main():
                 time_random_forest = time.time()
 
             if do_post_process:
-                ######### Post_processing  ################
+                # --Post_processing-- #
                 inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack]
                 im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
                                                                image_filter=post_process,
                                                                filter_parameters=vars(args),
-                                                               generate_output_profiles=eo_utils.double_int_profile,
+                                                               generate_output_profiles=eo_utils.double_uint8_profile,
                                                                stable_margin=3,
                                                                context_manager=eoscale_manager,
                                                                multiproc_context="fork",

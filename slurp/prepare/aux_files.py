@@ -27,6 +27,7 @@ import otbApplication as otb
 import scipy
 
 from slurp.prepare import geometry
+from slurp.tools.constant import NODATA_int16
 
 
 def pekel_recovery(file_ref: str, pekel_ref: str, file_out: str):
@@ -159,5 +160,6 @@ def texture_task(input_buffers: list, input_profiles: list, params: dict) -> np.
     """
     masked_band = np.ma.array(input_buffers[0][params["nir"] - 1], mask=np.logical_not(input_buffers[1]))
     texture = std_convoluted(masked_band.astype(float), params["texture_rad"], params["min_value"], params["max_value"])
+    texture[np.logical_not(input_buffers[1][0])] = NODATA_int16
 
     return texture

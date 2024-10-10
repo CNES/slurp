@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding: utf8
 #
 # Copyright (c) 2024 Centre National d'Etudes Spatiales (CNES).
@@ -17,20 +18,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Pytest configuration
-[pytest]
-addopts = -ra
-markers =
-    all: prepare + computation + validation
-    computation: only masks computation
-    computation_and_validation: compute and validate mask
-    default: default marker
-    prepare: only prepare computation
-    validation: only masks validation
-    features: only specific features computation
-testpaths = tests
-norecursedirs = .git docs .gitlab .github .ipynb_checkpoints tests/.ipynb_checkpoints
-# if needed add filterwarnings to clean dependencies warnings
-# filterwarnings =
-#    ignore::DeprecationWarning:distutils.*
-#    ignore: distutils Version:DeprecationWarning
+
+"""
+Top-level package for slurp.
+"""
+
+from importlib.metadata import version
+
+# version through setuptools_scm when python3 > 3.8
+try:
+    __version__ = version("slurp")
+except Exception:  # pylint: disable=broad-except
+    __version__ = "unknown"
+
+__author__ = "CNES - Yannick TANGUY"
+__email__ = "yannick.tanguy@cnes.fr"

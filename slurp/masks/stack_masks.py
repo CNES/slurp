@@ -40,26 +40,19 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import morpho_clean, apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils
-
-
-# Elevation estimation in 2nd layer
-LOW = 1
-HIGH = 2
-
-NODATA = 255
+from slurp.tools.constant import NODATA_int8, LOW, HIGH
 
 
 def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
-    
     """
+    Clean and apply watershed regulation for buildings
     
-    
-    :param array input_image: VHR input image
-    :param array urbanmask: Urbanmask created by the dedicated script 
-    :param array wsf: WSF file from post_process function
-    :param array vegmask: Vegetationnmask created by the dedicated script
-    :param array watermask: Watermask created by the dedicated script
-    :param array shadowmask: Shadowmask created by the dedicated script
+    :param np.ndarray input_image: VHR input image
+    :param np.ndarray urbanmask: Urbanmask created by the dedicated script
+    :param np.ndarray wsf: WSF file from post_process function
+    :param np.ndarray vegmask: Vegetationnmask created by the dedicated script
+    :param np.ndarray watermask: Watermask created by the dedicated script
+    :param np.ndarray shadowmask: Shadowmask created by the dedicated script
     :param dict params: dictionary of arguments
     :return: tuple of segmentation value and markers
     """
@@ -146,7 +139,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
     # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA
+    stack[0][np.logical_not(valid_stack[0])] = NODATA_int8
 
     # Estimation of heigth
     # Supposed to be low 
@@ -161,11 +154,11 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     stack[1][watermask[0] == 1] = 0
     stack[1][shadowmask[0] == 2] = 0
     
-    stack[1][np.logical_not(valid_stack[0])] = NODATA
+    stack[1][np.logical_not(valid_stack[0])] = NODATA_int8
 
     # Markers
     stack[2] = markers
-    stack[2][np.logical_not(valid_stack[0])] = NODATA
+    stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
 
     return stack
 

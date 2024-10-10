@@ -34,9 +34,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils
 from slurp.tools import eoscale_utils as eo_utils
-
-
-NO_DATA = 255
+from slurp.tools.constant import NODATA_int8
 
 
 def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
@@ -71,7 +69,7 @@ def compute_shadowmask(input_buffers: list, input_profiles: list, params: dict) 
     final_shadow_mask += raw_shadow_mask
 
     # apply NO_DATA mask
-    final_shadow_mask[np.logical_not(input_buffers[1][0])] = NO_DATA
+    final_shadow_mask[np.logical_not(input_buffers[1][0])] = NODATA_int8
     
     return final_shadow_mask
 
