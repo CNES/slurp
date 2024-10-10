@@ -21,11 +21,15 @@
 """ Brings together the geometry functions using OTB features"""
 
 import time
-import otbApplication as otb
+
+try:
+    import otbApplication as otb
+except:
+    print("OTB is not installed")
 
 from slurp.tools.constant import COMPRESSION
 
-
+    
 def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Superimpose using OTB

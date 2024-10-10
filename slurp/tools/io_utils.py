@@ -55,8 +55,7 @@ def read_json(main_config_file: str, keys: list, user_config_file: str = None) -
             with open(user_config_file, "r") as json_file2:
                 full_args = json.load(json_file2)
                 for k in full_args.keys():
-                    if k in keys:
-                        argsdict.update(full_args[k])
+                    argsdict.update(full_args[k])
 
         except FileNotFoundError:
             print(f"File {user_config_file} not found.")
