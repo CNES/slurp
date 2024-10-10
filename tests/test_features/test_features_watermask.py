@@ -47,7 +47,7 @@ def test_samples_method(samples_method):
 @pytest.mark.features
 @pytest.mark.parametrize("nb_samples_water,nb_samples_other", [(10000,1000),(0,0)])
 def test_nb_samples(nb_samples_water,nb_samples_other):
-    command = write_command_compute_shadowmask(1) + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
+    command = write_command_compute_watermask(1) + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
     os.system(command)
     
 @pytest.mark.features

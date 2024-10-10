@@ -11,7 +11,7 @@ import pytest
 import os
 import glob
 
-from tests.utils import get_output_path
+from tests.utils import get_output_path, get_aux_path
 
 def write_command_compute_shadowmask(nb_workers, valid_stack=None):
     output_image = get_output_path(pytest.features_test_img, "shadowmask", remove=True)
