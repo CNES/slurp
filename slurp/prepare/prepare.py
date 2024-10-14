@@ -80,7 +80,6 @@ def getarguments():
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
 
     # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
-    #group5.add_mutually_exclusive_group(required=False)
     group5.add_argument('--analyse_glcm', dest='analyse_glcm', action='store_true',help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
     group5.add_argument('--no_analyse_glcm', dest='analyse_glcm', action='store_false',help="Do not analyse global land cover map")
     group5.set_defaults(analyse_glcm=True)
