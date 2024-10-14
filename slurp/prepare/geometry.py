@@ -24,6 +24,8 @@ georeferenced geometry (with superimpose) or Sharloc, to project images into sen
 """
 
 import time
+import rasterio as rio
+import numpy as np
 
 try:
     import otbApplication as otb
