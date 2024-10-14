@@ -26,7 +26,10 @@ import traceback
 
 import numpy as np
 
-import otbApplication as otb
+try:
+    import otbApplication as otb
+except:
+    print("OTB is not installed")
 
 
 def get_advices(veg, low_veg, high_veg, nb_total):
@@ -75,7 +78,6 @@ def compute_stats(map_lc, im):
     :param str im: path to the input image
     :returns: number of clusters for vegetation and low vegetation
     """
-    
     app_roi = otb.Registry.CreateApplication("ExtractROI")
     params_roi = {"out": "fake.tif", "mode": "fit", "mode.fit.im": im, "in": map_lc}
     app_roi.SetParameters(params_roi)

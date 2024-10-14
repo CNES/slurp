@@ -10,6 +10,7 @@
   <a href="#overview">Overview</a> •
   <a href="#features">Features</a> •
   <a href="#install">Install</a> •
+  <a href="#getting-started">Getting Started</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#contribution">Contribution</a> •
   <a href="#references">References</a>
@@ -87,6 +88,12 @@ pip install .
 pip install pytest
 ```
 Your environment is ready, you can compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
+
+## Getting Started
+
+Once your environment has been set up, you can run SLURP.
+
+A tutorial (with and without OTB) is available : [Tutorial.md](Tutorial.md).
 
 ## Use SLURP on TREX
 On TREX, you can directly use SLURP by sourcing the following environment.

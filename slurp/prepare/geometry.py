@@ -24,13 +24,16 @@ georeferenced geometry (with superimpose) or Sharloc, to project images into sen
 """
 
 import time
-import rasterio as rio
-import numpy as np
+
+try:
+    import otbApplication as otb
+except:
+    print("OTB is not installed")
+
 from slurp.tools.constant import COMPRESSION
 
-
-def superimpose(file_in: str, file_ref: str, file_out: str):
-    import otbApplication as otb
+    
+def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     """
     Superimpose using OTB
 

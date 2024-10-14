@@ -25,6 +25,12 @@ from os import path
 import rasterio as rio
 import numpy as np
 import scipy
+
+try:
+    import otbApplication as otb
+except:
+    print("OTB is not installed")
+
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_int16
 
