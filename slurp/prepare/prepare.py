@@ -78,8 +78,13 @@ def getarguments():
     group5 = parser.add_argument_group(description="*** AUX FILES FOR VEGETATION MASK ***")
     group5.add_argument("-file_texture", help="Path to store the texture file")
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
-    group5.add_argument("-analyse_glcm", type=bool,
-                        help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+
+    # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    group5.add_mutually_exclusive_group(required=False)
+    group5.add_argument('--analyse_glcm', dest='analyse_glcm', action='store_true',help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+    group5.add_argument('--no_analyse_glcm', dest='analyse_glcm', action='store_false',help="Do not analyse global land cover map")
+    group5.set_defaults(analyse_glcm=True)
+    
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
                         
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
