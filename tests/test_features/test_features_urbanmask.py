@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+# coding: utf8
+#
+# Copyright (C) 2022-2024 CNES
+#
+# This file is part of slurp
+#
+""" Test urban mask with differents features and different arguments values"""
+
+import pytest
+import os
+import glob
+
+from tests.utils import get_output_path, get_aux_path
+
+def write_command_compute_urbanmask(nb_workers, valid_stack=None):
+    output_image = get_output_path(pytest.features_test_img, "urbanmask", remove=True)
+    if valid_stack is None:
+        valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
+    
+    return f"slurp_urbanmask {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {valid_stack} "
+
+@pytest.mark.features
+@pytest.mark.parametrize("vegmask_max_value", [0,21,1000])
+def test_vegmask_max_value(vegmask_max_value):
+    command = write_command_compute_urbanmask(1) + f"-vegmask_max_value {vegmask_max_value}"
+    os.system(command)
+    
+@pytest.mark.features
+@pytest.mark.parametrize("nb_samples_other,nb_samples_urban", [(0,0),(5000,1000)])
+def test_nb_samples(nb_samples_other,nb_samples_urban):
+    command = write_command_compute_urbanmask(1) + f"-nb_samples_other {nb_samples_other} -nb_samples_other {nb_samples_other}"
+    os.system(command)
+
+    # BUG /!\ works every time !!!
+@pytest.mark.features
+def test_files_layers():
+    command = write_command_compute_urbanmask(1) + "-files_layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
+    os.system(command)
+    

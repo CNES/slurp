@@ -48,6 +48,9 @@ def getarguments():
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
+    group1.add_argument("-sensor_mode", type=bool, default=False, help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
+    group1.add_argument("-dtm", help="Digital Terrain Model, used only in sensor mode")
+    group1.add_argument("-geoid_file", help="Geoid file, used only in sensor mode")
     group1.add_argument("-valid", dest="valid_stack", help="Path to store the valid stack file")
     group1.add_argument("-cloud_mask", help="Path to the input cloud mask")
 
@@ -62,7 +65,8 @@ def getarguments():
     group3.add_argument("-pekel_method",
                         help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery")
     group3.add_argument("-pekel", help="Path of the global Pekel file")
-    group3.add_argument("-pekel_obs", help="Path of the global monthly has observations Pekel file")
+    group3.add_argument("-pekel_obs", help="Month of the desired Pekel file (pekel_method = month)")
+    group3.add_argument("-pekel_monthly_occurrence", help="Path of the root of monthly occurrence Pekel files")
     group3.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
     group3.add_argument("-hand", help="Path of the global HAND file")
     group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
@@ -74,8 +78,13 @@ def getarguments():
     group5 = parser.add_argument_group(description="*** AUX FILES FOR VEGETATION MASK ***")
     group5.add_argument("-file_texture", help="Path to store the texture file")
     group5.add_argument("-texture_rad", type=int, help="Radius for texture (std convolution) computation")
-    group5.add_argument("-analyse_glcm", type=bool,
-                        help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+
+    # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    group5.add_mutually_exclusive_group(required=False)
+    group5.add_argument('--analyse_glcm', dest='analyse_glcm', action='store_true',help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation")
+    group5.add_argument('--no_analyse_glcm', dest='analyse_glcm', action='store_false',help="Do not analyse global land cover map")
+    group5.set_defaults(analyse_glcm=True)
+    
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
                         
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
@@ -85,12 +94,12 @@ def getarguments():
 
     return args
 
-
 def main():
     """Main function that compute prepare date for mask computation"""
         
     argparse_dict = vars(getarguments())
-
+    print(f"DBG> {argparse_dict}")
+    
     # Read the JSON files
     keys = ["input", "prepare", "aux_layers", "resources"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
@@ -178,9 +187,11 @@ def main():
                 if args.overwrite or not path.isfile(args.extracted_pekel):
                     makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
                     if args.pekel_method == "month":
-                        aux.pekel_month_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.pekel_obs)
+                        file_pekel = path.join(args.pekel_monthly_occurrence,"has_observations"+str(args.pekel_obs),"has_observations"+str(args.pekel_obs)+".vrt")
+                        print(f"DBG> {file_pekel=}")
+                        aux.aux_file_recovery(args.file_vhr, file_pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
                     elif args.pekel_method == "all":
-                        aux.pekel_recovery(args.file_vhr, args.pekel, args.extracted_pekel)
+                        aux.aux_file_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
                     else:
                         raise Exception("Method for Pekel extraction not accepted. Use 'month' or 'all'")
                 else:
@@ -192,7 +203,8 @@ def main():
             if args.hand and args.extracted_hand:
                 if args.overwrite or not path.isfile(args.extracted_hand):
                     makedirs(path.dirname(args.extracted_hand), exist_ok=True)
-                    aux.hand_recovery(args.file_vhr, args.hand, args.extracted_hand)
+                    aux.aux_file_recovery(args.file_vhr, args.hand, args.extracted_hand,
+                                          args.sensor_mode, args.dtm, args.geoid_file)
                 else:
                     print("Not extracting Hand : the file already exists.")
             else:
@@ -202,7 +214,8 @@ def main():
             if args.wsf and args.extracted_wsf:
                 if args.overwrite or not path.isfile(args.extracted_wsf):
                     makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
-                    aux.wsf_recovery(args.file_vhr, args.wsf, args.extracted_wsf)
+                    aux.aux_file_recovery(args.file_vhr, args.wsf, args.extracted_wsf,
+                                          args.sensor_mode, args.dtm, args.geoid_file)
                 else:
                     print("Not extracting WSF : the file already exists.")
             else:
@@ -252,6 +265,8 @@ def main():
             with open(args.effective_used_config, "w", encoding="utf8") as file_to_save:
                 json.dump(final_used_config, file_to_save, indent=4)
 
+            eoscale_manager._release_all()
+                
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
@@ -268,6 +283,8 @@ def main():
             print("oups...", exception)
             traceback.print_exc()
 
+    print("End of prepare step")
+            
 
 if __name__ == "__main__":
     main()

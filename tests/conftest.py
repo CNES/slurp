@@ -46,6 +46,8 @@ def pytest_configure(config):
     with open(os.path.join(current_dir, 'config_tests.json')) as f:
         conf = json.load(f)
         pytest.data_dir = conf["data_dir"]
+        pytest.sensor_goem_dir = conf["sensor_goem_dir"]
+        pytest.features_test_img = conf["features_test_img"]
         pytest.output_dir = conf["output_dir"]
         pytest.ref_dir = conf["ref_dir"]
         pytest.pekel = conf["pekel"]
