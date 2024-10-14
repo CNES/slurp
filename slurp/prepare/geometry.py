@@ -27,11 +27,6 @@ import time
 import rasterio as rio
 import numpy as np
 
-try:
-    import otbApplication as otb
-except:
-    print("OTB is not installed")
-
 from slurp.tools.constant import COMPRESSION
 
     
@@ -44,6 +39,11 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
     :param str file_out: path for the output reprojected image
     :param type_out: OTB type for the output image
     """
+    try:
+        import otbApplication as otb
+    except:
+        print("OTB is not installed")
+
     ds = rio.open(file_in)
     # default value
     output_dtype = otb.ImagePixelType_float
@@ -68,7 +68,6 @@ def superimpose(file_in: str, file_ref: str, file_out: str, type_out):
 
 
 def rasterization(file_in: str, file_ref: str, file_out: str):
-    import otbApplication as otb
     """
     Rasterization using OTB
 
@@ -77,6 +76,11 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
     :param str file_out: path for the output reprojected image
     :param type_out: OTB type for the output image
     """
+    try:
+        import otbApplication as otb
+    except:
+        print("OTB is not installed")
+        
     ds = rio.open(file_in)
     # default value
     output_dtype = otb.ImagePixelType_float
@@ -113,14 +117,17 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     :param str projected_data: path to the output projected data
     :param int step: TODO document (default, 30)
     """
-    from shareloc.geomodels import GeoModel
-    from shareloc.dtm_reader import dtm_reader
-    from shareloc.geofunctions.dtm_intersection import DTMIntersection
-    from shareloc.geofunctions.localization import Localization
-    from shareloc.proj_utils import transform_physical_point_to_index
-    from shareloc.image import Image
+    try:
+        from shareloc.geomodels import GeoModel
+        from shareloc.dtm_reader import dtm_reader
+        from shareloc.geofunctions.dtm_intersection import DTMIntersection
+        from shareloc.geofunctions.localization import Localization
+        from shareloc.proj_utils import transform_physical_point_to_index
+        from shareloc.image import Image
+        import bindings_cpp
+    except:
+        print("Shareloc is not installed")
 
-    import bindings_cpp
     import scipy
     
     # Import image geometrical model
