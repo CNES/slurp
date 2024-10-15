@@ -22,9 +22,10 @@
 Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation
 """
 
-import traceback
-
 import numpy as np
+import rasterio as rio
+
+from slurp.prepare import geometry
 
 def get_advices(veg, low_veg, high_veg, nb_total):
     """
@@ -64,24 +65,29 @@ def get_advices(veg, low_veg, high_veg, nb_total):
     return nb_clusters_veg, nb_clusters_low_veg
     
         
-def compute_stats(map_lc, im):
+def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tuple:
     """
     Compute ratio of vegetation, low vegetation and vegetation in the ROI
-
-    :param str map_lc: path to the LandCover file
-    :param str im: path to the input image
+    
+    :param str im: path to the input VHR image
+    :param str map_lc: path to the land cover map
+    :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
     :returns: number of clusters for vegetation and low vegetation
     """
-    try:
-        import otbApplication as otb
-    except:
-        print("OTB is not installed")
+    if not cropped:
+        # get ROI before computing stats
+        if sensor_mode:
+            print("ERROR : GLCM analysis not implemented for sensor mode yet. Returns default clustering values")
+            return 3, 3
+        else:
+            data_map = geometry.get_extract_roi(map_lc, im)
+    else:
+        # get all data from map_lc
+        ds = rio.open(map_lc)
+        data_map = ds.read(1)
+        ds.close()
+        del ds
 
-    app_roi = otb.Registry.CreateApplication("ExtractROI")
-    params_roi = {"out": "fake.tif", "mode": "fit", "mode.fit.im": im, "in": map_lc}
-    app_roi.SetParameters(params_roi)
-    app_roi.Execute()
-    data_map = app_roi.GetVectorImageAsNumpyArray("out")
     print(f"{data_map.shape}")
 
     legend = {10: "Tree cover",
@@ -124,28 +130,3 @@ def compute_stats(map_lc, im):
     print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
     
     return nb_clusters_veg, nb_clusters_low_veg
-
-
-def analyse_glcm(map_lc, im):
-    """ Main function """ 
-    try:
-        nb_clusters_veg, nb_clusters_low_veg = compute_stats(map_lc, im)
-        
-        return nb_clusters_veg, nb_clusters_low_veg
-
-    except FileNotFoundError as fnfe_exception:
-        print("FileNotFoundError", fnfe_exception)
-
-    except PermissionError as pe_exception:
-        print("PermissionError", pe_exception)
-
-    except ArithmeticError as ae_exception:
-        print("ArithmeticError", ae_exception)
-
-    except MemoryError as me_exception:
-        print("MemoryError", me_exception)
-
-    except Exception as exception: 
-        print("oups...", exception)
-        traceback.print_exc()
-        

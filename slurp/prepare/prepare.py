@@ -85,6 +85,7 @@ def getarguments():
     group5.set_defaults(analyse_glcm=True)
     
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
+    group5.add_argument("-cropped_land_cover_map", type=bool, help="If the land_cover_map image is cropped to the input VHR file or not")
                         
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int, help="Number of CPU")
@@ -110,12 +111,18 @@ def main():
 
     args = argparse.Namespace(**argsdict)
 
+    # Compute prepare data with eoscale
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
         try:
             # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_phr)
-
+            
+            # Global land cover map
+            if args.analyse_glcm:
+                nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.compute_stats(args.file_vhr, args.land_cover_map, args.cropped_land_cover_map, args.sensor_mode)
+                argsdict.update({"nb_clusters_veg": nb_clusters_veg, "nb_clusters_low_veg": nb_clusters_low_veg})  
+            
             # Valid stack
             if args.overwrite or not path.isfile(args.valid_stack):
                 makedirs(path.dirname(args.valid_stack), exist_ok=True)
@@ -244,13 +251,7 @@ def main():
                 else:
                     print("Not computing texture file : the file already exists.")
             else:
-                print("Pass texture computation")
-                
-            # Global land cover map
-            if args.analyse_glcm:
-                nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.analyse_glcm(args.land_cover_map, args.file_vhr)
-                argsdict.update({"nb_clusters_veg": nb_clusters_veg,
-                                "nb_clusters_low_veg": nb_clusters_low_veg})
+                print("Pass texture computation")    
                 
             # Write effective used config
             with open(args.main_config, "r", encoding="utf8") as json_file:
@@ -259,7 +260,7 @@ def main():
                     for sub_key in final_used_config[key]:
                         if sub_key in argsdict:
                             final_used_config[key].update({sub_key: argsdict[sub_key]})
-            
+
             makedirs(path.dirname(args.effective_used_config), exist_ok=True)
             with open(args.effective_used_config, "w", encoding="utf8") as file_to_save:
                 json.dump(final_used_config, file_to_save, indent=4)
