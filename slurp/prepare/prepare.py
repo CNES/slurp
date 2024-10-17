@@ -98,7 +98,6 @@ def main():
     """Main function that compute prepare date for mask computation"""
         
     argparse_dict = vars(getarguments())
-    print(f"DBG> {argparse_dict}")
     
     # Read the JSON files
     keys = ["input", "prepare", "aux_layers", "resources"]
@@ -109,6 +108,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
+    print("JSON data loaded:")
+    print(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
