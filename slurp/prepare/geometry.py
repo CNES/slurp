@@ -151,8 +151,8 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
         from shareloc.image import Image
         import bindings_cpp
     except:
-        print("Shareloc is not installed")
-
+        raise Exception("\n*** Shareloc is not installed ***\n")
+        
     import scipy
     
     # Import image geometrical model

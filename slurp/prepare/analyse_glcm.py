@@ -110,7 +110,7 @@ def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tup
 
     veg, low_veg, high_veg = 0, 0, 0
     for v, c in zip(unique, counts):
-        print(f"{v} : {c} pixels ({100*c/nb_total:.1f}%) - class {legend[v]}")
+        print(f"{v} : {c}")
         if v in [10, 20, 30, 40, 90, 95, 100]:
             veg += c
 

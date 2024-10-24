@@ -56,19 +56,14 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     :param dict params: dictionary of arguments
     :returns: Pekel masks
     """
+    mask_pekel = utils.compute_mask(input_buffer[0], [params["thresh_pekel"]])
     if params["hand_strict"]:
-        [mask_pekel, mask_pekelxx] = utils.compute_mask(
-            input_buffer[0],
-            [params["thresh_pekel"], params["strict_thresh"]]
-        )
+        mask_pekelxx = utils.compute_mask(input_buffer[0], [params["strict_thresh"]])
         return [mask_pekel, mask_pekelxx]
 
     if not params["no_pekel_filter"]:
-        [mask_pekel, mask_pekel0] = utils.compute_mask(
-            input_buffer[0],
-            [params["thresh_pekel"], 0])
+        mask_pekel0 = utils.compute_mask(input_buffer[0], [0])
     else:
-        mask_pekel = utils.compute_mask(input_buffer[0], params["thresh_pekel"])
         mask_pekel0 = np.zeros(input_buffer[0].shape)
 
     return [mask_pekel, mask_pekel0]
@@ -470,6 +465,10 @@ def main():
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
 
+            # margin for masks computation (a Pekel pixel is 30m large, ~ 45m in its diagonal
+            # for 0.5 m images, a 100 pixels margin will allow to cover one Pekel pixel
+            margin = 100
+            
             # NDXI
             key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
             key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
@@ -489,7 +488,7 @@ def main():
                                                            image_filter=compute_pekel_mask,
                                                            filter_parameters=vars(args),
                                                            generate_output_profiles=eo_utils.double_uint8_profile,
-                                                           stable_margin=0,
+                                                           stable_margin=margin,
                                                            context_manager=eoscale_manager,
                                                            multiproc_context="fork",
                                                            filter_desc="Pekel valid mask processing...")
@@ -520,7 +519,7 @@ def main():
                                                           # args.hand_strict impossible because of mask_pekel0 not sure
                                                           filter_parameters=vars(args),
                                                           generate_output_profiles=eo_utils.single_float_profile,
-                                                          stable_margin=0,
+                                                          stable_margin=margin,
                                                           context_manager=eoscale_manager,
                                                           multiproc_context="fork",
                                                           filter_desc="Hand valid mask processing...")
@@ -603,7 +602,7 @@ def main():
                                                                 image_filter=rf_prediction,
                                                                 filter_parameters={"classifier": classifier},
                                                                 generate_output_profiles=eo_utils.single_float_profile,
-                                                                stable_margin=0,
+                                                                stable_margin=margin,
                                                                 context_manager=eoscale_manager,
                                                                 multiproc_context="fork",
                                                                 filter_desc="RF prediction processing...")
@@ -616,7 +615,7 @@ def main():
                                                                image_filter=post_process,
                                                                filter_parameters=vars(args),
                                                                generate_output_profiles=eo_utils.double_uint8_profile,
-                                                               stable_margin=3,
+                                                               stable_margin=margin,
                                                                context_manager=eoscale_manager,
                                                                multiproc_context="fork",
                                                                filter_desc="Post processing...")

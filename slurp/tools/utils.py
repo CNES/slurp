@@ -38,9 +38,10 @@ def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:
     :param list thresh_ref: list of threshold values
     :returns: list of masks for each threshold value
     """
-    mask_ref = []
+    mask_ref = np.zeros(im_ref.shape)
     for thresh in thresh_ref:
-        mask_ref.append(im_ref > thresh)
+        local_mask = im_ref > thresh
+        mask_ref = np.where(local_mask, local_mask, mask_ref)
 
     return mask_ref
 
