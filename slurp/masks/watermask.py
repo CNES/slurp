@@ -207,6 +207,12 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, input_buffer[0]))
     nb_other_subset = nb_valid_subset - nb_water_subset
 
+    # valid pixels for 'other' (every thing but water) : valid mask + hand > 0
+    # This criteria should be reconsidered (ie : think of a relative threshold to select samples not too far from water)
+    nb_valid_pix_other = np.count_nonzero(np.logical_and(input_buffer[0], input_buffer[1]))
+    nb_other_subset = nb_valid_pix_other
+
+    
     # Ratio of pixel class compare to the full image ratio
     water_ratio = nb_water_subset / params["nb_valid_water_pixels"]
     other_ratio = nb_other_subset / params["nb_valid_other_pixels"]
@@ -579,7 +585,7 @@ def main():
                                                       concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
                                                       multiproc_context="fork",
-                                                      filter_desc="Samples building processing...")
+                                                      filter_desc="Samples water processing...")
                 # samples=[x_samples, y_samples]
 
                 time_samples = time.time()
