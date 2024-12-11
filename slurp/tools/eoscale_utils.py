@@ -140,6 +140,18 @@ def three_uint8_profile(input_profiles: list, map_params):
     return profile
 
 
+def five_uint8_profile(input_profiles: list, map_params):
+    """ Define profiles for eoscale """
+    profile = input_profiles[0]
+    profile["count"] = 5
+    profile["dtype"] = np.uint8
+    profile["compress"] = COMPRESSION.lower()
+    profile["nodata"] = NODATA_int8
+    profile["driver"] = DRIVER
+    
+    return profile
+
+
 def double_uint8_profile(input_profiles: list, map_params):
     """ Define profiles for eoscale """
     profile1 = input_profiles[0]

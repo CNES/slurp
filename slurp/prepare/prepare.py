@@ -232,11 +232,13 @@ def main():
             if args.texture_rad:
                 if args.overwrite or not path.isfile(args.file_texture):
                     makedirs(path.dirname(args.file_texture), exist_ok=True)
+                    # take percentiles to avoid outliers that could affect texture computation
+                    percentiles = np.percentile(eoscale_manager.get_array(key_phr)[3],[2,98])
                     params = {
                         "nir": args.nir,
                         "texture_rad": args.texture_rad,
-                        "min_value": np.min(eoscale_manager.get_array(key_phr)[3]),
-                        "max_value": np.max(eoscale_manager.get_array(key_phr)[3])
+                        "min_value": percentiles[0],
+                        "max_value": percentiles[1]
                     }
                     key_texture = eoexe.n_images_to_m_images_filter(
                         inputs=[key_phr, key_valid_stack[0]],

@@ -58,13 +58,14 @@ def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, s
     :return: tuple of segmentation value and markers
     """
     # Compute mono image from RGB image
-    im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
+    #im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
+    im_mono = 0.3*input_image[0] + 0.3*input_image[1] + 0.3*input_image[3]
     edges = sobel(im_mono)
 
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
     
     # We set markers by reverse order of confidence
-    eroded_bare_ground = apply_morpho(vegmask[0], "binary_erosion", params["building_erosion"])
+    eroded_bare_ground = apply_morpho(vegmask[0] == 11, "binary_erosion", params["building_erosion"])
     markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
     
     ground_truth_eroded = apply_morpho(wsf[0] == 255, "binary_erosion", params["building_erosion"])
@@ -86,9 +87,8 @@ def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, s
 
     eroded_low_veg = apply_morpho(vegmask[0] == 21, "binary_erosion", params["building_erosion"])
     markers[0][eroded_low_veg] = params["value_classif_low_veg"]
-    eroded_middle_veg = apply_morpho(vegmask[0] == 22, "binary_erosion", params["building_erosion"])
-    markers[0][eroded_middle_veg] = params["value_classif_high_veg"]
-    eroded_high_veg = apply_morpho(vegmask[0] == 23, "binary_erosion", params["building_erosion"])
+    # careful : vegetation mask has two values for high veg !
+    eroded_high_veg = apply_morpho(np.logical_or(vegmask[0] == 23, vegmask[0] == 22), "binary_erosion", params["building_erosion"])
     markers[0][eroded_high_veg] = params["value_classif_high_veg"]
     
     eroded_shadow = apply_morpho(shadowmask[0] == 2, "binary_erosion", params["building_erosion"])
@@ -160,6 +160,18 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     # Markers
     stack[2] = markers
     stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
+
+    """
+    # Layer 3 : segmentation from watershed, before morpho/clean
+    stack[3] = seg
+    stack[3][np.logical_not(valid_stack[0])] = NODATA_int8
+
+    # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
+    
+    buildings = np.where(urbanmask > params["building_threshold"],1,0)
+    stack[4] = morpho_clean(buildings[0], params)
+    stack[4][np.logical_not(valid_stack[0])] = NODATA_int8
+    """
 
     return stack
 
