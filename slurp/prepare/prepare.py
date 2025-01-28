@@ -70,6 +70,9 @@ def getarguments():
     group3.add_argument("-extracted_pekel", help="Path to store the extracted Pekel file")
     group3.add_argument("-hand", help="Path of the global HAND file")
     group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+    group3.add_argument("-wbm", help="Path of the Water Body Mask (WBM) file")
+    group3.add_argument("-extracted_wbm", help="Path to store the extracted WBM file")
+    group3.add_argument("-categorized_watermask", type=bool, help="If true, compute a categorized watermask based on the WBM file")
 
     group4 = parser.add_argument_group(description="*** AUX FILES FOR URBAN MASK ***")
     group4.add_argument("-wsf", help="Path of the global WSF file")
@@ -227,6 +230,18 @@ def main():
                     print("Not extracting WSF : the file already exists.")
             else:
                 print("Pass WSF extraction")
+
+            # WBM
+            if args.wbm and args.extracted_wbm and args.categorized_watermask:
+                if args.overwrite or not path.isfile(args.extracted_wbm):
+                    makedirs(path.dirname(args.extracted_wbm), exist_ok=True)
+                    aux.aux_file_recovery(args.file_vhr, args.wbm, args.extracted_wbm,
+                                          args.sensor_mode, args.dtm, args.geoid_file)
+                else:
+                    print("Not extracting WBM : the file already exists.")
+            else:
+                print("Pass WBM extraction")
+                argsdict.update({"extracted_wbm": None})
 
             # Texture
             if args.texture_rad:
