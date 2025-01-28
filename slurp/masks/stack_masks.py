@@ -112,11 +112,15 @@ def watershed_categorized_water(wbm, watermask, params):
     :return: categorized mask
     """
 
-    not_water_value = 0
+    # Water values for the WBM
     sea_value_wbm = 1
     lake_value_wbm = 2
     river_value_wbm = 3
+    # Water value for the SLURP watermask
     water_value_watermask = 1
+    # Non water value for both the WBM and SLURP watermask
+    not_water_value = 0
+    # Unknown water value
     water_unknown_value = 4
 
     # Intersection SLURP watermask and WBM mask
@@ -230,7 +234,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     stack[1][np.logical_not(valid_stack[0])] = NODATA_int8
 
     # Layer 2: watermask categorized
-    if params["extracted_wbm"]=="out/wbm.tif":
+    if params["categorized_watermask"]:
         wbm = input_buffer[7]
         stack[2] = watershed_categorized_water(wbm, watermask, params)
 
@@ -305,7 +309,7 @@ def main():
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "resources", "post_process", "stack"]
+    keys = ["input", "aux_layers", "masks", "resources", "prepare", "post_process", "stack"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
 
     # Overload with manually passed arguments if not None
@@ -331,7 +335,7 @@ def main():
             key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
             key_wsf = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
             key_validstack = eoscale_manager.open_raster(raster_path=args.valid_stack)
-            if args.extracted_wbm is not None:
+            if args.categorized_watermask:
                 key_wbm = eoscale_manager.open_raster(raster_path=args.extracted_wbm)
                 inputs_final = [key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask,
                                 key_wsf, key_wbm]

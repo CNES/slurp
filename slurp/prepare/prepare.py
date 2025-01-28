@@ -241,7 +241,6 @@ def main():
                     print("Not extracting WBM : the file already exists.")
             else:
                 print("Pass WBM extraction")
-                argsdict.update({"extracted_wbm": None})
 
             # Texture
             if args.texture_rad:
