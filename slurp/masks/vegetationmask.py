@@ -39,7 +39,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools.constant import NODATA_int8, NB_CLUSTERS
+from slurp.tools.constant import NODATA_int8, NODATA_int16, NB_CLUSTERS
 
 
 # Cython module to compute stats
@@ -115,7 +115,7 @@ def segmentation_task(input_buffers: list, input_profiles: list, params: dict) -
     """
     Segmentation
 
-    :param list input_buffers: [im_vhr, valid_stack]
+    :param list input_buffers: [im_vhr, ndvi, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: segments
@@ -126,6 +126,7 @@ def segmentation_task(input_buffers: list, input_profiles: list, params: dict) -
 
     # minimum segment is 1, attribute 0 to no_data pixel
     segments[np.logical_not(input_buffers[2])] = 0
+    segments[np.where(input_buffers[1]==NODATA_int16)] = 0
 
     return segments
 

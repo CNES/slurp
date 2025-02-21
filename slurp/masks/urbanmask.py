@@ -96,6 +96,8 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     else:
         s_rows = []
         s_cols = []
+
+    print(f"get_grid... : {nb_samples=} {rows.shape=} {s_rows.shape=}")
         
     return s_rows, s_cols
 
@@ -123,27 +125,24 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     # Retrieve number of samples to create for each class in this subset 
     nb_urban_subsamples = round(urban_ratio * params["nb_samples_urban"])
     nb_other_subsamples = round(other_ratio * params["nb_samples_other"])
-
+    
     if nb_urban_subsamples > 0:
         # Building samples
-        rows, cols = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
+        rows_b, cols_b = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
 
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
-            rows = np.concatenate((rows, rows_nob), axis=0)
-            cols = np.concatenate((cols, cols_nob), axis=0)
     else:
-        rows, cols = [], []
+        rows_b, cols_b = [], []
         if nb_other_subsamples > 0:
-            rows, cols = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
-    
+            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
+
+    rows = np.concatenate((rows_b, rows_nob)) 
+    cols = np.concatenate((cols_b, cols_nob)) 
+            
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[1:]), axis=0) 
-    
-    if rows == [] or cols == []:
-        samples = np.zeros(shape=(0, im_stack.shape[0]))
-    else:
-        samples = np.transpose(im_stack[:, rows, cols])
+    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
     
     return samples
 
