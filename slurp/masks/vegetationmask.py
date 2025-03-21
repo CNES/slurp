@@ -313,10 +313,10 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
         else:
             # Distinction veg class
             nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-            if params["max_low_veg"]:
+            if params["max_texture_th"]:
                 # Distinction veg class by threshold
                 params["nb_clusters_low_veg"] = int(
-                    list_clusters[list_clusters["mean_texture'"] < params["max_low_veg"]].count()
+                    list_clusters[list_clusters["mean_texture'"] < params["max_texture_th"]].count()
                 )
             if params["nb_clusters_low_veg"] >= 7:
                 nb_clusters_high_veg = NB_CLUSTERS - params["nb_clusters_low_veg"]
@@ -439,7 +439,7 @@ def getarguments():
     group3.add_argument("-non_veg_clusters", action="store_true",
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     group3.add_argument("-nb_clusters_low_veg", type=int, help=f"Nb of clusters considered as low vegetation (1-{NB_CLUSTERS})")
-    group3.add_argument("-max_low_veg", type=int,
+    group3.add_argument("-max_texture_th", type=int,
                         help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
