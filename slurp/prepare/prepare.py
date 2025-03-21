@@ -86,10 +86,12 @@ def getarguments():
     
     group5.add_argument("-land_cover_map", help="Input land cover map, only used if 'analyse_glcm' is True")
     group5.add_argument("-cropped_land_cover_map", type=bool, help="If the land_cover_map image is cropped to the input VHR file or not")
-                        
+    
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int, help="Number of CPU")
-
+    group6.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group6.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
+    
     args = parser.parse_args()
 
     return args
@@ -113,7 +115,7 @@ def main():
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
             # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
@@ -136,7 +138,7 @@ def main():
                         generate_output_profiles=eo_utils.single_uint8_1b_profile,
                         stable_margin=0,
                         context_manager=eoscale_manager,
-                        multiproc_context="fork",
+                        multiproc_context=args.multiproc_context,
                         filter_desc="Valid stack processing..."
                     )
                 else:
@@ -147,7 +149,7 @@ def main():
                         generate_output_profiles=eo_utils.single_uint8_1b_profile,
                         stable_margin=0,
                         context_manager=eoscale_manager,
-                        multiproc_context="fork",
+                        multiproc_context=args.multiproc_context,
                         filter_desc="Valid stack processing..."
                     )
                 eoscale_manager.write(key=key_valid_stack[0], img_path=args.valid_stack)
@@ -165,7 +167,7 @@ def main():
                     generate_output_profiles=eo_utils.single_int16_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="NDVI processing..."
                 )
                 eoscale_manager.write(key=key_ndvi[0], img_path=args.file_ndvi)
@@ -182,7 +184,7 @@ def main():
                     generate_output_profiles=eo_utils.single_int16_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="NDWI processing..."
                 )
                 eoscale_manager.write(key=key_ndwi[0], img_path=args.file_ndwi)
@@ -247,7 +249,7 @@ def main():
                         generate_output_profiles=eo_utils.single_uint16_profile,
                         stable_margin=args.texture_rad,
                         context_manager=eoscale_manager,
-                        multiproc_context="fork",
+                        multiproc_context=args.multiproc_context,
                         filter_desc="Texture processing..."
                     )
                     eoscale_manager.write(key=key_texture[0], img_path=args.file_texture)

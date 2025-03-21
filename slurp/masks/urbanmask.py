@@ -97,8 +97,6 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
         s_rows = []
         s_cols = []
 
-    print(f"get_grid... : {nb_samples=} {rows.shape=} {s_rows.shape=}")
-        
     return s_rows, s_cols
 
 
@@ -125,7 +123,9 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     # Retrieve number of samples to create for each class in this subset 
     nb_urban_subsamples = round(urban_ratio * params["nb_samples_urban"])
     nb_other_subsamples = round(other_ratio * params["nb_samples_other"])
-    
+
+    rows_b, cols_b = [], []
+    rows_nob, cols_nob = [], []
     if nb_urban_subsamples > 0:
         # Building samples
         rows_b, cols_b = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
@@ -133,7 +133,7 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
     else:
-        rows_b, cols_b = [], []
+
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
 
@@ -249,6 +249,8 @@ def getarguments():
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
+    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
     
     return parser.parse_args()
 
@@ -276,7 +278,7 @@ def main():
     makedirs(path.dirname(args.urbanmask), exist_ok=True)
     
     # Mask calculation    
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
             
             t0 = time.time()
@@ -302,7 +304,7 @@ def main():
                     generate_output_profiles=eo_utils.single_bool_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="Valid stack processing with vegetationmask..."
                 )
                 key_valid_stack = key_valid_stack[0]
@@ -316,7 +318,7 @@ def main():
                     generate_output_profiles=eo_utils.single_bool_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="Valid stack processing with watermask..."
                 )
                 key_valid_stack = key_valid_stack[0]
@@ -358,7 +360,7 @@ def main():
                                                       context_manager=eoscale_manager,
                                                       concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
-                                                      multiproc_context="fork",
+                                                      multiproc_context=args.multiproc_context,
                                                       filter_desc="Samples building processing...")
 
                 samples = np.concatenate(samples[:])
@@ -393,7 +395,7 @@ def main():
                                                                 generate_output_profiles=eo_utils.double_uint8_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context="spawn",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
@@ -419,7 +421,7 @@ def main():
                                                                 filter_parameters={"fill_value": 100},
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Add nodata...")
                 
                 # Save proba mask
@@ -434,7 +436,7 @@ def main():
                                                                 filter_parameters={"fill_value": 0},
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Add nodata...")
 
                 # Save proba mask

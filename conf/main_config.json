@@ -29,6 +29,8 @@
   "resources":
 	{
 	    "n_workers": 8,
+	    "tile_max_size": 0,
+	    "multiproc_context": "fork",
 	    "n_jobs": 1,
 	    "save_mode": "none"
 	},

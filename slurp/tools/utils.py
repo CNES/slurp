@@ -23,7 +23,8 @@
 import time
 import numpy as np
 from slurp.tools.constant import NODATA_int8
-
+import psutil
+import os
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -59,3 +60,10 @@ def compute_mask_threshold(input_buffers: list, input_profiles: list, params: di
     mask = np.where(input_buffers[1][0] != 1, NODATA_int8, mask)
 
     return mask
+
+def display_mem_usage(debug_mode, message):
+    if debug_mode:
+        pid = os.getpid()
+        python_process = psutil.Process(pid)
+        memoryUse = python_process.memory_info()[0]/2.**30  # memory use in GB...I think
+        print(f">> {message} >> Mem usage : {memoryUse} Gb")
