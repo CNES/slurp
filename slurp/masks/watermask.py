@@ -76,7 +76,7 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
     :param list input_buffer: Hand image [hand_image]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
-    :returns: Hand mask
+    :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
     """
     mask_hand = input_buffer[0] > params["thresh_hand"]
 

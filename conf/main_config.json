@@ -77,7 +77,7 @@
   "urban":
     {
 	"files_layers": [],
-	"vegmask_max_value": 21,
+	"vegmask_min_value": 21,
 	"veg_binary_dilation": 5,
 	"value_classif": 255,
 	"gt_binary_erosion": 5,
@@ -98,7 +98,7 @@
 	"max_ndvi_noveg": null,
 	"non_veg_clusters": null,
 	"nb_clusters_low_veg": 3,
-	"max_low_veg": null,
+	"max_texture_th": null,
 	"debug": false
     },
 

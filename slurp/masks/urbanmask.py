@@ -50,10 +50,10 @@ def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict)
 
     :param list input_buffer: VHR input image [valid_stack, vegetationmask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
+    :param dict params: dictionary of arguments, must contain the keys "vegmask_min_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    non_veg = np.where(input_buffer[1] < params["vegmask_max_value"], True, False)
+    non_veg = np.where(input_buffer[1] < params["vegmask_min_value"], True, False)
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
     non_veg_dilated = apply_morpho(non_veg[0], "binary_dilation", params["veg_binary_dilation"])
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
@@ -225,8 +225,8 @@ def getarguments():
                                             "big shadow areas will be marked as background")
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
-    group2.add_argument("-vegmask_max_value", type=int,
-                        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted")
+    group2.add_argument("-vegmask_min_value", type=int,
+                        help="Vegetation min value for vegetated areas : all pixels with lower value will be predicted")
     group2.add_argument("-veg_binary_dilation", type=int,
                         help="Size of disk structuring element (dilate non vegetated areas)")
     group2.add_argument("-value_classif", type=int,
