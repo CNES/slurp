@@ -455,7 +455,10 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int,
                         help="Number of CPU for multiprocessed tasks (primitives+segmentation)")
+    group6.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group6.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
 
+    
     return parser.parse_args()
 
 
@@ -481,7 +484,7 @@ def main():
     makedirs(path.dirname(args.vegetationmask), exist_ok=True)
     
     # Mask calculation    
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
 
         try:
 
@@ -514,7 +517,7 @@ def main():
                                                            stable_margin=0,
                                                            context_manager=eoscale_manager,
                                                            concatenate_filter=concat_seg,
-                                                           multiproc_context="fork",
+                                                           multiproc_context=args.multiproc_context,
                                                            filter_desc="Segmentation processing...")
 
             if args.save_mode in ["all", "debug"]:
@@ -537,7 +540,7 @@ def main():
                                                 nb_output_scalars=nb_polys,
                                                 context_manager=eoscale_manager,
                                                 concatenate_filter=stats_concatenate,
-                                                multiproc_context="fork",
+                                                multiproc_context=args.multiproc_context,
                                                 filter_desc="Stats ")
 
             # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
@@ -567,7 +570,7 @@ def main():
                                                           generate_output_profiles=eo_utils.single_uint8_profile,
                                                           stable_margin=0,
                                                           context_manager=eoscale_manager,
-                                                          multiproc_context="fork",
+                                                          multiproc_context=args.multiproc_context,
                                                           filter_desc="Finalize processing (Cython)...")
 
             if args.save_mode == "debug":
@@ -589,7 +592,7 @@ def main():
                                                               generate_output_profiles=eo_utils.single_uint8_profile,
                                                               stable_margin=margin,
                                                               context_manager=eoscale_manager,
-                                                              multiproc_context="fork",
+                                                              multiproc_context=args.multiproc_context,
                                                               filter_desc="Post-processing...")
             time_closing = time.time()
 
