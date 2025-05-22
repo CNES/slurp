@@ -32,6 +32,9 @@ fi
 
 # source your own environment to use a personal SLURP installation
 . /softs/projets/pluto/slurp/init_slurp.sh
+#. /home/qt/tanguyy/bin/init_slurp.sh
+module load monitoring
+start_monitoring.sh --name SLURP_all_masks
 
 VHR_IM=$1
 OUTPUT_DIR=$2
@@ -50,6 +53,7 @@ cp ${VHR_IM} ${TMPDIR}
 filename="$(basename ${VHR_IM})"
 
 main_config="/softs/projets/pluto/slurp/main_config.json"
+#main_config="/home/qt/tanguyy/SRC/slurp/conf/main_config.json"
 
 # Start
 echo "Launch SLURP from `pwd`"
@@ -72,6 +76,7 @@ slurp_urbanmask out/effective_used_config.json ${OPT_URBAN}
 slurp_stackmasks out/effective_used_config.json ${OPT_STACK}
 
 current_date=`date +%F`
+stop_monitoring.sh --name SLURP_all_masks
 
 tar cf ${OUTPUT_DIR}/masks_${current_date}.tar out
 
