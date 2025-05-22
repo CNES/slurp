@@ -39,7 +39,7 @@ import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools.constant import NODATA_int8, NB_CLUSTERS
+from slurp.tools.constant import NODATA_int8, NODATA_int16, NB_CLUSTERS
 
 
 # Cython module to compute stats
@@ -115,7 +115,7 @@ def segmentation_task(input_buffers: list, input_profiles: list, params: dict) -
     """
     Segmentation
 
-    :param list input_buffers: [im_vhr, valid_stack]
+    :param list input_buffers: [im_vhr, ndvi, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: segments
@@ -126,6 +126,7 @@ def segmentation_task(input_buffers: list, input_profiles: list, params: dict) -
 
     # minimum segment is 1, attribute 0 to no_data pixel
     segments[np.logical_not(input_buffers[2])] = 0
+    segments[np.where(input_buffers[1]==NODATA_int16)] = 0
 
     return segments
 
@@ -312,10 +313,10 @@ def apply_clustering(params: dict, nb_polys: int, stats: np.ndarray) -> np.ndarr
         else:
             # Distinction veg class
             nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-            if params["max_low_veg"]:
+            if params["max_texture_th"]:
                 # Distinction veg class by threshold
                 params["nb_clusters_low_veg"] = int(
-                    list_clusters[list_clusters["mean_texture'"] < params["max_low_veg"]].count()
+                    list_clusters[list_clusters["mean_texture'"] < params["max_texture_th"]].count()
                 )
             if params["nb_clusters_low_veg"] >= 7:
                 nb_clusters_high_veg = NB_CLUSTERS - params["nb_clusters_low_veg"]
@@ -438,7 +439,7 @@ def getarguments():
     group3.add_argument("-non_veg_clusters", action="store_true",
                         help="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     group3.add_argument("-nb_clusters_low_veg", type=int, help=f"Nb of clusters considered as low vegetation (1-{NB_CLUSTERS})")
-    group3.add_argument("-max_low_veg", type=int,
+    group3.add_argument("-max_texture_th", type=int,
                         help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
@@ -454,7 +455,10 @@ def getarguments():
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int,
                         help="Number of CPU for multiprocessed tasks (primitives+segmentation)")
+    group6.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group6.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
 
+    
     return parser.parse_args()
 
 
@@ -480,7 +484,7 @@ def main():
     makedirs(path.dirname(args.vegetationmask), exist_ok=True)
     
     # Mask calculation    
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
 
         try:
 
@@ -513,7 +517,7 @@ def main():
                                                            stable_margin=0,
                                                            context_manager=eoscale_manager,
                                                            concatenate_filter=concat_seg,
-                                                           multiproc_context="fork",
+                                                           multiproc_context=args.multiproc_context,
                                                            filter_desc="Segmentation processing...")
 
             if args.save_mode in ["all", "debug"]:
@@ -536,7 +540,7 @@ def main():
                                                 nb_output_scalars=nb_polys,
                                                 context_manager=eoscale_manager,
                                                 concatenate_filter=stats_concatenate,
-                                                multiproc_context="fork",
+                                                multiproc_context=args.multiproc_context,
                                                 filter_desc="Stats ")
 
             # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
@@ -566,7 +570,7 @@ def main():
                                                           generate_output_profiles=eo_utils.single_uint8_profile,
                                                           stable_margin=0,
                                                           context_manager=eoscale_manager,
-                                                          multiproc_context="fork",
+                                                          multiproc_context=args.multiproc_context,
                                                           filter_desc="Finalize processing (Cython)...")
 
             if args.save_mode == "debug":
@@ -588,7 +592,7 @@ def main():
                                                               generate_output_profiles=eo_utils.single_uint8_profile,
                                                               stable_margin=margin,
                                                               context_manager=eoscale_manager,
-                                                              multiproc_context="fork",
+                                                              multiproc_context=args.multiproc_context,
                                                               filter_desc="Post-processing...")
             time_closing = time.time()
 

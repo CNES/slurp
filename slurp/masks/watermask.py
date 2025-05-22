@@ -76,7 +76,7 @@ def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) ->
     :param list input_buffer: Hand image [hand_image]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
-    :returns: Hand mask
+    :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
     """
     mask_hand = input_buffer[0] > params["thresh_hand"]
 
@@ -280,13 +280,16 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     """
     im_stack = np.concatenate((input_buffer[1:]), axis=0)
     valid_mask = input_buffer[0].astype(bool)
-    buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
+    buffer_to_predict = np.transpose(im_stack[:, valid_mask[0].astype(bool)])
+    
 
     classifier = params["classifier"]
     prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
     if buffer_to_predict.shape[0] > 0:  # not only NO DATA
-        prediction[valid_mask[0]] = classifier.predict(buffer_to_predict)
+        prediction[valid_mask[0].astype(bool)] = classifier.predict(buffer_to_predict)
 
+    utils.display_mem_usage(params["debug"],f"RF Prediction on buffer {input_buffer[0].shape[1]} x {input_buffer[0].shape[2]}")
+    
     return prediction
 
 
@@ -365,6 +368,8 @@ def getarguments():
 
     parser.add_argument("main_config", help="First JSON file, load basis arguments")
 
+    parser.add_argument("-d", "--debug", action="store_true", dest="debug", help="Debug flag")
+    
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
@@ -422,7 +427,8 @@ def getarguments():
 
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group6.add_argument("-n_workers", type=int, action="store", help="Number of CPU")
-
+    group6.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group6.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
     return parser.parse_args()
 
 
@@ -451,10 +457,12 @@ def main():
     makedirs(path.dirname(args.watermask), exist_ok=True)
     
     # Mask calculation 
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
             t0 = time.time()
 
+            utils.display_mem_usage(args.debug, "Start computation")
+            
             # --Build stack with all layers-- #
 
             # Image PHR (numpy array, 4 bands, band number is first dimension),
@@ -496,7 +504,7 @@ def main():
                                                            generate_output_profiles=eo_utils.double_uint8_profile,
                                                            stable_margin=margin,
                                                            context_manager=eoscale_manager,
-                                                           multiproc_context="fork",
+                                                           multiproc_context=args.multiproc_context,
                                                            filter_desc="Pekel valid mask processing...")
 
             # If user wants a simple threshold on NDWI values, we don't select samples and launch learning/prediction step
@@ -527,7 +535,7 @@ def main():
                                                           generate_output_profiles=eo_utils.single_float_profile,
                                                           stable_margin=margin,
                                                           context_manager=eoscale_manager,
-                                                          multiproc_context="fork",
+                                                          multiproc_context=args.multiproc_context,
                                                           filter_desc="Hand valid mask processing...")
 
             # Flag to command post-process
@@ -542,7 +550,7 @@ def main():
                                                                     "threshold": 1000 * args.ndwi_threshold},
                                                                 context_manager=eoscale_manager,
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Simple NDWI threshold")
 
                 time_random_forest = time.time()
@@ -557,7 +565,7 @@ def main():
                                                                 filter_parameters={"threshold": 1000},
                                                                 context_manager=eoscale_manager,
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Void mask")
 
                 do_post_process = False
@@ -584,10 +592,12 @@ def main():
                                                       context_manager=eoscale_manager,
                                                       concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
-                                                      multiproc_context="fork",
+                                                      multiproc_context=args.multiproc_context,
                                                       filter_desc="Samples water processing...")
                 # samples=[x_samples, y_samples]
 
+                del local_mask_pekel
+                
                 time_samples = time.time()
 
                 # --Train classifier from samples-- #
@@ -602,18 +612,20 @@ def main():
                 RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
+                utils.display_mem_usage(args.debug, "After training step")
+                
                 # --Predict-- #
                 input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
                 key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
                                                                 image_filter=rf_prediction,
-                                                                filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.single_float_profile,
+                                                                filter_parameters={"classifier": classifier, "debug": args.debug},
+                                                                generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 stable_margin=margin,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
-
+                utils.display_mem_usage(args.debug, "After prediction step")
             if do_post_process:
                 # --Post_processing-- #
                 inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack]
@@ -623,7 +635,7 @@ def main():
                                                                generate_output_profiles=eo_utils.double_uint8_profile,
                                                                stable_margin=margin,
                                                                context_manager=eoscale_manager,
-                                                               multiproc_context="fork",
+                                                               multiproc_context=args.multiproc_context,
                                                                filter_desc="Post processing...")
 
                 eoscale_manager.write(key=im_classif[1], img_path=args.watermask)  # classif
@@ -632,7 +644,8 @@ def main():
 
             else:
                 eoscale_manager.write(key=key_predict[0], img_path=args.watermask)  # classif
-
+                
+            utils.display_mem_usage(args.debug, "End of computation")
             end_time = time.time()
 
             print(f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****")

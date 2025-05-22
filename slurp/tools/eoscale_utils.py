@@ -24,7 +24,6 @@ import numpy as np
 
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_int8, NODATA_int16
 
-
 def print_dataset_infos(name, profile, prefix=""):
     """Print information about rasterio dataset."""
 

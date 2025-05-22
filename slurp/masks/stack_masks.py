@@ -41,7 +41,7 @@ import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import morpho_clean, apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils
+from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_int8, LOW, HIGH
 
 
@@ -299,7 +299,9 @@ def getarguments():
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
-
+    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
+    
     return parser.parse_args()
 
 
@@ -325,7 +327,7 @@ def main():
     makedirs(path.dirname(args.stackmask), exist_ok=True)
     
     # Mask calculation     
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
             t0 = time.time()
             key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
@@ -351,14 +353,14 @@ def main():
                                                            generate_output_profiles=eo_utils.three_uint8_profile,
                                                            stable_margin=200,
                                                            context_manager=eoscale_manager,
-                                                           multiproc_context="fork",
+                                                           multiproc_context=args.multiproc_context,
                                                            filter_desc="Post processing...")
                 
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
                 
             t1 = time.time()
-
-            print("Total time (user)       :\t" + str(t1-t0))
+            print(f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****")
+            print("Total time (user)       :\t" + utils.convert_time(t1-t0))
                 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)

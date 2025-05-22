@@ -28,9 +28,11 @@
 
   "resources":
     {
-      "n_workers": 8,
-      "save_mode": "none",
-      "n_jobs": 1
+	"n_workers": 8,
+	"tile_max_size": 0,
+	"multiproc_context": "fork",
+	"save_mode": "none",
+	"n_jobs": 1
     },
 
   "prepare":
@@ -93,7 +95,7 @@
       "max_ndvi_noveg": 0,
       "non_veg_clusters": null,
       "nb_clusters_low_veg": 3,
-      "max_low_veg": null,
+      "max_texture_th": null,
       "texture_mode": "yes",
       "filter_texture": 90,
       "debug": false

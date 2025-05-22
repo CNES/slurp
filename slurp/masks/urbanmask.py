@@ -50,10 +50,10 @@ def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict)
 
     :param list input_buffer: VHR input image [valid_stack, vegetationmask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys "vegmask_max_value" and "veg_binary_dilation"
+    :param dict params: dictionary of arguments, must contain the keys "vegmask_min_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    non_veg = np.where(input_buffer[1] < params["vegmask_max_value"], True, False)
+    non_veg = np.where(input_buffer[1] < params["vegmask_min_value"], True, False)
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
     non_veg_dilated = apply_morpho(non_veg[0], "binary_dilation", params["veg_binary_dilation"])
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
@@ -96,7 +96,7 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     else:
         s_rows = []
         s_cols = []
-        
+
     return s_rows, s_cols
 
 
@@ -124,26 +124,25 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     nb_urban_subsamples = round(urban_ratio * params["nb_samples_urban"])
     nb_other_subsamples = round(other_ratio * params["nb_samples_other"])
 
+    rows_b, cols_b = [], []
+    rows_nob, cols_nob = [], []
     if nb_urban_subsamples > 0:
         # Building samples
-        rows, cols = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
+        rows_b, cols_b = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
 
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
-            rows = np.concatenate((rows, rows_nob), axis=0)
-            cols = np.concatenate((cols, cols_nob), axis=0)
     else:
-        rows, cols = [], []
+
         if nb_other_subsamples > 0:
-            rows, cols = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
-    
+            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
+
+    rows = np.concatenate((rows_b, rows_nob)) 
+    cols = np.concatenate((cols_b, cols_nob)) 
+            
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[1:]), axis=0) 
-    
-    if rows == [] or cols == []:
-        samples = np.zeros(shape=(0, im_stack.shape[0]))
-    else:
-        samples = np.transpose(im_stack[:, rows, cols])
+    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
     
     return samples
 
@@ -226,8 +225,8 @@ def getarguments():
                                             "big shadow areas will be marked as background")
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
-    group2.add_argument("-vegmask_max_value", type=int,
-                        help="Vegetation mask value for vegetated areas : all pixels with lower value will be predicted")
+    group2.add_argument("-vegmask_min_value", type=int,
+                        help="Vegetation min value for vegetated areas : all pixels with lower value will be predicted")
     group2.add_argument("-veg_binary_dilation", type=int,
                         help="Size of disk structuring element (dilate non vegetated areas)")
     group2.add_argument("-value_classif", type=int,
@@ -250,6 +249,8 @@ def getarguments():
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
+    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
     
     return parser.parse_args()
 
@@ -277,7 +278,7 @@ def main():
     makedirs(path.dirname(args.urbanmask), exist_ok=True)
     
     # Mask calculation    
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
             
             t0 = time.time()
@@ -303,7 +304,7 @@ def main():
                     generate_output_profiles=eo_utils.single_bool_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="Valid stack processing with vegetationmask..."
                 )
                 key_valid_stack = key_valid_stack[0]
@@ -317,7 +318,7 @@ def main():
                     generate_output_profiles=eo_utils.single_bool_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
-                    multiproc_context="fork",
+                    multiproc_context=args.multiproc_context,
                     filter_desc="Valid stack processing with watermask..."
                 )
                 key_valid_stack = key_valid_stack[0]
@@ -359,7 +360,7 @@ def main():
                                                       context_manager=eoscale_manager,
                                                       concatenate_filter=eo_utils.concatenate_samples,
                                                       output_scalars=[],
-                                                      multiproc_context="fork",
+                                                      multiproc_context=args.multiproc_context,
                                                       filter_desc="Samples building processing...")
 
                 samples = np.concatenate(samples[:])
@@ -394,7 +395,7 @@ def main():
                                                                 generate_output_profiles=eo_utils.double_uint8_profile,
                                                                 stable_margin=0,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context="spawn",
                                                                 filter_desc="RF prediction processing...")
                 time_random_forest = time.time()
 
@@ -420,7 +421,7 @@ def main():
                                                                 filter_parameters={"fill_value": 100},
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Add nodata...")
                 
                 # Save proba mask
@@ -435,7 +436,7 @@ def main():
                                                                 filter_parameters={"fill_value": 0},
                                                                 generate_output_profiles=eo_utils.single_uint8_profile,
                                                                 context_manager=eoscale_manager,
-                                                                multiproc_context="fork",
+                                                                multiproc_context=args.multiproc_context,
                                                                 filter_desc="Add nodata...")
 
                 # Save proba mask

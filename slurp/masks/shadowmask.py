@@ -26,13 +26,14 @@ This script computes a shadow mask
 import argparse
 import traceback
 from os import path, makedirs
+import time
 
 import numpy as np
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
 
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import io_utils
+from slurp.tools import io_utils, utils
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools.constant import NODATA_int8
 
@@ -105,7 +106,9 @@ def getarguments():
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
-
+    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
+    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
+    
     args = parser.parse_args()
 
     return args
@@ -116,7 +119,8 @@ def main():
     """Main function that compute Shadowmask"""
     
     argparse_dict = vars(getarguments())
-
+    t0 = time.time()
+    
     # Read the JSON files
     keys = ["input", "aux_layers", "masks", "resources", "post_process", "shadows"]
     argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
@@ -134,7 +138,7 @@ def main():
     makedirs(path.dirname(args.shadowmask), exist_ok=True)
     
     # Mask calculation
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
 
             # Store image in shared memory
@@ -193,10 +197,16 @@ def main():
                                                             generate_output_profiles=eo_utils.single_uint8_profile,
                                                             stable_margin=args.remove_small_objects,
                                                             context_manager=eoscale_manager,
+                                                            multiproc_context=args.multiproc_context,
                                                             filter_desc="Shadow mask processing...")
 
             eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
 
+            end_time = time.time()
+            print(f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****")
+            print("Total time (user)       :\t" + utils.convert_time(end_time - t0))
+
+            
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
