@@ -131,16 +131,15 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     return app_roi.GetVectorImageAsNumpyArray("out")
 
 
-def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_data, step=30):
+def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     """ 
-    Reproject georeferenced data into sensor geometry
+    Compute an interpolation grid (lons/lats) -> x/y coords that will help reproject 
+    global georeferenced data in sensor geometry
 
-    :param str input_data: path to global data (ie : Pekel, WSF, etc.) to crop and reproject
     :param str sensor_image: path to input image in its raw geometry (sensor)
     :param str dtm_file: path to the DTM
     :param str geoid_file: path to the Geoid
-    :param str projected_data: path to the output projected data
-    :param int step: TODO document (default, 30)
+    :param int step: grid step (default, 30)
     """
     try:
         from shareloc.geomodels import GeoModel
@@ -152,8 +151,6 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
         import bindings_cpp
     except:
         raise Exception("\n*** Shareloc is not installed ***\n")
-        
-    import scipy
     
     # Import image geometrical model
     geom_model_optim = GeoModel(sensor_image, "RPCoptim")
@@ -171,8 +168,9 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     col, row = np.meshgrid(x, y)
     grid_nb_cols, grid_nb_rows = col.shape
 
-    epi_lp = np.vstack((col.flatten(), row.flatten()))
-    epi_pos_left = epi_lp.transpose()
+    cols_rows = np.vstack((col.flatten(), row.flatten()))
+    cols_rows_t = cols_rows.transpose()
+    
     # Full image
     all_x = np.arange(0, nb_col, pix_col)
     all_y = np.arange(0, nb_row, pix_row)
@@ -182,11 +180,37 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     # Load Shareloc direct loc function
     # force shareloc to use north for vertical direction (compatible with images with
     # positive or negative y spacing
+
+    # open DTM in a ROI (add margin on supposed extent)
+    loc_alt_min = Localization(geom_model_optim, elevation=-2000.,
+                                  image=Image(sensor_image, vertical_direction="north"), epsg=4326)
+    loc_alt_max = Localization(geom_model_optim, elevation=10000.,
+                                  image=Image(sensor_image, vertical_direction="north"), epsg=4326)
+
+
+    lon_lat_lr_corner_altmax = loc_alt_max.direct(data_img.shape[0]-1, data_img.shape[1]-1)[0][0:2]
+    lon_lat_ul_corner_altmax = loc_alt_max.direct(0,0)[0][0:2]
+    
+    lon_lat_lr_corner_altmin = loc_alt_min.direct(data_img.shape[0]-1, data_img.shape[1]-1)[0][0:2]
+    lon_lat_ul_corner_altmin = loc_alt_min.direct(0,0)[0][0:2]
+
+    min_lat = min(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmin[1])
+    min_lon = min(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmin[0])
+    max_lat = max(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmin[1])
+    max_lon = max(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmin[0])
+    
+    # compute usable extent and add a margin
+    footprint_dtm = [min_lat, min_lon, max_lat, max_lon]
+    footprint_dtm[0] -= 0.5
+    footprint_dtm[1] -= 0.5
+    footprint_dtm[2] += 0.5
+    footprint_dtm[3] += 0.5
+
     image = Image(sensor_image, vertical_direction="north")
     dtm_image = dtm_reader(
         dtm_file,
         geoid_file,
-        roi=None,
+        roi= footprint_dtm,
         roi_is_in_physical_space=True,
         fill_nodata=None,
         fill_value=0.0
@@ -198,8 +222,10 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
         dtm_image.nb_columns,
         dtm_image.transform
     )
-    loc_optim = Localization(geom_model_optim, elevation=dtm_optim, image=image, epsg=4326)
 
+    # Localization model taking into account local DTM
+    loc_optim = Localization(geom_model_optim, elevation=dtm_optim, image=image, epsg=4326)
+    
     # Get bbox pixel coordinates in lat/lon
     coords_bbox_min = None
     coords_bbox_max = None
@@ -218,46 +244,76 @@ def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_
     max_lat = np.maximum(np.max(coords_bbox_min[:, 1]), np.max(coords_bbox_max[:, 1]))
 
     # Direct localization of resampled image to get associated terrain coordinates
-    coords_4326 = None
-    for pix_x, pix_y in epi_pos_left:
-        if coords_4326 is None:
-            coords_4326 = np.array([loc_optim.direct(pix_x, pix_y, using_geotransform=True)[0][:2]])
-        else:
-            coords_4326 = np.append(coords_4326, np.array([loc_optim.direct(pix_x, pix_y, using_geotransform=True)[0][:2]]), axis=0)
-
+    coords_4326 = loc_optim.direct(cols_rows_t[:,0], cols_rows_t[:,1], using_geotransform=True)[:,:2]
+    
     coords_lon = coords_4326[:, 0].reshape((grid_nb_cols, grid_nb_rows))
     coords_lat = coords_4326[:, 1].reshape((grid_nb_cols, grid_nb_rows))
-        
+
     # interpolate positions on image coordinates
     grid_positions = (y, x)
 
+    roi = [min_lat, min_lon, max_lat, max_lon]
+
+    #  grid in sensor (every n step), grid in lon/lat (every n step), grid of every pixel in sensor, roi to load on external data
+    return grid_positions, (coords_lon, coords_lat), all_coords, roi
+
+    
+
+def sensor_projection(input_data, sensor_image, dtm_file, geoid_file, projected_data, grid_sensor, grid_geo, all_coords, roi):
+    """ 
+    Reproject georeferenced data into sensor geometry
+
+    :param str input_data: path to global data (ie : Pekel, WSF, etc.) to crop and reproject
+    :param str sensor_image: path to input image in its raw geometry (sensor)
+    :param str dtm_file: path to the DTM
+    :param str geoid_file: path to the Geoid
+    :param str projected_data: path to the output projected data
+    """
+    try:
+        from shareloc.geomodels import GeoModel
+        from shareloc.dtm_reader import dtm_reader
+        from shareloc.geofunctions.dtm_intersection import DTMIntersection
+        from shareloc.geofunctions.localization import Localization
+        from shareloc.proj_utils import transform_physical_point_to_index
+        from shareloc.image import Image
+        import bindings_cpp
+    except:
+        raise Exception("\n*** Shareloc is not installed ***\n")
+        
+    import scipy
+    
+        
     # construct all pixels positions
     interp_lon = scipy.interpolate.interpn(
-        grid_positions, coords_lon, all_coords, method="linear", bounds_error=False, fill_value=None
+        grid_sensor, grid_geo[0], all_coords, method="linear", bounds_error=False, fill_value=None
     )
     interp_lat = scipy.interpolate.interpn(
-        grid_positions, coords_lat, all_coords, method="linear", bounds_error=False, fill_value=None
+        grid_sensor, grid_geo[1], all_coords, method="linear", bounds_error=False, fill_value=None
     )
     interp_pos = np.stack((interp_lat, interp_lon)).transpose()
 
     # load subset of external data
-    roi = [min_lat, min_lon, max_lat, max_lon]
     image_roi = Image(input_data, read_data=True, roi=roi, roi_is_in_physical_space=True)
 
+    
     # transform positions in pekel image positions
     indexes = transform_physical_point_to_index(image_roi.trans_inv, interp_pos[:, 0], interp_pos[:, 1])
-
+        
     # Nearest Neighbor
     # TODO use cars-resample to do linear interpolation ?
     values = np.round(indexes).astype(int)
     # get data at indexes
     image_data = image_roi.data[values[0, :], values[1, :]]
 
-    # DBG
-    reshaped_image = np.reshape(image_data, (nb_row, nb_col))
+    ds_sensor_image = rio.open(sensor_image)
+    profile = ds_sensor_image.profile
+    nb_rows = profile['height']
+    nb_columns = profile['width']
+    
+    reshaped_image = np.reshape(image_data, (nb_rows, nb_columns))
 
     ext_data = rio.open(input_data)
-    profile = data_img.profile
+    
     # force GTiff as output
     profile.update({'count': 1, 'dtype': ext_data.profile['dtype'], 'driver': "GTiff"})
     

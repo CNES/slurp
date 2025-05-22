@@ -26,13 +26,14 @@ import argparse
 import traceback
 from os import path, makedirs
 import json
+import time
 
 import numpy as np
 
 import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
-from slurp.tools import io_utils, eoscale_utils as eo_utils
-from slurp.prepare import validity, primitives, analyse_glcm
+from slurp.tools import io_utils, utils, eoscale_utils as eo_utils
+from slurp.prepare import validity, primitives, analyse_glcm, geometry
 from slurp.prepare import aux_files as aux
 
 
@@ -48,7 +49,7 @@ def getarguments():
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
-    group1.add_argument("-sensor_mode", type=bool, default=False, help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
+    group1.add_argument("-sensor_mode", type=bool, help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
     group1.add_argument("-dtm", help="Digital Terrain Model, used only in sensor mode")
     group1.add_argument("-geoid_file", help="Geoid file, used only in sensor mode")
     group1.add_argument("-valid", dest="valid_stack", help="Path to store the valid stack file")
@@ -117,6 +118,8 @@ def main():
     # Compute prepare data with eoscale
     with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
         try:
+            t0 = time.time()
+            
             # Store image in shared memory
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_phr)
@@ -191,16 +194,35 @@ def main():
             else:
                 print("Not computing NDWI : the file already exists.")
 
+
+            
+            ''' --------------------------------------------------------------------------------
+            External data recovery (Pekel, Hand, WSF) : these global raster database
+            must be superimposed on the VHR image.
+            
+            For sensor-mode only, we compute an interpolation grid taking into account
+            sensor geometry, geoid and DTM.
+            -------------------------------------------------------------------------------- '''
+            
+            if args.sensor_mode:
+                grid_sensor, grid_geo, all_coords, roi = geometry.compute_interpolation_grid(args.file_vhr, args.dtm, args.geoid_file)
+            else:
+                grid_sensor = None
+                grid_geo = None
+                all_coords = None
+                roi = None
+            
             # Pekel
             if args.pekel and args.extracted_pekel:
                 if args.overwrite or not path.isfile(args.extracted_pekel):
                     makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
                     if args.pekel_method == "month":
                         file_pekel = path.join(args.pekel_monthly_occurrence,"has_observations"+str(args.pekel_obs),"has_observations"+str(args.pekel_obs)+".vrt")
-                        print(f"DBG> {file_pekel=}")
-                        aux.aux_file_recovery(args.file_vhr, file_pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
+                        aux.aux_file_recovery(args.file_vhr, file_pekel, args.extracted_pekel, args.sensor_mode,
+                                              args.dtm, args.geoid_file, grid_sensor, grid_geo, all_coords, roi)
                     elif args.pekel_method == "all":
-                        aux.aux_file_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.sensor_mode, args.dtm, args.geoid_file)
+                        aux.aux_file_recovery(args.file_vhr, args.pekel, args.extracted_pekel, args.sensor_mode,
+                                              args.dtm, args.geoid_file, grid_sensor, grid_geo, all_coords, roi)
                     else:
                         raise Exception("Method for Pekel extraction not accepted. Use 'month' or 'all'")
                 else:
@@ -213,7 +235,7 @@ def main():
                 if args.overwrite or not path.isfile(args.extracted_hand):
                     makedirs(path.dirname(args.extracted_hand), exist_ok=True)
                     aux.aux_file_recovery(args.file_vhr, args.hand, args.extracted_hand,
-                                          args.sensor_mode, args.dtm, args.geoid_file)
+                                          args.sensor_mode, args.dtm, args.geoid_file, grid_sensor, grid_geo, all_coords, roi)
                 else:
                     print("Not extracting Hand : the file already exists.")
             else:
@@ -224,7 +246,7 @@ def main():
                 if args.overwrite or not path.isfile(args.extracted_wsf):
                     makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
                     aux.aux_file_recovery(args.file_vhr, args.wsf, args.extracted_wsf,
-                                          args.sensor_mode, args.dtm, args.geoid_file)
+                                          args.sensor_mode, args.dtm, args.geoid_file, grid_sensor, grid_geo, all_coords, roi)
                 else:
                     print("Not extracting WSF : the file already exists.")
             else:
@@ -271,6 +293,10 @@ def main():
                 json.dump(final_used_config, file_to_save, indent=4)
 
             eoscale_manager._release_all()
+
+
+            t1 = time.time()
+            print("Total time (user)       :\t" + utils.convert_time(t1-t0))
                 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
