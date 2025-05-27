@@ -178,8 +178,8 @@ def watershed_categorized_water(wbm, watermask, params):
 
 def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
     """
-    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf
-    0          1              2              3             4              5               6
+    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf [, key_wbm ]
+    0          1              2              3             4              5               6       [ 7 ]
     """
     input_image = input_buffer[0]
     valid_stack = input_buffer[1]
@@ -188,6 +188,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     urbanmask   = input_buffer[4]
     shadowmask  = input_buffer[5]
     wsf = input_buffer[6]
+    
 
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
