@@ -18,13 +18,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Brings together some useful functions"""
+"""Brings together some useful functions"""
 
-import time
-import numpy as np
-from slurp.tools.constant import NODATA_int8
-import psutil
 import os
+import time
+
+import numpy as np
+import psutil
+
+from slurp.tools.constant import NODATA_int8
+
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -47,7 +50,9 @@ def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:
     return mask_ref
 
 
-def compute_mask_threshold(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
+def compute_mask_threshold(
+    input_buffers: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Compute boolean mask with threshold value
 
@@ -61,9 +66,12 @@ def compute_mask_threshold(input_buffers: list, input_profiles: list, params: di
 
     return mask
 
+
 def display_mem_usage(debug_mode, message):
     if debug_mode:
         pid = os.getpid()
         python_process = psutil.Process(pid)
-        memoryUse = python_process.memory_info()[0]/2.**30  # memory use in GB...I think
+        memoryUse = (
+            python_process.memory_info()[0] / 2.0**30
+        )  # memory use in GB...I think
         print(f">> {message} >> Mem usage : {memoryUse} Gb")

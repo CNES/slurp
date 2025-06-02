@@ -18,16 +18,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Brings together useful functions common to the different scripts  """
+"""Brings together useful functions common to the different scripts"""
 import json
-import rasterio as rio
+
 import matplotlib.pyplot as plt
 import numpy as np
+import rasterio as rio
 
 from slurp.tools.constant import COMPRESSION, DRIVER
 
 
-def read_json(main_config_file: str, keys: list, user_config_file: str = None) -> dict:
+def read_json(
+    main_config_file: str, keys: list, user_config_file: str = None
+) -> dict:
     """
     Read JSON config files
 
@@ -47,7 +50,9 @@ def read_json(main_config_file: str, keys: list, user_config_file: str = None) -
     except FileNotFoundError:
         print(f"File {main_config_file} not found.")
     except json.JSONDecodeError:
-        print(f"Error decoding JSON data from {main_config_file}. Please check the file format.")
+        print(
+            f"Error decoding JSON data from {main_config_file}. Please check the file format."
+        )
 
     if user_config_file:
         # Read the JSON data from the input file
@@ -60,7 +65,9 @@ def read_json(main_config_file: str, keys: list, user_config_file: str = None) -
         except FileNotFoundError:
             print(f"File {user_config_file} not found.")
         except json.JSONDecodeError:
-            print(f"Error decoding JSON data from {user_config_file}. Please check the file format.")
+            print(
+                f"Error decoding JSON data from {user_config_file}. Please check the file format."
+            )
 
     return argsdict
 
@@ -77,8 +84,8 @@ def print_dataset_infos(dataset, prefix=""):
     print(prefix, "Image crs :", dataset.crs)
     print(prefix, "Image bounds :", dataset.bounds)
     print()
-    
-    
+
+
 def save_image(
     image,
     file,
@@ -95,7 +102,7 @@ def save_image(
     Note that rio.dtype is string so convert np.dtype to string.
     rpc must be a dictionary.
     """
-    
+
     dataset = rio.open(
         file,
         "w",
@@ -120,12 +127,14 @@ def save_image(
 
     if tags:
         dataset.update_tags(**tags)
-        
+
     dataset.close()
     del dataset
 
 
-def save_image_n_bands(image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs):
+def save_image_n_bands(
+    image, file, crs=None, transform=None, nodata=None, rpc=None, **kwargs
+):
     """
     Save n bands numpy image to file with lzw compression.
     Note that rio.dtype is string so convert np.dtype to string.
@@ -143,10 +152,10 @@ def save_image_n_bands(image, file, crs=None, transform=None, nodata=None, rpc=N
         dtype=str(image.dtype),
         crs=crs,
         transform=transform,
-        **kwargs
+        **kwargs,
     ) as dataset:
         for i in range(image.shape[0]):
-            dataset.write(image[i], i+1)
+            dataset.write(image[i], i + 1)
 
         dataset.nodata = nodata
 
@@ -208,14 +217,14 @@ def show_histograms2(image1, title1, image2, title2, **kwargs):
         hist1,
         color="blue",
         label=title1,
-        **kwargs
+        **kwargs,
     )
     axe.plot(
         np.arange(-1000, 1001, step=10),
         hist2,
         color="red",
         label=title2,
-        **kwargs
+        **kwargs,
     )
 
     fig.tight_layout()
@@ -223,7 +232,9 @@ def show_histograms2(image1, title1, image2, title2, **kwargs):
     plt.show()
 
 
-def show_histograms4(image1, title1, image2, title2, image3, title3, image4, title4, **kwargs):
+def show_histograms4(
+    image1, title1, image2, title2, image3, title3, image4, title4, **kwargs
+):
     """Compute and show 4 histograms with matplotlib."""
 
     fig, axe = plt.subplots(nrows=1, ncols=1, figsize=(14, 7))

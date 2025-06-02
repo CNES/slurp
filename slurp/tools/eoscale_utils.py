@@ -18,11 +18,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""  Brings together functions used by eoscale"""
+"""Brings together functions used by eoscale"""
 import copy
+
 import numpy as np
 
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_int8, NODATA_int16
+
 
 def print_dataset_infos(name, profile, prefix=""):
     """Print information about rasterio dataset."""
@@ -45,8 +47,9 @@ def concatenate_samples(output_scalars, chunk_output_scalars, tile):
 
 # Profiles
 
+
 def single_float_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.float32
@@ -57,18 +60,18 @@ def single_float_profile(input_profiles: list, map_params):
 
 
 def single_bool_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = bool
     profile["compress"] = COMPRESSION.lower()
     profile["driver"] = DRIVER
-    
+
     return profile
-    
+
 
 def single_uint8_1b_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
@@ -81,43 +84,43 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
 
 
 def single_uint8_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
     profile["nodata"] = NODATA_int8
     profile["driver"] = DRIVER
-    
+
     return profile
 
 
 def single_int16_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int16
     profile["nodata"] = NODATA_int16
     profile["compress"] = COMPRESSION.lower()
     profile["driver"] = DRIVER
-    
+
     return profile
 
 
 def single_uint16_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint16
     profile["nodata"] = NODATA_int16
     profile["compress"] = COMPRESSION.lower()
     profile["driver"] = DRIVER
-    
+
     return profile
 
 
 def single_int32_profile(input_profiles: list, map_params):
-    """ Define profile for eoscale """
+    """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int32
@@ -128,39 +131,39 @@ def single_int32_profile(input_profiles: list, map_params):
 
 
 def three_uint8_profile(input_profiles: list, map_params):
-    """ Define profiles for eoscale """
+    """Define profiles for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 3
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
     profile["nodata"] = NODATA_int8
     profile["driver"] = DRIVER
-    
+
     return profile
 
 
 def five_uint8_profile(input_profiles: list, map_params):
-    """ Define profiles for eoscale """
+    """Define profiles for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 5
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
     profile["nodata"] = NODATA_int8
     profile["driver"] = DRIVER
-    
+
     return profile
 
 
 def double_uint8_profile(input_profiles: list, map_params):
-    """ Define profiles for eoscale """
+    """Define profiles for eoscale"""
     profile1 = input_profiles[0]
     profile1["count"] = 1
     profile1["dtype"] = np.uint8
     profile1["nodata"] = NODATA_int8
     profile1["compress"] = COMPRESSION.lower()
     profile1["driver"] = DRIVER
-    
+
     # avoid to modify profile1
     profile2 = copy.deepcopy(profile1)
-       
-    return [profile1, profile2] 
+
+    return [profile1, profile2]

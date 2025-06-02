@@ -19,12 +19,14 @@
 # limitations under the License.
 
 
-""" Brings together functions that create valid mask"""
+"""Brings together functions that create valid mask"""
 
 import numpy as np
 
 
-def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def compute_valid_stack(
+    input_buffer: list, input_profiles: list, args: dict
+) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image
 
@@ -33,11 +35,15 @@ def compute_valid_stack(input_buffer: list, input_profiles: list, args: dict) ->
     :param dict args: dictionary of arguments, must contain a key "nodata"
     :returns: valid_mask (boolean numpy array, True = valid data, False = no data)
     """
-    valid_mask = np.logical_and.reduce(input_buffer[0] != args["nodata"], axis=0)
+    valid_mask = np.logical_and.reduce(
+        input_buffer[0] != args["nodata"], axis=0
+    )
     return valid_mask
 
 
-def compute_valid_stack_clouds(input_buffer: list, input_profiles: list, args: dict) -> np.ndarray:
+def compute_valid_stack_clouds(
+    input_buffer: list, input_profiles: list, args: dict
+) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image with a cloud mask
 

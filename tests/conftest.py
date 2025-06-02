@@ -21,11 +21,12 @@
 """Fixtures definitions"""
 
 import json
-import pytest
 import os
 
-pytest.register_assert_rewrite('tests.utils')
-pytest.register_assert_rewrite('tests.validation')
+import pytest
+
+pytest.register_assert_rewrite("tests.utils")
+pytest.register_assert_rewrite("tests.validation")
 
 
 def pytest_collection_modifyitems(items, config):
@@ -34,16 +35,16 @@ def pytest_collection_modifyitems(items, config):
         if not any(item.iter_markers()):
             item.add_marker("default")
     # Ensure the `default` marker is always selected for
-    markexpr = config.getoption("markexpr", 'False')
-    if markexpr := config.getoption('markexpr', 'False'):
+    markexpr = config.getoption("markexpr", "False")
+    if markexpr := config.getoption("markexpr", "False"):
         config.option.markexpr = f"({markexpr})"
     else:
         config.option.markexpr = "default or computation_and_validation"
-        
-        
+
+
 def pytest_configure(config):
     current_dir = os.path.dirname(__file__)
-    with open(os.path.join(current_dir, 'config_tests.json')) as f:
+    with open(os.path.join(current_dir, "config_tests.json")) as f:
         conf = json.load(f)
         pytest.data_dir = conf["data_dir"]
         pytest.sensor_goem_dir = conf["sensor_goem_dir"]
@@ -53,6 +54,6 @@ def pytest_configure(config):
         pytest.pekel = conf["pekel"]
         pytest.hand = conf["hand"]
         pytest.wsf = conf["wsf"]
-    pytest.main_config = os.path.join(current_dir, 'main_config_tests.json')
+    pytest.main_config = os.path.join(current_dir, "main_config_tests.json")
     if not os.path.exists(pytest.output_dir):
         os.makedirs(pytest.output_dir)

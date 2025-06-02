@@ -19,18 +19,19 @@
 # limitations under the License.
 
 
-""" Module to rasterize image with OTB"""
-import os
-import traceback
+"""Module to rasterize image with OTB"""
 import argparse
+import os
 import time
+import traceback
+
 import otbApplication as otb
 
 from slurp.tools.constant import COMPRESSION
 
 
 def rasterize(args):
-    """ Create a rasterized copy of the image passed in arguments  """
+    """Create a rasterized copy of the image passed in arguments"""
     start_time = time.time()
 
     app_reproj = otb.Registry.CreateApplication("VectorDataExtractROI")
@@ -49,41 +50,70 @@ def rasterize(args):
 
     app_si = otb.Registry.CreateApplication("Superimpose")
     app_si.SetParameterString("inr", args.im)
-    app_si.SetParameterInputImage("inm", app_raster.GetParameterOutputImage("out"))
+    app_si.SetParameterInputImage(
+        "inm", app_raster.GetParameterOutputImage("out")
+    )
     if args.dilate > 0:
         app_si.SetParameterString("out", "superimpose")
         app_si.Execute()
         print("Dilatation of vector data / write final result")
-        app_morpho = otb.Registry.CreateApplication("BinaryMorphologicalOperation")
-        app_morpho.SetParameterInputImage("in", app_si.GetParameterOutputImage("out"))
+        app_morpho = otb.Registry.CreateApplication(
+            "BinaryMorphologicalOperation"
+        )
+        app_morpho.SetParameterInputImage(
+            "in", app_si.GetParameterOutputImage("out")
+        )
         app_morpho.SetParameterInt("xradius", args.dilate)
         app_morpho.SetParameterInt("yradius", args.dilate)
-        app_morpho.SetParameterString("out", str(args.out+f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"))
-        app_morpho.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
+        app_morpho.SetParameterString(
+            "out",
+            str(
+                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+            ),
+        )
+        app_morpho.SetParameterOutputImagePixelType(
+            "out", otb.ImagePixelType_uint8
+        )
         app_morpho.ExecuteAndWriteOutput()
     else:
         print("Write final result")
-        app_si.SetParameterString("out", str(args.out+f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"))
+        app_si.SetParameterString(
+            "out",
+            str(
+                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+            ),
+        )
         app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
         app_si.ExecuteAndWriteOutput()
 
     os.system("rm tmp_OSM_data.sqlite")
 
-    print("Execution time : "+str(time.time() - start_time))
+    print("Execution time : " + str(time.time() - start_time))
 
 
 def getarguments():
-    """ Parse command line arguments. """
+    """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(
         description="Rasterize OSM layer with respect to an input image geographic extent and spacing"
     )
 
-    parser.add_argument("-osm", required=True, action="store", help="OSM building layer")
-    parser.add_argument("-im", required=True, action="store", help="Reference image")
-    parser.add_argument("-dilate", required=False, type=int, default=0,
-                        help="Dilatation radius (for line layers - roads, etc.")
-    parser.add_argument("-out", required=True, action="store", help="Result file")
+    parser.add_argument(
+        "-osm", required=True, action="store", help="OSM building layer"
+    )
+    parser.add_argument(
+        "-im", required=True, action="store", help="Reference image"
+    )
+    parser.add_argument(
+        "-dilate",
+        required=False,
+        type=int,
+        default=0,
+        help="Dilatation radius (for line layers - roads, etc.",
+    )
+    parser.add_argument(
+        "-out", required=True, action="store", help="Result file"
+    )
 
     return parser.parse_args()
 

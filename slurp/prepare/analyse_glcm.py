@@ -18,7 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" 
+"""
 Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation
 """
 
@@ -26,6 +26,7 @@ import numpy as np
 import rasterio as rio
 
 from slurp.prepare import geometry
+
 
 def get_advices(veg, low_veg, high_veg, nb_total):
     """
@@ -37,7 +38,7 @@ def get_advices(veg, low_veg, high_veg, nb_total):
     :param int nb_total: total number of pixels
     :returns: number of clusters for vegetation and low vegetation
     """
-    pct_veg = 100*veg/nb_total
+    pct_veg = 100 * veg / nb_total
     if pct_veg == 0:
         return 0, 0
     nb_clusters_veg = 3
@@ -63,12 +64,14 @@ def get_advices(veg, low_veg, high_veg, nb_total):
         nb_clusters_low_veg = 5
 
     return nb_clusters_veg, nb_clusters_low_veg
-    
-        
-def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tuple:
+
+
+def compute_stats(
+    im: str, map_lc: str, cropped: bool, sensor_mode: bool
+) -> tuple:
     """
     Compute ratio of vegetation, low vegetation and vegetation in the ROI
-    
+
     :param str im: path to the input VHR image
     :param str map_lc: path to the land cover map
     :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
@@ -77,10 +80,11 @@ def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tup
     if not cropped:
         # get ROI before computing stats
         if sensor_mode:
-            print("ERROR : GLCM analysis not implemented for sensor mode yet. Returns default clustering values")
+            print(
+                "ERROR : GLCM analysis not implemented for sensor mode yet. Returns default clustering values"
+            )
             return 3, 3
-        else:
-            data_map = geometry.get_extract_roi(map_lc, im)
+        data_map = geometry.get_extract_roi(map_lc, im)
     else:
         # get all data from map_lc
         ds = rio.open(map_lc)
@@ -90,18 +94,19 @@ def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tup
 
     print(f"{data_map.shape}")
 
-    legend = {10: "Tree cover",
-              20: "Shrubland",
-              30: "Grassland",
-              40: "Cropland",
-              50: "Built-up",
-              60: "Bare / Sparse vegetation",
-              70: "Snow and ice",
-              80: "Permanent water bodies",
-              90: "Herbaceous wetland",
-              95: "Mangroves",
-              100: "Moss and lichen"
-              }
+    legend = {
+        10: "Tree cover",
+        20: "Shrubland",
+        30: "Grassland",
+        40: "Cropland",
+        50: "Built-up",
+        60: "Bare / Sparse vegetation",
+        70: "Snow and ice",
+        80: "Permanent water bodies",
+        90: "Herbaceous wetland",
+        95: "Mangroves",
+        100: "Moss and lichen",
+    }
     width = data_map.shape[0]
     height = data_map.shape[1]
 
@@ -120,13 +125,15 @@ def compute_stats(im: str, map_lc: str, cropped: bool, sensor_mode: bool) -> tup
         if v in [10, 95]:
             high_veg += c
 
-    nb_clusters_veg, nb_clusters_low_veg = get_advices(veg, low_veg, high_veg, nb_total)
-            
+    nb_clusters_veg, nb_clusters_low_veg = get_advices(
+        veg, low_veg, high_veg, nb_total
+    )
+
     print(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
     print(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
     print(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
 
     print(f"export VEG_CLUSTERS={nb_clusters_veg}")
     print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
-    
+
     return nb_clusters_veg, nb_clusters_low_veg

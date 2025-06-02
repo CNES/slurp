@@ -18,22 +18,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Compute building and road masks from VHR images thanks to OSM layers """
+"""Compute building and road masks from VHR images thanks to OSM layers"""
 
 import argparse
 import gc
 import time
 import traceback
-from os import path, makedirs
+from os import makedirs, path
 
-import numpy as np
-
-from sklearn.ensemble import RandomForestClassifier
-import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
+import eoscale.manager as eom
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import io_utils, utils, RF_utils
+from slurp.tools import RF_utils
 from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_int8
 
 try:
@@ -44,7 +45,9 @@ except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
 
-def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def apply_vegetationmask(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside vegetation mask
 
@@ -53,15 +56,21 @@ def apply_vegetationmask(input_buffer: list, input_profiles: list, params: dict)
     :param dict params: dictionary of arguments, must contain the keys "vegmask_min_value" and "veg_binary_dilation"
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    non_veg = np.where(input_buffer[1] < params["vegmask_min_value"], True, False)
+    non_veg = np.where(
+        input_buffer[1] < params["vegmask_min_value"], True, False
+    )
     # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
-    non_veg_dilated = apply_morpho(non_veg[0], "binary_dilation", params["veg_binary_dilation"])
+    non_veg_dilated = apply_morpho(
+        non_veg[0], "binary_dilation", params["veg_binary_dilation"]
+    )
     valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
 
     return valid_stack
 
 
-def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def apply_watermask(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image outside water mask
 
@@ -70,27 +79,31 @@ def apply_watermask(input_buffer: list, input_profiles: list, params: dict) -> n
     :param dict params: dictionary of arguments (not used but necessary for eoscale)
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    valid_stack = np.logical_and(input_buffer[0], np.where(input_buffer[1] == 0, True, False))
+    valid_stack = np.logical_and(
+        input_buffer[0], np.where(input_buffer[1] == 0, True, False)
+    )
 
     return valid_stack
 
-    
+
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     """
     Recover of row and columns indices selected on the valid pixel of the image
-    
-    :param int nb_samples: 
+
+    :param int nb_samples:
     :param boolean numpy array valid_mask :
     :param boolean numpy array mask_ground_truth :
     :return: tuple of list , row indices and columns indices
     """
-    valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
+    valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(
+        np.uint8
+    )
     _, rows, cols = np.where(valid_samples)
 
     if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
         # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
-        indices = np.arange(0, len(rows)-1, int(len(rows)/nb_samples))
+        indices = np.arange(0, len(rows) - 1, int(len(rows) / nb_samples))
         s_rows = rows[indices]
         s_cols = cols[indices]
     else:
@@ -100,7 +113,9 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     return s_rows, s_cols
 
 
-def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def build_samples(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Build samples
 
@@ -110,17 +125,29 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     :returns: Retrieve number of pixels for each class
     """
     # Beware that WSF ground truth contains 0 (non building), 255 (building) but sometimes 1 (invalid pixels ?)
-    mask_building_before_erosion = np.where(input_buffer[1] == params["value_classif"], True, False)
-    mask_building = [apply_morpho(mask_building_before_erosion[0], "binary_erosion", params["gt_binary_erosion"])]
+    mask_building_before_erosion = np.where(
+        input_buffer[1] == params["value_classif"], True, False
+    )
+    mask_building = [
+        apply_morpho(
+            mask_building_before_erosion[0],
+            "binary_erosion",
+            params["gt_binary_erosion"],
+        )
+    ]
     mask_non_building = np.where(input_buffer[1] == 0, True, False)
-    
+
     # Retrieve number of pixels for each class
-    nb_built_subset = np.count_nonzero(np.logical_and(mask_building, input_buffer[0]))
-    nb_other_subset = np.count_nonzero(np.logical_and(mask_non_building, input_buffer[0]))
+    nb_built_subset = np.count_nonzero(
+        np.logical_and(mask_building, input_buffer[0])
+    )
+    nb_other_subset = np.count_nonzero(
+        np.logical_and(mask_non_building, input_buffer[0])
+    )
     # Ratio of pixel class compare to the full image ratio
     urban_ratio = nb_built_subset / params["nb_valid_built_pixels"]
     other_ratio = nb_other_subset / params["nb_valid_other_pixels"]
-    # Retrieve number of samples to create for each class in this subset 
+    # Retrieve number of samples to create for each class in this subset
     nb_urban_subsamples = round(urban_ratio * params["nb_samples_urban"])
     nb_other_subsamples = round(other_ratio * params["nb_samples_other"])
 
@@ -128,26 +155,36 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     rows_nob, cols_nob = [], []
     if nb_urban_subsamples > 0:
         # Building samples
-        rows_b, cols_b = get_grid_indexes_from_mask(nb_urban_subsamples, input_buffer[0][0], mask_building)
+        rows_b, cols_b = get_grid_indexes_from_mask(
+            nb_urban_subsamples, input_buffer[0][0], mask_building
+        )
 
         if nb_other_subsamples > 0:
-            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
+            rows_nob, cols_nob = get_grid_indexes_from_mask(
+                nb_other_subsamples, input_buffer[0][0], mask_non_building
+            )
     else:
 
         if nb_other_subsamples > 0:
-            rows_nob, cols_nob = get_grid_indexes_from_mask(nb_other_subsamples, input_buffer[0][0], mask_non_building)
+            rows_nob, cols_nob = get_grid_indexes_from_mask(
+                nb_other_subsamples, input_buffer[0][0], mask_non_building
+            )
 
-    rows = np.concatenate((rows_b, rows_nob)) 
-    cols = np.concatenate((cols_b, cols_nob)) 
-            
+    rows = np.concatenate((rows_b, rows_nob))
+    cols = np.concatenate((cols_b, cols_nob))
+
     # Prepare samples for learning
-    im_stack = np.concatenate((input_buffer[1:]), axis=0) 
-    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
-    
+    im_stack = np.concatenate((input_buffer[1:]), axis=0)
+    samples = np.transpose(
+        im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
+    )
+
     return samples
 
 
-def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> list:
+def rf_prediction(
+    input_buffer: list, input_profiles: list, params: dict
+) -> list:
     """
     Random Forest prediction
 
@@ -174,7 +211,9 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> lis
         prediction[0][nodata_mask[0]] = NODATA_int8
 
         proba_buildings = np.zeros(valid_mask.shape)
-        proba_buildings[0][valid_mask[0]] = 100 * proba[:, 1]  # Proba for class 1 (buildings)
+        proba_buildings[0][valid_mask[0]] = (
+            100 * proba[:, 1]
+        )  # Proba for class 1 (buildings)
         proba_buildings[0][nodata_mask[0]] = NODATA_int8
 
     else:
@@ -185,7 +224,9 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> lis
     return [proba_buildings, prediction]
 
 
-def add_nodata(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def add_nodata(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Add nodata to the predicted mask
 
@@ -206,64 +247,128 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Urban Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument(
+        "main_config", help="First JSON file, load basis arguments"
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
-    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument(
+        "-user_config",
+        help="Second JSON file, overload basis arguments if keys are the same",
+    )
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
     group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster filename")
-    group1.add_argument("-layers", nargs="+", dest="files_layers",
-                        help="Add layers as additional features used by learning algorithm")
-    group1.add_argument("-watermask", help="Watermask filename (facultative) : "
-                                           "urban mask will be learned & predicted, excepted on water areas")
-    group1.add_argument("-vegetationmask", help="Vegetation mask filename (facultative) : "
-                                                "urban mask will be learned & predicted, excepted on vegetated areas")
-    group1.add_argument("-shadowmask", help="Shadowmask filename (facultative) : "
-                                            "big shadow areas will be marked as background")
+    group1.add_argument(
+        "-wsf",
+        dest="extracted_wsf",
+        help="Extracted World Settlement Footprint raster filename",
+    )
+    group1.add_argument(
+        "-layers",
+        nargs="+",
+        dest="files_layers",
+        help="Add layers as additional features used by learning algorithm",
+    )
+    group1.add_argument(
+        "-watermask",
+        help="Watermask filename (facultative) : "
+        "urban mask will be learned & predicted, excepted on water areas",
+    )
+    group1.add_argument(
+        "-vegetationmask",
+        help="Vegetation mask filename (facultative) : "
+        "urban mask will be learned & predicted, excepted on vegetated areas",
+    )
+    group1.add_argument(
+        "-shadowmask",
+        help="Shadowmask filename (facultative) : "
+        "big shadow areas will be marked as background",
+    )
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
-    group2.add_argument("-vegmask_min_value", type=int,
-                        help="Vegetation min value for vegetated areas : all pixels with lower value will be predicted")
-    group2.add_argument("-veg_binary_dilation", type=int,
-                        help="Size of disk structuring element (dilate non vegetated areas)")
-    group2.add_argument("-value_classif", type=int,
-                        help="Input ground truth class to consider in the input ground truth")
-    group2.add_argument("-gt_binary_erosion", type=int, action="store",
-                        help="Size of disk structuring element (erode GT before picking-up samples)")
-    group2.add_argument("-save", choices=["none", "debug"], dest="save_mode",
-                        help="Save all files (debug) or only output mask (none)")
+    group2.add_argument(
+        "-vegmask_min_value",
+        type=int,
+        help="Vegetation min value for vegetated areas : all pixels with lower value will be predicted",
+    )
+    group2.add_argument(
+        "-veg_binary_dilation",
+        type=int,
+        help="Size of disk structuring element (dilate non vegetated areas)",
+    )
+    group2.add_argument(
+        "-value_classif",
+        type=int,
+        help="Input ground truth class to consider in the input ground truth",
+    )
+    group2.add_argument(
+        "-gt_binary_erosion",
+        type=int,
+        action="store",
+        help="Size of disk structuring element (erode GT before picking-up samples)",
+    )
+    group2.add_argument(
+        "-save",
+        choices=["none", "debug"],
+        dest="save_mode",
+        help="Save all files (debug) or only output mask (none)",
+    )
 
-    group3 = parser.add_argument_group(description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
-    group3.add_argument("-nb_samples_urban", type=int, help="Number of samples in buildings for learning")
-    group3.add_argument("-nb_samples_other", type=int, help="Number of samples in other for learning")
+    group3 = parser.add_argument_group(
+        description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***"
+    )
+    group3.add_argument(
+        "-nb_samples_urban",
+        type=int,
+        help="Number of samples in buildings for learning",
+    )
+    group3.add_argument(
+        "-nb_samples_other",
+        type=int,
+        help="Number of samples in other for learning",
+    )
     group3.add_argument("-max_depth", type=int, help="Max depth of trees")
-    group3.add_argument("-nb_estimators", type=int, help="Nb of trees in Random Forest")
-    group3.add_argument("-n_jobs", type=int, help="Nb of parallel jobs for Random Forest "
-                                                  "(1 is recommanded : use n_workers to optimize parallel computing)")
-    
+    group3.add_argument(
+        "-nb_estimators", type=int, help="Nb of trees in Random Forest"
+    )
+    group3.add_argument(
+        "-n_jobs",
+        type=int,
+        help="Nb of parallel jobs for Random Forest "
+        "(1 is recommanded : use n_workers to optimize parallel computing)",
+    )
+
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-urbanmask", help="Output classification filename")
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
-    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
-    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
-    
+    group5.add_argument(
+        "-tile_max_size",
+        type=int,
+        help="Max tile size to be processed (0 : default)",
+    )
+    group5.add_argument(
+        "-multiproc_context",
+        default="spawn",
+        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+    )
+
     return parser.parse_args()
 
 
 def main():
-    
     """Main function that compute Urbanmask"""
-    
+
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
     keys = ["input", "aux_layers", "masks", "resources", "urban"]
-    argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
+    argsdict = io_utils.read_json(
+        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
+    )
 
     # Overload with manually passed arguments if not None
     for key in argparse_dict.keys():
@@ -273,30 +378,38 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-    
+
     # Create output folder
     makedirs(path.dirname(args.urbanmask), exist_ok=True)
-    
-    # Mask calculation    
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
+
+    # Mask calculation
+    with eom.EOContextManager(
+        nb_workers=args.n_workers,
+        tile_mode=True,
+        tile_max_size=args.tile_max_size,
+    ) as eoscale_manager:
         try:
-            
+
             t0 = time.time()
 
             # Build stack with all layers #
-            
+
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
             eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
-            key_original_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
+            key_original_valid_stack = eoscale_manager.open_raster(
+                raster_path=args.valid_stack
+            )
             key_valid_stack = key_original_valid_stack
 
             # Global validity mask construction
             if args.vegetationmask and path.isfile(args.vegetationmask):
-                key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
+                key_vegmask = eoscale_manager.open_raster(
+                    raster_path=args.vegetationmask
+                )
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_vegmask],
                     image_filter=apply_vegetationmask,
@@ -305,12 +418,14 @@ def main():
                     stable_margin=0,
                     context_manager=eoscale_manager,
                     multiproc_context=args.multiproc_context,
-                    filter_desc="Valid stack processing with vegetationmask..."
+                    filter_desc="Valid stack processing with vegetationmask...",
                 )
                 key_valid_stack = key_valid_stack[0]
 
             if args.watermask and path.isfile(args.watermask):
-                key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
+                key_watermask = eoscale_manager.open_raster(
+                    raster_path=args.watermask
+                )
                 key_valid_stack = eoexe.n_images_to_m_images_filter(
                     inputs=[key_valid_stack, key_watermask],
                     image_filter=apply_watermask,
@@ -319,7 +434,7 @@ def main():
                     stable_margin=0,
                     context_manager=eoscale_manager,
                     multiproc_context=args.multiproc_context,
-                    filter_desc="Valid stack processing with watermask..."
+                    filter_desc="Valid stack processing with watermask...",
                 )
                 key_valid_stack = key_valid_stack[0]
 
@@ -329,11 +444,11 @@ def main():
 
             # WSF
             gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
-  
+
             time_stack = time.time()
-            
+
             # BUILD SAMPLES
-                                   
+
             # Recover useful features
             valid_stack = eoscale_manager.get_array(key_valid_stack)
             local_gt = eoscale_manager.get_array(gt_key)
@@ -341,106 +456,170 @@ def main():
                 eoscale_manager.open_raster(raster_path=args.files_layers[i])
                 for i in range(len(args.files_layers))
             ]
-            
+
             # Calculation of valid pixels
             nb_valid_pixels = np.count_nonzero(valid_stack)
-            args.nb_valid_built_pixels = np.count_nonzero(np.logical_and(local_gt, valid_stack))
-            args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_built_pixels                                      
+            args.nb_valid_built_pixels = np.count_nonzero(
+                np.logical_and(local_gt, valid_stack)
+            )
+            args.nb_valid_other_pixels = (
+                nb_valid_pixels - args.nb_valid_built_pixels
+            )
 
             building_areas = False
             non_building_areas = False
-            
-            if args.nb_valid_built_pixels > args.nb_samples_urban and args.nb_valid_other_pixels > 0:
+
+            if (
+                args.nb_valid_built_pixels > args.nb_samples_urban
+                and args.nb_valid_other_pixels > 0
+            ):
                 # Nominal case : Ground Truth contains some pixels marked as building.
-                input_for_samples = [key_valid_stack, gt_key, key_phr, key_ndvi, key_ndwi] + keys_files_layers
-                samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
-                                                      image_filter=build_samples,
-                                                      filter_parameters=vars(args),
-                                                      nb_output_scalars=args.nb_valid_built_pixels+args.nb_valid_other_pixels,
-                                                      context_manager=eoscale_manager,
-                                                      concatenate_filter=eo_utils.concatenate_samples,
-                                                      output_scalars=[],
-                                                      multiproc_context=args.multiproc_context,
-                                                      filter_desc="Samples building processing...")
+                input_for_samples = [
+                    key_valid_stack,
+                    gt_key,
+                    key_phr,
+                    key_ndvi,
+                    key_ndwi,
+                ] + keys_files_layers
+                samples = eoexe.n_images_to_m_scalars(
+                    inputs=input_for_samples,
+                    image_filter=build_samples,
+                    filter_parameters=vars(args),
+                    nb_output_scalars=args.nb_valid_built_pixels
+                    + args.nb_valid_other_pixels,
+                    context_manager=eoscale_manager,
+                    concatenate_filter=eo_utils.concatenate_samples,
+                    output_scalars=[],
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Samples building processing...",
+                )
 
                 samples = np.concatenate(samples[:])
-                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                x_samples = samples[
+                    :, 1:
+                ]  # im_phr, im_ndvi, im_ndwi and files_layers
                 y_samples = samples[:, 0]  # gt
 
                 # Check if we have found "building" AND "non building" samples
                 # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
                 building_areas = len(np.where(y_samples == 255)[0]) > 0
                 non_building_areas = len(np.where(y_samples == 0)[0]) > 0
-                    
+
                 time_samples = time.time()
 
             if building_areas and non_building_areas:
                 # Train classifier from samples
 
                 classifier = RandomForestClassifier(
-                    n_estimators=args.nb_estimators, max_depth=args.max_depth, class_weight="balanced",
-                    random_state=0, n_jobs=args.n_jobs
+                    n_estimators=args.nb_estimators,
+                    max_depth=args.max_depth,
+                    class_weight="balanced",
+                    random_state=0,
+                    n_jobs=args.n_jobs,
                 )
-                print("RandomForest parameters:\n", classifier.get_params(), "\n")
-                
+                print(
+                    "RandomForest parameters:\n", classifier.get_params(), "\n"
+                )
+
                 RF_utils.train_classifier(classifier, x_samples, y_samples)
                 RF_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 # Predict
-                input_for_prediction = [key_original_valid_stack, key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
-                                                                image_filter=rf_prediction,
-                                                                filter_parameters={"classifier": classifier},
-                                                                generate_output_profiles=eo_utils.double_uint8_profile,
-                                                                stable_margin=0,
-                                                                context_manager=eoscale_manager,
-                                                                multiproc_context="spawn",
-                                                                filter_desc="RF prediction processing...")
+                input_for_prediction = [
+                    key_original_valid_stack,
+                    key_valid_stack,
+                    key_phr,
+                    key_ndvi,
+                    key_ndwi,
+                ] + keys_files_layers
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=input_for_prediction,
+                    image_filter=rf_prediction,
+                    filter_parameters={"classifier": classifier},
+                    generate_output_profiles=eo_utils.double_uint8_profile,
+                    stable_margin=0,
+                    context_manager=eoscale_manager,
+                    multiproc_context="spawn",
+                    filter_desc="RF prediction processing...",
+                )
                 time_random_forest = time.time()
 
-                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)  # classif
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.urbanmask
+                )  # classif
                 if args.save_mode == "debug":
-                    eoscale_manager.write(key=key_predict[1], img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"))
+                    eoscale_manager.write(
+                        key=key_predict[1],
+                        img_path=args.urbanmask.replace(
+                            ".tif", "_raw_predict.tif"
+                        ),
+                    )
 
                 end_time = time.time()
 
-                print(f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****")
-                print("Total time (user)       :\t" + utils.convert_time(end_time-t0))
-                print("- Build_stack           :\t" + utils.convert_time(time_stack-t0))
-                print("- Build_samples         :\t" + utils.convert_time(time_samples-time_stack))
-                print("- Random forest (total) :\t" + utils.convert_time(time_random_forest-time_samples))
-                print("***")   
-                
+                print(
+                    f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
+                )
+                print(
+                    "Total time (user)       :\t"
+                    + utils.convert_time(end_time - t0)
+                )
+                print(
+                    "- Build_stack           :\t"
+                    + utils.convert_time(time_stack - t0)
+                )
+                print(
+                    "- Build_samples         :\t"
+                    + utils.convert_time(time_samples - time_stack)
+                )
+                print(
+                    "- Random forest (total) :\t"
+                    + utils.convert_time(time_random_forest - time_samples)
+                )
+                print("***")
+
             elif args.nb_valid_built_pixels >= nb_valid_pixels:
                 # Corner case : no "non building pixels"
-                print(f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****")
+                print(
+                    f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
+                )
 
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_original_valid_stack],
-                                                                image_filter=add_nodata,
-                                                                filter_parameters={"fill_value": 100},
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                context_manager=eoscale_manager,
-                                                                multiproc_context=args.multiproc_context,
-                                                                filter_desc="Add nodata...")
-                
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_original_valid_stack],
+                    image_filter=add_nodata,
+                    filter_parameters={"fill_value": 100},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Add nodata...",
+                )
+
                 # Save proba mask
-                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
-                
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.urbanmask
+                )
+
             else:
                 # Corner case : no "building pixels" --> void mask (0)
-                print(f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****")
+                print(
+                    f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                )
 
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_original_valid_stack],
-                                                                image_filter=add_nodata,
-                                                                filter_parameters={"fill_value": 0},
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                context_manager=eoscale_manager,
-                                                                multiproc_context=args.multiproc_context,
-                                                                filter_desc="Add nodata...")
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_original_valid_stack],
+                    image_filter=add_nodata,
+                    filter_parameters={"fill_value": 0},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Add nodata...",
+                )
 
                 # Save proba mask
-                eoscale_manager.write(key=key_predict[0], img_path=args.urbanmask)
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.urbanmask
+                )
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
