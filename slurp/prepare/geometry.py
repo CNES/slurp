@@ -172,7 +172,7 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
         ]
     )
 
-    # Resampled image
+    # Resampled image grid (same geometry as sensor_image, but every n step)
     x = np.arange(0, nb_col + step, step)
     y = np.arange(0, nb_row + step, step)
     col, row = np.meshgrid(x, y)
@@ -186,6 +186,10 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     all_y = np.arange(0, nb_row, pix_row)
     all_col, all_row = np.meshgrid(all_x, all_y)
     all_coords = np.vstack((all_col.flatten(), all_row.flatten())).transpose()
+
+
+    # TODO : refac :
+    # New function 'compute DTM footprint' ? 
 
     # Load Shareloc direct loc function
     # force shareloc to use north for vertical direction (compatible with images with
@@ -205,6 +209,7 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
         epsg=4326,
     )
 
+    # lower right (lr) and upper left (ul) corners coordinates, with two altitudes
     lon_lat_lr_corner_altmax = loc_alt_max.direct(
         data_img.shape[0] - 1, data_img.shape[1] - 1
     )[0][0:2]
@@ -215,10 +220,17 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     )[0][0:2]
     lon_lat_ul_corner_altmin = loc_alt_min.direct(0, 0)[0][0:2]
 
-    min_lat = min(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmin[1])
-    min_lon = min(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmin[0])
-    max_lat = max(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmin[1])
-    max_lon = max(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmin[0])
+    # lon = coords[0] / lat = coords[1]
+    # depending on the projection, the upper left corner has not always 
+    # the lowest longiture or the highest latitude !!
+    min_lat = min(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmax[1], 
+                lon_lat_lr_corner_altmin[1], lon_lat_ul_corner_altmin[1])
+    min_lon = min(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmax[0],
+                lon_lat_lr_corner_altmin[0], lon_lat_ul_corner_altmin[0])
+    max_lat = max(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmax[1],
+                lon_lat_lr_corner_altmin[1], lon_lat_ul_corner_altmin[1])
+    max_lon = max(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmax[0],
+                lon_lat_lr_corner_altmin[0], lon_lat_ul_corner_altmin[0])
 
     # compute usable extent and add a margin
     footprint_dtm = [min_lat, min_lon, max_lat, max_lon]
