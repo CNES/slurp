@@ -34,7 +34,7 @@ from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
 
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import RF_utils
+from slurp.tools import random_forest_utils as rf_utils
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
@@ -811,8 +811,8 @@ def main():
                     :, 1:
                 ]  # im_phr, im_ndvi, im_ndwi and files_layers
                 y_samples = samples[:, 0]  # mask_pekel
-                RF_utils.train_classifier(classifier, x_samples, y_samples)
-                RF_utils.print_feature_importance(classifier, args.files_layers)
+                rf_utils.train_classifier(classifier, x_samples, y_samples)
+                rf_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 utils.display_mem_usage(args.debug, "After training step")
