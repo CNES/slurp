@@ -23,7 +23,7 @@
 
 import numpy as np
 
-from slurp.tools.constant import NODATA_int16
+from slurp.tools.constant import NODATA_INT16
 
 
 def compute_ndxi(
@@ -48,7 +48,7 @@ def compute_ndxi(
     )
     im_ndxi[np.logical_or(im_ndxi < -1000.0, im_ndxi > 1000.0)] = np.nan
     im_ndxi[np.logical_not(input_buffer[1][0])] = np.nan
-    np.nan_to_num(im_ndxi, copy=False, nan=NODATA_int16)
+    np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
     im_ndxi = np.int16(im_ndxi)
 
     return im_ndxi

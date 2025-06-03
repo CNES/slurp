@@ -35,7 +35,7 @@ import numpy as np
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import NODATA_int8
+from slurp.tools.constant import NODATA_INT8
 
 
 def compute_shadowmask(
@@ -80,7 +80,7 @@ def compute_shadowmask(
     final_shadow_mask += raw_shadow_mask
 
     # apply NO_DATA mask
-    final_shadow_mask[np.logical_not(input_buffers[1][0])] = NODATA_int8
+    final_shadow_mask[np.logical_not(input_buffers[1][0])] = NODATA_INT8
 
     return final_shadow_mask
 

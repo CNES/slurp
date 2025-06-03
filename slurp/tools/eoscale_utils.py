@@ -23,7 +23,7 @@ import copy
 
 import numpy as np
 
-from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_int8, NODATA_int16
+from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 
 
 def print_dataset_infos(name, profile, prefix=""):
@@ -89,7 +89,7 @@ def single_uint8_profile(input_profiles: list, map_params):
     profile["count"] = 1
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
-    profile["nodata"] = NODATA_int8
+    profile["nodata"] = NODATA_INT8
     profile["driver"] = DRIVER
 
     return profile
@@ -100,7 +100,7 @@ def single_int16_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int16
-    profile["nodata"] = NODATA_int16
+    profile["nodata"] = NODATA_INT16
     profile["compress"] = COMPRESSION.lower()
     profile["driver"] = DRIVER
 
@@ -112,7 +112,7 @@ def single_uint16_profile(input_profiles: list, map_params):
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint16
-    profile["nodata"] = NODATA_int16
+    profile["nodata"] = NODATA_INT16
     profile["compress"] = COMPRESSION.lower()
     profile["driver"] = DRIVER
 
@@ -136,7 +136,7 @@ def three_uint8_profile(input_profiles: list, map_params):
     profile["count"] = 3
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
-    profile["nodata"] = NODATA_int8
+    profile["nodata"] = NODATA_INT8
     profile["driver"] = DRIVER
 
     return profile
@@ -148,7 +148,7 @@ def five_uint8_profile(input_profiles: list, map_params):
     profile["count"] = 5
     profile["dtype"] = np.uint8
     profile["compress"] = COMPRESSION.lower()
-    profile["nodata"] = NODATA_int8
+    profile["nodata"] = NODATA_INT8
     profile["driver"] = DRIVER
 
     return profile
@@ -159,7 +159,7 @@ def double_uint8_profile(input_profiles: list, map_params):
     profile1 = input_profiles[0]
     profile1["count"] = 1
     profile1["dtype"] = np.uint8
-    profile1["nodata"] = NODATA_int8
+    profile1["nodata"] = NODATA_INT8
     profile1["compress"] = COMPRESSION.lower()
     profile1["driver"] = DRIVER
 

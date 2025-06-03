@@ -41,7 +41,7 @@ from skimage.filters import sobel
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import HIGH, LOW, NODATA_int8
+from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 
 def watershed_regul_buildings(
@@ -166,7 +166,7 @@ def post_process(
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
     # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Estimation of heigth
     # Supposed to be low
@@ -181,22 +181,22 @@ def post_process(
     stack[1][watermask[0] == 1] = 0
     stack[1][shadowmask[0] == 2] = 0
 
-    stack[1][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[1][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Markers
     stack[2] = markers
-    stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     """
     # Layer 3 : segmentation from watershed, before morpho/clean
     stack[3] = seg
-    stack[3][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
     
     buildings = np.where(urbanmask > params["building_threshold"],1,0)
     stack[4] = morpho_clean(buildings[0], params)
-    stack[4][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
     """
 
     return stack

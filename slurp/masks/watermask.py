@@ -37,7 +37,7 @@ from slurp.post_process.morphology import apply_morpho
 from slurp.tools import RF_utils
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import NODATA_int8
+from slurp.tools.constant import NODATA_INT8
 
 try:
     from sklearnex import patch_sklearn
@@ -390,11 +390,11 @@ def post_process(
         ).astype(np.uint8)
 
     # Add nodata in im_classif
-    im_classif[np.logical_not(input_buffer[3])] = NODATA_int8
+    im_classif[np.logical_not(input_buffer[3])] = NODATA_INT8
     im_classif[im_classif == 1] = params["value_classif"]
 
     im_predict = input_buffer[0]
-    im_predict[np.logical_not(input_buffer[3])] = NODATA_int8
+    im_predict[np.logical_not(input_buffer[3])] = NODATA_INT8
     im_predict[im_predict == 1] = params["value_classif"]
 
     return [im_predict, im_classif]

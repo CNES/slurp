@@ -35,7 +35,7 @@ from slurp.post_process.morphology import apply_morpho
 from slurp.tools import RF_utils
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import NODATA_int8
+from slurp.tools.constant import NODATA_INT8
 
 try:
     from sklearnex import patch_sklearn
@@ -208,18 +208,18 @@ def rf_prediction(
 
         prediction = np.zeros(valid_mask.shape)
         prediction[0][valid_mask[0]] = res_classif
-        prediction[0][nodata_mask[0]] = NODATA_int8
+        prediction[0][nodata_mask[0]] = NODATA_INT8
 
         proba_buildings = np.zeros(valid_mask.shape)
         proba_buildings[0][valid_mask[0]] = (
             100 * proba[:, 1]
         )  # Proba for class 1 (buildings)
-        proba_buildings[0][nodata_mask[0]] = NODATA_int8
+        proba_buildings[0][nodata_mask[0]] = NODATA_INT8
 
     else:
         # corner case : only NO_DATA !
-        prediction = np.full(valid_mask.shape, NODATA_int8)
-        proba_buildings = np.full(valid_mask.shape, NODATA_int8)
+        prediction = np.full(valid_mask.shape, NODATA_INT8)
+        proba_buildings = np.full(valid_mask.shape, NODATA_INT8)
 
     return [proba_buildings, prediction]
 
@@ -237,7 +237,7 @@ def add_nodata(
     """
     nodata_mask = (1 - input_buffer[0]).astype(bool)
     proba_buildings = np.full(nodata_mask.shape, params["fill_value"])
-    proba_buildings[nodata_mask] = NODATA_int8
+    proba_buildings[nodata_mask] = NODATA_INT8
 
     return proba_buildings
 

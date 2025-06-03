@@ -40,7 +40,7 @@ import stats as ts
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import NB_CLUSTERS, NODATA_int8, NODATA_int16
+from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
 
 NO_VEG_CODE = 0  # Water, other non vegetated areas
 UNDEFINED_VEG = 10  # Non vegetated or few vegetation (weak NDVI signal)
@@ -145,7 +145,7 @@ def segmentation_task(
 
     # minimum segment is 1, attribute 0 to no_data pixel
     segments[np.logical_not(input_buffers[2])] = 0
-    segments[np.where(input_buffers[1] == NODATA_int16)] = 0
+    segments[np.where(input_buffers[1] == NODATA_INT16)] = 0
 
     return segments
 
@@ -468,7 +468,7 @@ def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     final_mask = ts_stats.finalize(input_buffers[0], clustering)
 
     # Add nodata in final_mask (input_buffers[1] : valid mask)
-    final_mask[np.logical_not(input_buffers[1][0])] = NODATA_int8
+    final_mask[np.logical_not(input_buffers[1][0])] = NODATA_INT8
 
     return final_mask
 

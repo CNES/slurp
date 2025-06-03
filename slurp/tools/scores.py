@@ -41,7 +41,7 @@ from sklearn.metrics import (
 )
 
 from slurp.tools import io_utils
-from slurp.tools.constant import NODATA_int8
+from slurp.tools.constant import NODATA_INT8
 
 
 def generate_polygons_in_gdf(im, crs, transform):
@@ -175,7 +175,7 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
         path_out,
         crs,
         transform,
-        NODATA_int8,
+        NODATA_INT8,
         rpc,
     )
 

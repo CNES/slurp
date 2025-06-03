@@ -25,7 +25,7 @@ import numpy as np
 import scipy
 
 from slurp.prepare import geometry
-from slurp.tools.constant import NODATA_int16
+from slurp.tools.constant import NODATA_INT16
 
 
 def aux_file_recovery(
@@ -123,6 +123,6 @@ def texture_task(
         params["min_value"],
         params["max_value"],
     )
-    texture[np.logical_not(input_buffers[1][0])] = NODATA_int16
+    texture[np.logical_not(input_buffers[1][0])] = NODATA_INT16
 
     return texture

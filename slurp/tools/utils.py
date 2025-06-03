@@ -26,7 +26,7 @@ import time
 import numpy as np
 import psutil
 
-from slurp.tools.constant import NODATA_int8
+from slurp.tools.constant import NODATA_INT8
 
 
 def convert_time(seconds):
@@ -62,7 +62,7 @@ def compute_mask_threshold(
     :returns: computed mask
     """
     mask = np.where(input_buffers[0][0] > params["threshold"], 1, 0)
-    mask = np.where(input_buffers[1][0] != 1, NODATA_int8, mask)
+    mask = np.where(input_buffers[1][0] != 1, NODATA_INT8, mask)
 
     return mask
 
