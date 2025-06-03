@@ -507,79 +507,83 @@ def main():
 
                 time_samples = time.time()
 
-            if building_areas and non_building_areas:
-                # Train classifier from samples
+                if building_areas and non_building_areas:
+                    # Train classifier from samples
 
-                classifier = RandomForestClassifier(
-                    n_estimators=args.nb_estimators,
-                    max_depth=args.max_depth,
-                    class_weight="balanced",
-                    random_state=0,
-                    n_jobs=args.n_jobs,
-                )
-                print(
-                    "RandomForest parameters:\n", classifier.get_params(), "\n"
-                )
-
-                RF_utils.train_classifier(classifier, x_samples, y_samples)
-                RF_utils.print_feature_importance(classifier, args.files_layers)
-                gc.collect()
-
-                # Predict
-                input_for_prediction = [
-                    key_original_valid_stack,
-                    key_valid_stack,
-                    key_phr,
-                    key_ndvi,
-                    key_ndwi,
-                ] + keys_files_layers
-                key_predict = eoexe.n_images_to_m_images_filter(
-                    inputs=input_for_prediction,
-                    image_filter=rf_prediction,
-                    filter_parameters={"classifier": classifier},
-                    generate_output_profiles=eo_utils.double_uint8_profile,
-                    stable_margin=0,
-                    context_manager=eoscale_manager,
-                    multiproc_context="spawn",
-                    filter_desc="RF prediction processing...",
-                )
-                time_random_forest = time.time()
-
-                eoscale_manager.write(
-                    key=key_predict[0], img_path=args.urbanmask
-                )  # classif
-                if args.save_mode == "debug":
-                    eoscale_manager.write(
-                        key=key_predict[1],
-                        img_path=args.urbanmask.replace(
-                            ".tif", "_raw_predict.tif"
-                        ),
+                    classifier = RandomForestClassifier(
+                        n_estimators=args.nb_estimators,
+                        max_depth=args.max_depth,
+                        class_weight="balanced",
+                        random_state=0,
+                        n_jobs=args.n_jobs,
+                    )
+                    print(
+                        "RandomForest parameters:\n",
+                        classifier.get_params(),
+                        "\n",
                     )
 
-                end_time = time.time()
+                    RF_utils.train_classifier(classifier, x_samples, y_samples)
+                    RF_utils.print_feature_importance(
+                        classifier, args.files_layers
+                    )
+                    gc.collect()
 
-                print(
-                    f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
-                )
-                print(
-                    "Total time (user)       :\t"
-                    + utils.convert_time(end_time - t0)
-                )
-                print(
-                    "- Build_stack           :\t"
-                    + utils.convert_time(time_stack - t0)
-                )
-                print(
-                    "- Build_samples         :\t"
-                    + utils.convert_time(time_samples - time_stack)
-                )
-                print(
-                    "- Random forest (total) :\t"
-                    + utils.convert_time(time_random_forest - time_samples)
-                )
-                print("***")
+                    # Predict
+                    input_for_prediction = [
+                        key_original_valid_stack,
+                        key_valid_stack,
+                        key_phr,
+                        key_ndvi,
+                        key_ndwi,
+                    ] + keys_files_layers
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=input_for_prediction,
+                        image_filter=rf_prediction,
+                        filter_parameters={"classifier": classifier},
+                        generate_output_profiles=eo_utils.double_uint8_profile,
+                        stable_margin=0,
+                        context_manager=eoscale_manager,
+                        multiproc_context="spawn",
+                        filter_desc="RF prediction processing...",
+                    )
+                    time_random_forest = time.time()
 
-            elif args.nb_valid_built_pixels >= nb_valid_pixels:
+                    eoscale_manager.write(
+                        key=key_predict[0], img_path=args.urbanmask
+                    )  # classif
+                    if args.save_mode == "debug":
+                        eoscale_manager.write(
+                            key=key_predict[1],
+                            img_path=args.urbanmask.replace(
+                                ".tif", "_raw_predict.tif"
+                            ),
+                        )
+
+                    end_time = time.time()
+
+                    print(
+                        f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
+                    )
+                    print(
+                        "Total time (user)       :\t"
+                        + utils.convert_time(end_time - t0)
+                    )
+                    print(
+                        "- Build_stack           :\t"
+                        + utils.convert_time(time_stack - t0)
+                    )
+                    print(
+                        "- Build_samples         :\t"
+                        + utils.convert_time(time_samples - time_stack)
+                    )
+                    print(
+                        "- Random forest (total) :\t"
+                        + utils.convert_time(time_random_forest - time_samples)
+                    )
+                    print("***")
+
+            if args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 print(
                     f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"

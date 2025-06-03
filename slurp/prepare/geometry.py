@@ -41,8 +41,8 @@ def superimpose(file_in: str, file_ref: str, file_out: str):
     """
     try:
         import otbApplication as otb
-    except:
-        raise Exception("OTB is not installed")
+    except ModuleNotFoundError as e:
+        raise ImportError("OTB is not installed") from e
 
     ds = rio.open(file_in)
     # default value
@@ -121,8 +121,8 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     """
     try:
         import otbApplication as otb
-    except:
-        raise Exception("OTB is not installed")
+    except ModuleNotFoundError as e:
+        raise ImportError("OTB is not installed") from e
     start_time = time.time()
     app_roi = otb.Registry.CreateApplication("ExtractROI")
     app_roi.SetParameterString("in", file_in)
@@ -149,13 +149,11 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     try:
         import bindings_cpp
         from shareloc.dtm_reader import dtm_reader
-        from shareloc.geofunctions.dtm_intersection import DTMIntersection
         from shareloc.geofunctions.localization import Localization
         from shareloc.geomodels import GeoModel
         from shareloc.image import Image
-        from shareloc.proj_utils import transform_physical_point_to_index
-    except:
-        raise Exception("\n*** Shareloc is not installed ***\n")
+    except ModuleNotFoundError as e:
+        raise ImportError("\n*** Shareloc is not installed ***\n") from e
 
     # Import image geometrical model
     geom_model_optim = GeoModel(sensor_image, "RPCoptim")
@@ -326,15 +324,10 @@ def sensor_projection(
     :param str projected_data: path to the output projected data
     """
     try:
-        import bindings_cpp
-        from shareloc.dtm_reader import dtm_reader
-        from shareloc.geofunctions.dtm_intersection import DTMIntersection
-        from shareloc.geofunctions.localization import Localization
-        from shareloc.geomodels import GeoModel
         from shareloc.image import Image
         from shareloc.proj_utils import transform_physical_point_to_index
-    except:
-        raise Exception("\n*** Shareloc is not installed ***\n")
+    except ModuleNotFoundError as e:
+        raise ImportError("\n*** Shareloc is not installed ***\n") from e
 
     import scipy
 

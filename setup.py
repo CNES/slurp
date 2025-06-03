@@ -23,8 +23,8 @@ Packaging setup.py for compatibility
 All packaging in setup.cfg
 """
 
-from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
+from setuptools import Extension, find_packages, setup
 
 extensions = [Extension("stats", ["slurp/stats/cysrc/stats.pyx"])]
 

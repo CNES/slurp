@@ -20,10 +20,8 @@
 
 
 """Brings together the auxiliary files reading functions"""
-from os import path
 
 import numpy as np
-import rasterio as rio
 import scipy
 
 from slurp.prepare import geometry

@@ -41,7 +41,7 @@ def read_json(
     """
     # Read the JSON data from the main config
     try:
-        with open(main_config_file, "r") as json_file1:
+        with open(main_config_file, "r", encoding="utf-8") as json_file1:
             full_args = json.load(json_file1)
             argsdict = full_args[keys[0]]
             for key in keys[1:]:
@@ -57,7 +57,7 @@ def read_json(
     if user_config_file:
         # Read the JSON data from the input file
         try:
-            with open(user_config_file, "r") as json_file2:
+            with open(user_config_file, "r", encoding="utf-8") as json_file2:
                 full_args = json.load(json_file2)
                 for k in full_args.keys():
                     argsdict.update(full_args[k])

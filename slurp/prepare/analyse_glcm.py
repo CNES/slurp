@@ -70,7 +70,19 @@ def compute_stats(
     im: str, map_lc: str, cropped: bool, sensor_mode: bool
 ) -> tuple:
     """
-    Compute ratio of vegetation, low vegetation and vegetation in the ROI
+    Compute ratio of vegetation, low vegetation and vegetation in the ROI.
+    ESA world cover classification:
+        10: "Tree cover",
+        20: "Shrubland",
+        30: "Grassland",
+        40: "Cropland",
+        50: "Built-up",
+        60: "Bare / Sparse vegetation",
+        70: "Snow and ice",
+        80: "Permanent water bodies",
+        90: "Herbaceous wetland",
+        95: "Mangroves",
+        100: "Moss and lichen",
 
     :param str im: path to the input VHR image
     :param str map_lc: path to the land cover map
@@ -94,19 +106,6 @@ def compute_stats(
 
     print(f"{data_map.shape}")
 
-    legend = {
-        10: "Tree cover",
-        20: "Shrubland",
-        30: "Grassland",
-        40: "Cropland",
-        50: "Built-up",
-        60: "Bare / Sparse vegetation",
-        70: "Snow and ice",
-        80: "Permanent water bodies",
-        90: "Herbaceous wetland",
-        95: "Mangroves",
-        100: "Moss and lichen",
-    }
     width = data_map.shape[0]
     height = data_map.shape[1]
 
@@ -114,15 +113,18 @@ def compute_stats(
     unique, counts = np.unique(data_map, return_counts=True)
 
     veg, low_veg, high_veg = 0, 0, 0
+    vegetation_classes = [10, 20, 30, 40, 90, 95, 100]
+    low_vegetation_classes = [20, 30, 40, 90, 100]
+    high_vegetation_classes = [10, 95]
     for v, c in zip(unique, counts):
         print(f"{v} : {c}")
-        if v in [10, 20, 30, 40, 90, 95, 100]:
+        if v in vegetation_classes:
             veg += c
 
-        if v in [20, 30, 40, 90, 100]:
+        if v in low_vegetation_classes:
             low_veg += c
 
-        if v in [10, 95]:
+        if v in high_vegetation_classes:
             high_veg += c
 
     nb_clusters_veg, nb_clusters_low_veg = get_advices(

@@ -17,10 +17,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""This file contains important global variables."""
 
 # profiles
-NODATA_int8 = 255
-NODATA_int16 = 32767
+NODATA_INT8 = 255
+NODATA_INT16 = 32767
 COMPRESSION = "DEFLATE"
 DRIVER = "GTiff"
 

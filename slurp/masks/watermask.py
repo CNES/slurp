@@ -327,7 +327,7 @@ def mask_filter(im_in, mask_ref):
     Remove water areas in im_in not in contact
     with water areas in mask_ref.
     """
-    im_label, nb_label = label(im_in, connectivity=2, return_num=True)
+    im_label, _ = label(im_in, connectivity=2, return_num=True)
 
     im_label_thresh = np.copy(im_label)
     im_label_thresh[np.logical_not(mask_ref)] = 0
