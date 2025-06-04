@@ -72,7 +72,7 @@ def display_mem_usage(debug_mode, message):
     if debug_mode:
         pid = os.getpid()
         python_process = psutil.Process(pid)
-        memoryUse = (
+        memory_use = (
             python_process.memory_info()[0] / 2.0**30
         )  # memory use in GB...I think
-        print(f">> {message} >> Mem usage : {memoryUse} Gb")
+        print(f">> {message} >> Mem usage : {memory_use} Gb")
