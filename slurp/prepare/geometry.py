@@ -158,6 +158,9 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     # Import image geometrical model
     geom_model_optim = GeoModel(sensor_image, "RPCoptim")
 
+    # TODO : refac :
+    # New function 'compute grids' ?  to be discussed !
+
     # Read image and retrieve its bbox coordinates
     data_img = rio.open(sensor_image)
     nb_row, nb_col = data_img.profile["height"], data_img.profile["width"]
@@ -181,7 +184,7 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     cols_rows = np.vstack((col.flatten(), row.flatten()))
     cols_rows_t = cols_rows.transpose()
 
-    # Full image
+    # Full image grid
     all_x = np.arange(0, nb_col, pix_col)
     all_y = np.arange(0, nb_row, pix_row)
     all_col, all_row = np.meshgrid(all_x, all_y)
@@ -232,12 +235,14 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     max_lon = max(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmax[0],
                 lon_lat_lr_corner_altmin[0], lon_lat_ul_corner_altmin[0])
 
-    # compute usable extent and add a margin
+    # compute usable extent and add a margin 
+    # TODO : check if margin is style necessary
     footprint_dtm = [min_lat, min_lon, max_lat, max_lon]
-    footprint_dtm[0] -= 0.5
-    footprint_dtm[1] -= 0.5
-    footprint_dtm[2] += 0.5
-    footprint_dtm[3] += 0.5
+    footprint_dtm[0] -= 0.1
+    footprint_dtm[1] -= 0.1
+    footprint_dtm[2] += 0.1
+    footprint_dtm[3] += 0.1
+    
 
     image = Image(sensor_image, vertical_direction="north")
     dtm_image = dtm_reader(
@@ -261,7 +266,9 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
         geom_model_optim, elevation=dtm_optim, image=image, epsg=4326
     )
 
-    # Get bbox pixel coordinates in lat/lon
+    # TODO : refac :
+    # New function 'Get bbox pixel coordinates in lat/lon' ?
+
     coords_bbox_min = None
     coords_bbox_max = None
     alt_min = dtm_optim.get_alt_min()
