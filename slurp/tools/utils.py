@@ -68,6 +68,7 @@ def compute_mask_threshold(
 
 
 def display_mem_usage(debug_mode, message):
+    """If we are in debug mode, the memory usage is displayed."""
     if debug_mode:
         pid = os.getpid()
         python_process = psutil.Process(pid)
