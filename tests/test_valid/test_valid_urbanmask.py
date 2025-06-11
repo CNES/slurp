@@ -20,10 +20,17 @@
 
 """Tests for urbanmask generation."""
 
-import pytest
-import os
 import glob
-from tests.utils import get_files_to_process, get_output_path, get_aux_path, remove_file
+import os
+
+import pytest
+
+from tests.utils import (
+    get_aux_path,
+    get_files_to_process,
+    get_output_path,
+    remove_file,
+)
 from tests.validation import validate_mask
 
 # Input images
@@ -39,36 +46,54 @@ def prepare_urbanmask(file, nb_workers):
     ndwi = get_output_path(file, "ndwi", remove=True)
     wsf = get_output_path(file, "wsf", remove=True)
     if not pytest.wsf:
-        raise Exception("Please add a global wsf file in 'config_tests.json' to run this test")
+        raise Exception(
+            "Please add a global wsf file in 'config_tests.json' to run this test"
+        )
 
-    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-              f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf}")
-    
-    assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
-    assert os.path.exists(ndvi), f"The file {ndvi} has not been created. Error during NDVI computation ?"
-    assert os.path.exists(ndwi), f"The file {ndwi} has not been created. Error during NDWI computation ?"
-    assert os.path.exists(wsf), f"The file {wsf} has not been created. Error during WSF extraction ?"
-    
+    os.system(
+        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf}"
+    )
+
+    assert os.path.exists(
+        valid_stack
+    ), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
+    assert os.path.exists(
+        ndvi
+    ), f"The file {ndvi} has not been created. Error during NDVI computation ?"
+    assert os.path.exists(
+        ndwi
+    ), f"The file {ndwi} has not been created. Error during NDWI computation ?"
+    assert os.path.exists(
+        wsf
+    ), f"The file {wsf} has not been created. Error during WSF extraction ?"
+
     return valid_stack, ndvi, ndwi, wsf
 
 
-def compute_urbanmask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, wsf=None):
+def compute_urbanmask(
+    file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, wsf=None
+):
     output_image = get_output_path(file, "urbanmask")
     remove_file(output_image)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
     if ndvi is None:
         ndvi = get_aux_path(file, "ndvi")
-    if ndwi is None: 
+    if ndwi is None:
         ndwi = get_aux_path(file, "ndwi")
     if wsf is None:
         wsf = get_aux_path(file, "wsf")
 
-    os.system(f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
-              f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}")
-    
-    assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during urbanmask computation ?"
-    
+    os.system(
+        f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
+        f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}"
+    )
+
+    assert os.path.exists(
+        output_image
+    ), f"The file {output_image} has not been created. Error during urbanmask computation ?"
+
     return output_image
 
 
@@ -93,13 +118,13 @@ def test_computation_urbanmask(file):
 def test_validation_urbanmask(predict_file):
     validate_mask(predict_file, "Urban", valid_pixels=False)
 
-    
+
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_urbanmask(file):
     output_image = compute_urbanmask(file, 1)
     validate_mask(output_image, "Urban", valid_pixels=False)
-    
+
 
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)

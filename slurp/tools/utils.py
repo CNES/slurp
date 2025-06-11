@@ -18,13 +18,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Brings together some useful functions"""
+"""Brings together some useful functions"""
 
-import time
-import numpy as np
-from slurp.tools.constant import NODATA_int8
-import psutil
 import os
+import time
+
+import numpy as np
+import psutil
+
+from slurp.tools.constant import NODATA_INT8
+
 
 def convert_time(seconds):
     full_time = time.gmtime(seconds)
@@ -47,7 +50,9 @@ def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:
     return mask_ref
 
 
-def compute_mask_threshold(input_buffers: list, input_profiles: list, params: dict) -> np.ndarray:
+def compute_mask_threshold(
+    input_buffers: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Compute boolean mask with threshold value
 
@@ -57,13 +62,17 @@ def compute_mask_threshold(input_buffers: list, input_profiles: list, params: di
     :returns: computed mask
     """
     mask = np.where(input_buffers[0][0] > params["threshold"], 1, 0)
-    mask = np.where(input_buffers[1][0] != 1, NODATA_int8, mask)
+    mask = np.where(input_buffers[1][0] != 1, NODATA_INT8, mask)
 
     return mask
 
+
 def display_mem_usage(debug_mode, message):
+    """If we are in debug mode, the memory usage is displayed."""
     if debug_mode:
         pid = os.getpid()
         python_process = psutil.Process(pid)
-        memoryUse = python_process.memory_info()[0]/2.**30  # memory use in GB...I think
-        print(f">> {message} >> Mem usage : {memoryUse} Gb")
+        memory_use = (
+            python_process.memory_info()[0] / 2.0**30
+        )  # memory use in GB...I think
+        print(f">> {message} >> Mem usage : {memory_use} Gb")

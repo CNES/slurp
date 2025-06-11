@@ -22,32 +22,34 @@
 """
 This script stacks existing masks
 
-Final mask values 
+Final mask values
 - 1st layer : class
 - 2nd layer : estimation of elevation
 """
 
 import argparse
-import numpy as np
-import traceback
 import time
+import traceback
+from os import makedirs, path
 
-from os import path, makedirs
-from skimage.filters import sobel
-from skimage import segmentation
-
-import eoscale.manager as eom
 import eoscale.eo_executors as eoexe
-from slurp.post_process.morphology import morpho_clean, apply_morpho
+import eoscale.manager as eom
+import numpy as np
+from skimage import segmentation
+from skimage.filters import sobel
+
+from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import NODATA_int8, LOW, HIGH
+from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 
-def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
+def watershed_regul_buildings(
+    input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
+):
     """
     Clean and apply watershed regulation for buildings
-    
+
     :param np.ndarray input_image: VHR input image
     :param np.ndarray urbanmask: Urbanmask created by the dedicated script
     :param np.ndarray wsf: WSF file from post_process function
@@ -58,60 +60,80 @@ def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, s
     :return: tuple of segmentation value and markers
     """
     # Compute mono image from RGB image
-    #im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
-    im_mono = 0.3*input_image[0] + 0.3*input_image[1] + 0.3*input_image[3]
+    # im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
+    im_mono = 0.3 * input_image[0] + 0.3 * input_image[1] + 0.3 * input_image[3]
     edges = sobel(im_mono)
 
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
-    
+
     # We set markers by reverse order of confidence
-    eroded_bare_ground = apply_morpho(vegmask[0] == 11, "binary_erosion", params["building_erosion"])
+    eroded_bare_ground = apply_morpho(
+        vegmask[0] == 11, "binary_erosion", params["building_erosion"]
+    )
     markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
-    
-    ground_truth_eroded = apply_morpho(wsf[0] == 255, "binary_erosion", params["building_erosion"])
+
+    ground_truth_eroded = apply_morpho(
+        wsf[0] == 255, "binary_erosion", params["building_erosion"]
+    )
 
     # Bonus for pixels above ground truth
     urbanmask[0][ground_truth_eroded] += params["bonus_gt"]
     # Malus for pixels in shadow areas
     urbanmask[0][shadowmask[0] == 2] -= params["malus_shadow"]
-    probable_buildings = np.logical_and(ground_truth_eroded, urbanmask[0] > params["building_threshold"])
-    probable_buildings = apply_morpho(probable_buildings, "binary_erosion", params["building_erosion"])
-    
+    probable_buildings = np.logical_and(
+        ground_truth_eroded, urbanmask[0] > params["building_threshold"]
+    )
+    probable_buildings = apply_morpho(
+        probable_buildings, "binary_erosion", params["building_erosion"]
+    )
+
     false_positive = np.logical_and(
         apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
-        urbanmask[0] > params["building_threshold"]
+        urbanmask[0] > params["building_threshold"],
     )
-    
-    markers[0][probable_buildings] = params["value_classif_buildings"]
-    markers[0][false_positive] = params["value_classif_false_positive_buildings"]
 
-    eroded_low_veg = apply_morpho(vegmask[0] == 21, "binary_erosion", params["building_erosion"])
+    markers[0][probable_buildings] = params["value_classif_buildings"]
+    markers[0][false_positive] = params[
+        "value_classif_false_positive_buildings"
+    ]
+
+    eroded_low_veg = apply_morpho(
+        vegmask[0] == 21, "binary_erosion", params["building_erosion"]
+    )
     markers[0][eroded_low_veg] = params["value_classif_low_veg"]
     # careful : vegetation mask has two values for high veg !
-    eroded_high_veg = apply_morpho(np.logical_or(vegmask[0] == 23, vegmask[0] == 22), "binary_erosion", params["building_erosion"])
+    eroded_high_veg = apply_morpho(
+        np.logical_or(vegmask[0] == 23, vegmask[0] == 22),
+        "binary_erosion",
+        params["building_erosion"],
+    )
     markers[0][eroded_high_veg] = params["value_classif_high_veg"]
-    
-    eroded_shadow = apply_morpho(shadowmask[0] == 2, "binary_erosion", params["building_erosion"])
+
+    eroded_shadow = apply_morpho(
+        shadowmask[0] == 2, "binary_erosion", params["building_erosion"]
+    )
     markers[0][eroded_shadow] = params["value_classif_background"]
-    
+
     markers[watermask == 1] = params["value_classif_background"]
 
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
-    
-    return seg, markers
-    
 
-def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np.ndarray:
+    return seg, markers
+
+
+def post_process(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf
     0          1              2              3             4              5               6
     """
     input_image = input_buffer[0]
     valid_stack = input_buffer[1]
-    watermask   = input_buffer[2]
-    vegmask     = input_buffer[3]
-    urbanmask   = input_buffer[4]
-    shadowmask  = input_buffer[5]
+    watermask = input_buffer[2]
+    vegmask = input_buffer[3]
+    urbanmask = input_buffer[4]
+    shadowmask = input_buffer[5]
     wsf = input_buffer[6]
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
@@ -122,10 +144,14 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
 
-    clean_bare_ground = morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
+    clean_bare_ground = (
+        morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
+    )
     stack[0][clean_bare_ground] = params["value_classif_bare_ground"]
 
-    clean_buildings = morpho_clean(seg == params["value_classif_buildings"], params) == 1
+    clean_buildings = (
+        morpho_clean(seg == params["value_classif_buildings"], params) == 1
+    )
     stack[0][clean_buildings] = params["value_classif_buildings"]
 
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
@@ -140,10 +166,10 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
     # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Estimation of heigth
-    # Supposed to be low 
+    # Supposed to be low
     stack[1][clean_bare_ground] = LOW
     stack[1][low_veg] = LOW
 
@@ -154,23 +180,23 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     # No confidence in heigh
     stack[1][watermask[0] == 1] = 0
     stack[1][shadowmask[0] == 2] = 0
-    
-    stack[1][np.logical_not(valid_stack[0])] = NODATA_int8
+
+    stack[1][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Markers
     stack[2] = markers
-    stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     """
     # Layer 3 : segmentation from watershed, before morpho/clean
     stack[3] = seg
-    stack[3][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
     
     buildings = np.where(urbanmask > params["building_threshold"],1,0)
     stack[4] = morpho_clean(buildings[0], params)
-    stack[4][np.logical_not(valid_stack[0])] = NODATA_int8
+    stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
     """
 
     return stack
@@ -178,63 +204,131 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
 
 def getarguments():
     """Parse command line arguments."""
-    
+
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument(
+        "main_config", help="First JSON file, load basis arguments"
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
-    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument(
+        "-user_config",
+        help="Second JSON file, overload basis arguments if keys are the same",
+    )
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-vegetationmask", help="Vegetation mask")
     group1.add_argument("-watermask", help="Water mask")
     group1.add_argument("-urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
-    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster  filename")
+    group1.add_argument(
+        "-wsf",
+        dest="extracted_wsf",
+        help="Extracted World Settlement Footprint raster  filename",
+    )
 
     group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
-    group2.add_argument("-building_threshold", type=int, help="Threshold to consider building as detected")
-    group2.add_argument("-building_erosion", type=int,
-                        help="Supposed buildings will be eroded by this size in the marker step")
-    group2.add_argument("-bonus_gt", type=int,
-                        help="Bonus for pixels covered by GT, in the watershed regularization step "
-                             "(ex : +30 to improve discrimination between building and background)")
-    group2.add_argument("-malus_shadow", type=int,
-                        help="Value of the malus for pixels in shadow, in the watershed regularization step")
+    group2.add_argument(
+        "-building_threshold",
+        type=int,
+        help="Threshold to consider building as detected",
+    )
+    group2.add_argument(
+        "-building_erosion",
+        type=int,
+        help="Supposed buildings will be eroded by this size in the marker step",
+    )
+    group2.add_argument(
+        "-bonus_gt",
+        type=int,
+        help="Bonus for pixels covered by GT, in the watershed regularization step "
+        "(ex : +30 to improve discrimination between building and background)",
+    )
+    group2.add_argument(
+        "-malus_shadow",
+        type=int,
+        help="Value of the malus for pixels in shadow, in the watershed regularization step",
+    )
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
-    group4.add_argument("-low_veg", dest="value_classif_low_veg", type=int,
-                        help="Output classification value for low vegetation")
-    group4.add_argument("-high_veg", dest="value_classif_high_veg", type=int,
-                        help="Output classification value for high vegetation")
-    group4.add_argument("-water", dest="value_classif_water", type=int, help="Output classification value for water")
-    group4.add_argument("-buildings", dest="value_classif_buildings", type=int,
-                        help="Output classification value for buildings")
-    group4.add_argument("-bare_ground", dest="value_classif_bare_ground", type=int,
-                        help="Output classification value for bare ground")
-    group4.add_argument("-false_pos_buildings", dest="value_classif_false_positive_buildings", type=int,
-                        help="Output classification value for buildings false positive")
-    group4.add_argument("-background", dest="value_classif_background", type=int,
-                        help="Output classification value for background")
+    group4.add_argument(
+        "-low_veg",
+        dest="value_classif_low_veg",
+        type=int,
+        help="Output classification value for low vegetation",
+    )
+    group4.add_argument(
+        "-high_veg",
+        dest="value_classif_high_veg",
+        type=int,
+        help="Output classification value for high vegetation",
+    )
+    group4.add_argument(
+        "-water",
+        dest="value_classif_water",
+        type=int,
+        help="Output classification value for water",
+    )
+    group4.add_argument(
+        "-buildings",
+        dest="value_classif_buildings",
+        type=int,
+        help="Output classification value for buildings",
+    )
+    group4.add_argument(
+        "-bare_ground",
+        dest="value_classif_bare_ground",
+        type=int,
+        help="Output classification value for bare ground",
+    )
+    group4.add_argument(
+        "-false_pos_buildings",
+        dest="value_classif_false_positive_buildings",
+        type=int,
+        help="Output classification value for buildings false positive",
+    )
+    group4.add_argument(
+        "-background",
+        dest="value_classif_background",
+        type=int,
+        help="Output classification value for background",
+    )
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
-    group5.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
-    group5.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
-    
+    group5.add_argument(
+        "-tile_max_size",
+        type=int,
+        help="Max tile size to be processed (0 : default)",
+    )
+    group5.add_argument(
+        "-multiproc_context",
+        default="spawn",
+        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+    )
+
     return parser.parse_args()
 
 
 def main():
     """Main function that stacks the masks compute before"""
-    
+
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "resources", "post_process", "stack"]
-    argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
+    keys = [
+        "input",
+        "aux_layers",
+        "masks",
+        "resources",
+        "post_process",
+        "stack",
+    ]
+    argsdict = io_utils.read_json(
+        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
+    )
 
     # Overload with manually passed arguments if not None
     for key in argparse_dict.keys():
@@ -244,40 +338,68 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-    
+
     # Create output folder
     makedirs(path.dirname(args.stackmask), exist_ok=True)
-    
-    # Mask calculation     
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
+
+    # Mask calculation
+    with eom.EOContextManager(
+        nb_workers=args.n_workers,
+        tile_mode=True,
+        tile_max_size=args.tile_max_size,
+    ) as eoscale_manager:
         try:
             t0 = time.time()
             key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
-            key_watermask = eoscale_manager.open_raster(raster_path=args.watermask)
-            key_vegmask = eoscale_manager.open_raster(raster_path=args.vegetationmask)
-            key_urbanmask = eoscale_manager.open_raster(raster_path=args.urbanmask)
-            key_shadowmask = eoscale_manager.open_raster(raster_path=args.shadowmask)
-            key_wsf = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
-            key_validstack = eoscale_manager.open_raster(raster_path=args.valid_stack)
-                
+            key_watermask = eoscale_manager.open_raster(
+                raster_path=args.watermask
+            )
+            key_vegmask = eoscale_manager.open_raster(
+                raster_path=args.vegetationmask
+            )
+            key_urbanmask = eoscale_manager.open_raster(
+                raster_path=args.urbanmask
+            )
+            key_shadowmask = eoscale_manager.open_raster(
+                raster_path=args.shadowmask
+            )
+            key_wsf = eoscale_manager.open_raster(
+                raster_path=args.extracted_wsf
+            )
+            key_validstack = eoscale_manager.open_raster(
+                raster_path=args.valid_stack
+            )
+
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
-            inputs_final = [key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf]
-            final_mask = eoexe.n_images_to_m_images_filter(inputs=inputs_final,
-                                                           image_filter=post_process,
-                                                           filter_parameters=vars(args),
-                                                           generate_output_profiles=eo_utils.three_uint8_profile,
-                                                           stable_margin=200,
-                                                           context_manager=eoscale_manager,
-                                                           multiproc_context=args.multiproc_context,
-                                                           filter_desc="Post processing...")
-                
+            inputs_final = [
+                key_image,
+                key_validstack,
+                key_watermask,
+                key_vegmask,
+                key_urbanmask,
+                key_shadowmask,
+                key_wsf,
+            ]
+            final_mask = eoexe.n_images_to_m_images_filter(
+                inputs=inputs_final,
+                image_filter=post_process,
+                filter_parameters=vars(args),
+                generate_output_profiles=eo_utils.three_uint8_profile,
+                stable_margin=200,
+                context_manager=eoscale_manager,
+                multiproc_context=args.multiproc_context,
+                filter_desc="Post processing...",
+            )
+
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
-                
+
             t1 = time.time()
-            print(f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****")
-            print("Total time (user)       :\t" + utils.convert_time(t1-t0))
-                
+            print(
+                f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
+            )
+            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
 
@@ -294,6 +416,6 @@ def main():
             print("oups...", exception)
             traceback.print_exc()
 
-                
+
 if __name__ == "__main__":
     main()

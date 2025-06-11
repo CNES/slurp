@@ -19,25 +19,25 @@
 # limitations under the License.
 
 
-""" Compute water mask of PHR image with help of Pekel and Hand images."""
+"""Compute water mask of PHR image with help of Pekel and Hand images."""
 
 import argparse
 import gc
-import numpy as np
 import time
 import traceback
+from os import makedirs, path
 
-from os import path, makedirs
+import eoscale.eo_executors as eoexe
+import eoscale.manager as eom
+import numpy as np
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
 
-import eoscale.manager as eom
-import eoscale.eo_executors as eoexe
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import io_utils, utils, RF_utils
+from slurp.tools import random_forest_utils as rf_utils
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools.constant import NODATA_int8
-
+from slurp.tools import io_utils, utils
+from slurp.tools.constant import NODATA_INT8
 
 try:
     from sklearnex import patch_sklearn
@@ -47,7 +47,9 @@ except ModuleNotFoundError:
     print("Intel(R) Extension/Optimization for scikit-learn not found.")
 
 
-def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -> list:
+def compute_pekel_mask(
+    input_buffer: list, input_profiles: list, params: dict
+) -> list:
     """
     Compute Pekel mask regarding entry arguments
 
@@ -58,7 +60,9 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     """
     mask_pekel = utils.compute_mask(input_buffer[0], [params["thresh_pekel"]])
     if params["hand_strict"]:
-        mask_pekelxx = utils.compute_mask(input_buffer[0], [params["strict_thresh"]])
+        mask_pekelxx = utils.compute_mask(
+            input_buffer[0], [params["strict_thresh"]]
+        )
         return [mask_pekel, mask_pekelxx]
 
     if not params["no_pekel_filter"]:
@@ -69,7 +73,9 @@ def compute_pekel_mask(input_buffer: list, input_profiles: list, params: dict) -
     return [mask_pekel, mask_pekel0]
 
 
-def compute_hand_mask(input_buffer: list, input_profiles: list, params: dict) -> bool:
+def compute_hand_mask(
+    input_buffer: list, input_profiles: list, params: dict
+) -> bool:
     """
     Compute Hand mask with one or multiple threshold values.
 
@@ -121,19 +127,23 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
 def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     """
     Retrieve row and columns indices selected on the valid pixel of the image
-    
+
     :param int nb_samples: number of samples selected
     :param boolean numpy array valid_mask :
     :param boolean numpy array mask_ground_truth :
     :return: tuple of list , row indices and columns indices
     """
-    valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(np.uint8)
+    valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(
+        np.uint8
+    )
     _, rows, cols = np.where(valid_samples)
 
     if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
         # because in some cases (ex : 19871, 104 samples), last index is the len(rows)
-        indices = np.arange(0, len(rows) - 1, len(rows) / nb_samples).astype(np.uint16)
+        indices = np.arange(0, len(rows) - 1, len(rows) / nb_samples).astype(
+            np.uint16
+        )
 
         s_rows = rows[indices]
         s_cols = cols[indices]
@@ -147,13 +157,13 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
 def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
     """
     Retrieve row and columns indices selected on the valid pixel of the image
-    
+
     :param int nb_indexes: number of samples selected
     :param int pct_area: importance of area for selecting number of samples in each water surface
     :param int minimum: minimum number of samples in each water surface
     :param boolean numpy array mask:
     :return: tuple of list , row indices and columns indices
-    
+
     """
     rows_idxs = []
     cols_idxs = []
@@ -192,7 +202,9 @@ def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
     return rows_idxs, cols_idxs
 
 
-def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def build_samples(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Build samples
 
@@ -202,17 +214,22 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
     :returns: Retrieve number of pixels for each class
     """
     nb_valid_subset = np.count_nonzero(input_buffer[0])
-    valid_water_pixels = np.logical_and(input_buffer[2], input_buffer[5] > params["ndwi_threshold"])
+    valid_water_pixels = np.logical_and(
+        input_buffer[2], input_buffer[5] > params["ndwi_threshold"]
+    )
 
-    nb_water_subset = np.count_nonzero(np.logical_and(valid_water_pixels, input_buffer[0]))
+    nb_water_subset = np.count_nonzero(
+        np.logical_and(valid_water_pixels, input_buffer[0])
+    )
     nb_other_subset = nb_valid_subset - nb_water_subset
 
     # valid pixels for 'other' (every thing but water) : valid mask + hand > 0
     # This criteria should be reconsidered (ie : think of a relative threshold to select samples not too far from water)
-    nb_valid_pix_other = np.count_nonzero(np.logical_and(input_buffer[0], input_buffer[1]))
+    nb_valid_pix_other = np.count_nonzero(
+        np.logical_and(input_buffer[0], input_buffer[1])
+    )
     nb_other_subset = nb_valid_pix_other
 
-    
     # Ratio of pixel class compare to the full image ratio
     water_ratio = nb_water_subset / params["nb_valid_water_pixels"]
     other_ratio = nb_other_subset / params["nb_valid_other_pixels"]
@@ -248,7 +265,9 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         )
 
     elif params["samples_method"] == "grid":
-        rows_pekel, cols_pekel = get_grid_indexes_from_mask(nb_water_subsamples, input_buffer[0], valid_water_pixels[0])
+        rows_pekel, cols_pekel = get_grid_indexes_from_mask(
+            nb_water_subsamples, input_buffer[0], valid_water_pixels[0]
+        )
 
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
@@ -256,7 +275,9 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
         )
 
     else:
-        raise Exception("Sample method not accepted : use 'random', 'smart' or 'grid'")
+        raise Exception(
+            "Sample method not accepted : use 'random', 'smart' or 'grid'"
+        )
 
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
@@ -264,12 +285,16 @@ def build_samples(input_buffer: list, input_profiles: list, params: dict) -> np.
 
     # Prepare samples for learning
     im_stack = np.concatenate((input_buffer[2:]), axis=0)
-    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
+    samples = np.transpose(
+        im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
+    )
 
     return samples  # [x_samples, y_samples]
 
 
-def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.ndarray:
+def rf_prediction(
+    input_buffer: list, input_profiles: list, params: dict
+) -> np.ndarray:
     """
     Random Forest prediction
 
@@ -281,15 +306,19 @@ def rf_prediction(input_buffer: list, input_profiles: list, params: dict) -> np.
     im_stack = np.concatenate((input_buffer[1:]), axis=0)
     valid_mask = input_buffer[0].astype(bool)
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0].astype(bool)])
-    
 
     classifier = params["classifier"]
     prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
     if buffer_to_predict.shape[0] > 0:  # not only NO DATA
-        prediction[valid_mask[0].astype(bool)] = classifier.predict(buffer_to_predict)
+        prediction[valid_mask[0].astype(bool)] = classifier.predict(
+            buffer_to_predict
+        )
 
-    utils.display_mem_usage(params["debug"],f"RF Prediction on buffer {input_buffer[0].shape[1]} x {input_buffer[0].shape[2]}")
-    
+    utils.display_mem_usage(
+        params["debug"],
+        f"RF Prediction on buffer {input_buffer[0].shape[1]} x {input_buffer[0].shape[2]}",
+    )
+
     return prediction
 
 
@@ -298,7 +327,7 @@ def mask_filter(im_in, mask_ref):
     Remove water areas in im_in not in contact
     with water areas in mask_ref.
     """
-    im_label, nb_label = label(im_in, connectivity=2, return_num=True)
+    im_label, _ = label(im_in, connectivity=2, return_num=True)
 
     im_label_thresh = np.copy(im_label)
     im_label_thresh[np.logical_not(mask_ref)] = 0
@@ -310,7 +339,9 @@ def mask_filter(im_in, mask_ref):
     return im_filtered
 
 
-def post_process(input_buffer: list, input_profiles: list, params: dict) -> list:
+def post_process(
+    input_buffer: list, input_profiles: list, params: dict
+) -> list:
     """
     Compute some filters on the prediction image.
 
@@ -333,7 +364,9 @@ def post_process(input_buffer: list, input_profiles: list, params: dict) -> list
         mask = np.zeros(buffer_shape, dtype=bool)
         if not params["no_pekel_filter"]:  # filter with pekel0
             mask = np.zeros(buffer_shape, dtype=bool)
-            mask = np.logical_or(mask, input_buffer[2][0])  # problème de mask_pekel0 if "not defined"
+            mask = np.logical_or(
+                mask, input_buffer[2][0]
+            )  # problème de mask_pekel0 if "not defined"
         im_classif = mask_filter(input_buffer[0], mask)
     else:
         im_classif = input_buffer[0]
@@ -341,21 +374,27 @@ def post_process(input_buffer: list, input_profiles: list, params: dict) -> list
     # Closing
     if params["binary_closing"]:
         im_classif[0, :, :] = apply_morpho(
-            im_classif[0, :, :].astype(bool), "binary_closing", params["binary_closing"]
+            im_classif[0, :, :].astype(bool),
+            "binary_closing",
+            params["binary_closing"],
         ).astype(np.uint8)
     if params["area_closing"]:
-        im_classif[0, :, :] = apply_morpho(im_classif[0, :, :], "area_closing", params["area_closing"])
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :], "area_closing", params["area_closing"]
+        )
     if params["remove_small_holes"]:
         im_classif[0, :, :] = apply_morpho(
-            im_classif[0, :, :].astype(bool), "remove_small_holes", params["remove_small_holes"]
+            im_classif[0, :, :].astype(bool),
+            "remove_small_holes",
+            params["remove_small_holes"],
         ).astype(np.uint8)
 
     # Add nodata in im_classif
-    im_classif[np.logical_not(input_buffer[3])] = NODATA_int8
+    im_classif[np.logical_not(input_buffer[3])] = NODATA_INT8
     im_classif[im_classif == 1] = params["value_classif"]
 
     im_predict = input_buffer[0]
-    im_predict[np.logical_not(input_buffer[3])] = NODATA_int8
+    im_predict[np.logical_not(input_buffer[3])] = NODATA_INT8
     im_predict[im_predict == 1] = params["value_classif"]
 
     return [im_predict, im_classif]
@@ -366,69 +405,176 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Water Mask.")
 
-    parser.add_argument("main_config", help="First JSON file, load basis arguments")
+    parser.add_argument(
+        "main_config", help="First JSON file, load basis arguments"
+    )
 
-    parser.add_argument("-d", "--debug", action="store_true", dest="debug", help="Debug flag")
-    
+    parser.add_argument(
+        "-d", "--debug", action="store_true", dest="debug", help="Debug flag"
+    )
+
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
-    group1.add_argument("-user_config", help="Second JSON file, overload basis arguments if keys are the same")
+    group1.add_argument(
+        "-user_config",
+        help="Second JSON file, overload basis arguments if keys are the same",
+    )
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-ndvi", dest="file_ndvi", help="NDVI filename")
     group1.add_argument("-ndwi", dest="file_ndwi", help="NDWI filename")
-    group1.add_argument("-pekel", dest="extracted_pekel", help="Extracted Pekel filename")
-    group1.add_argument("-hand", dest="extracted_hand", help="Extracted Hand filename")
-    group1.add_argument("-layers", nargs="+", dest="files_layers",
-                        help="Add layers as additional features used by learning algorithm")
-    group1.add_argument("-filters", nargs="+", dest="file_filters", help="Add files used in filtering (postprocessing)")
+    group1.add_argument(
+        "-pekel", dest="extracted_pekel", help="Extracted Pekel filename"
+    )
+    group1.add_argument(
+        "-hand", dest="extracted_hand", help="Extracted Hand filename"
+    )
+    group1.add_argument(
+        "-layers",
+        nargs="+",
+        dest="files_layers",
+        help="Add layers as additional features used by learning algorithm",
+    )
+    group1.add_argument(
+        "-filters",
+        nargs="+",
+        dest="file_filters",
+        help="Add files used in filtering (postprocessing)",
+    )
 
     group2 = parser.add_argument_group(description="*** OPTIONS ***")
-    group2.add_argument("-thresh_pekel", type=float, help="Pekel Threshold float")
-    group2.add_argument("-hand_strict", action="store_true", help="Use not(pekelxx) for other (no water) samples")
-    group2.add_argument("-thresh_hand", type=int, help="Hand Threshold int >= 0")
-    group2.add_argument("-strict_thresh", type=float, help="Pekel Threshold float if hand_strict")
-    group2.add_argument("-save_mode", choices=["none", "debug"],
-                        help="Save all files (debug) or only output mask (none)")
-    group2.add_argument("-simple_ndwi_threshold", help="Compute water mask as a simple NDWI threshold - "
-                                                       "useful in arid places where no water is known by Peckel")
-    group2.add_argument("-ndwi_threshold", type=float, help="Threshold used when Pekel is empty in the area")
+    group2.add_argument(
+        "-thresh_pekel", type=float, help="Pekel Threshold float"
+    )
+    group2.add_argument(
+        "-hand_strict",
+        action="store_true",
+        help="Use not(pekelxx) for other (no water) samples",
+    )
+    group2.add_argument(
+        "-thresh_hand", type=int, help="Hand Threshold int >= 0"
+    )
+    group2.add_argument(
+        "-strict_thresh",
+        type=float,
+        help="Pekel Threshold float if hand_strict",
+    )
+    group2.add_argument(
+        "-save_mode",
+        choices=["none", "debug"],
+        help="Save all files (debug) or only output mask (none)",
+    )
+    group2.add_argument(
+        "-simple_ndwi_threshold",
+        help="Compute water mask as a simple NDWI threshold - "
+        "useful in arid places where no water is known by Peckel",
+    )
+    group2.add_argument(
+        "-ndwi_threshold",
+        type=float,
+        help="Threshold used when Pekel is empty in the area",
+    )
 
-    group3 = parser.add_argument_group(description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***")
-    group3.add_argument("-samples_method", choices=["smart", "grid", "random"],
-                        help="Select method for choosing learning samples")
-    group3.add_argument("-nb_samples_water", type=int, help="Number of samples in water for learning")
-    group3.add_argument("-nb_samples_other", type=int, help="Number of samples in other for learning")
-    group3.add_argument("-nb_samples_auto", action="store_true", help="Auto select number of samples for water and other")
-    group3.add_argument("-auto_pct", type=float, help="Percentage of samples points, to use with -nb_samples_auto")
-    group3.add_argument("-smart_area_pct", type=int,
-                        help="For smart method, importance of area for selecting number of samples in each water surface")
-    group3.add_argument("-smart_minimum", type=int,
-                        help="For smart method, minimum number of samples in each water surface.")
-    group3.add_argument("-grid_spacing", type=int,
-                        help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)")
+    group3 = parser.add_argument_group(
+        description="*** LEARNING SAMPLES SELECTION AND CLASSIFIER ***"
+    )
+    group3.add_argument(
+        "-samples_method",
+        choices=["smart", "grid", "random"],
+        help="Select method for choosing learning samples",
+    )
+    group3.add_argument(
+        "-nb_samples_water",
+        type=int,
+        help="Number of samples in water for learning",
+    )
+    group3.add_argument(
+        "-nb_samples_other",
+        type=int,
+        help="Number of samples in other for learning",
+    )
+    group3.add_argument(
+        "-nb_samples_auto",
+        action="store_true",
+        help="Auto select number of samples for water and other",
+    )
+    group3.add_argument(
+        "-auto_pct",
+        type=float,
+        help="Percentage of samples points, to use with -nb_samples_auto",
+    )
+    group3.add_argument(
+        "-smart_area_pct",
+        type=int,
+        help="For smart method, importance of area for selecting number of samples in each water surface",
+    )
+    group3.add_argument(
+        "-smart_minimum",
+        type=int,
+        help="For smart method, minimum number of samples in each water surface.",
+    )
+    group3.add_argument(
+        "-grid_spacing",
+        type=int,
+        help="For grid method, select samples on a regular grid (40 pixels seems to be a good value)",
+    )
     group3.add_argument("-max_depth", type=int, help="Max depth of trees")
-    group3.add_argument("-nb_estimators", type=int, help="Nb of trees in Random Forest")
-    group3.add_argument("-n_jobs", type=int, help="Nb of parallel jobs for Random Forest "
-                                                  "(1 is recommanded : use n_workers to optimize parallel computing)")
+    group3.add_argument(
+        "-nb_estimators", type=int, help="Nb of trees in Random Forest"
+    )
+    group3.add_argument(
+        "-n_jobs",
+        type=int,
+        help="Nb of parallel jobs for Random Forest "
+        "(1 is recommanded : use n_workers to optimize parallel computing)",
+    )
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
-    group4.add_argument("-no_pekel_filter", action="store_true",
-                        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel")
-    group4.add_argument("-hand_filter", action="store_true",
-                        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict")
-    group4.add_argument("-binary_closing", type=int, help="Size of disk structuring element")
-    group4.add_argument("-area_closing", type=int, help="Area closing removes all dark structures")
-    group4.add_argument("-remove_small_holes", type=int,
-                        help="The maximum area, in pixels, of a contiguous hole that will be filled")
+    group4.add_argument(
+        "-no_pekel_filter",
+        action="store_true",
+        help="Deactivate postprocess with pekel which only keeps surfaces already known by pekel",
+    )
+    group4.add_argument(
+        "-hand_filter",
+        action="store_true",
+        help="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict",
+    )
+    group4.add_argument(
+        "-binary_closing", type=int, help="Size of disk structuring element"
+    )
+    group4.add_argument(
+        "-area_closing",
+        type=int,
+        help="Area closing removes all dark structures",
+    )
+    group4.add_argument(
+        "-remove_small_holes",
+        type=int,
+        help="The maximum area, in pixels, of a contiguous hole that will be filled",
+    )
 
     group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group5.add_argument("-watermask", help="Output classification filename")
-    group5.add_argument("-value_classif", type=int, help="Output classification value (default is 1)")
+    group5.add_argument(
+        "-value_classif",
+        type=int,
+        help="Output classification value (default is 1)",
+    )
 
     group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
-    group6.add_argument("-n_workers", type=int, action="store", help="Number of CPU")
-    group6.add_argument("-tile_max_size", type=int, help="Max tile size to be processed (0 : default)")
-    group6.add_argument("-multiproc_context", default='spawn', help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
+    group6.add_argument(
+        "-n_workers", type=int, action="store", help="Number of CPU"
+    )
+    group6.add_argument(
+        "-tile_max_size",
+        type=int,
+        help="Max tile size to be processed (0 : default)",
+    )
+    group6.add_argument(
+        "-multiproc_context",
+        default="spawn",
+        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+    )
     return parser.parse_args()
 
 
@@ -437,12 +583,21 @@ def getarguments():
 
 def main():
     """Main function that compute Urbanmask"""
-    
+
     argparse_dict = vars(getarguments())
 
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "resources", "post_process", "water"]
-    argsdict = io_utils.read_json(argparse_dict["main_config"], keys, argparse_dict.get("user_config"))
+    keys = [
+        "input",
+        "aux_layers",
+        "masks",
+        "resources",
+        "post_process",
+        "water",
+    ]
+    argsdict = io_utils.read_json(
+        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
+    )
 
     # Overload with manually passed arguments if not None
     for key in argparse_dict.keys():
@@ -452,17 +607,21 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-    
+
     # Create output folder
     makedirs(path.dirname(args.watermask), exist_ok=True)
-    
-    # Mask calculation 
-    with eom.EOContextManager(nb_workers=args.n_workers, tile_mode=True, tile_max_size=args.tile_max_size) as eoscale_manager:
+
+    # Mask calculation
+    with eom.EOContextManager(
+        nb_workers=args.n_workers,
+        tile_mode=True,
+        tile_max_size=args.tile_max_size,
+    ) as eoscale_manager:
         try:
             t0 = time.time()
 
             utils.display_mem_usage(args.debug, "Start computation")
-            
+
             # --Build stack with all layers-- #
 
             # Image PHR (numpy array, 4 bands, band number is first dimension),
@@ -477,12 +636,14 @@ def main():
             args.rpc = None
 
             # Valid stack
-            key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
+            key_valid_stack = eoscale_manager.open_raster(
+                raster_path=args.valid_stack
+            )
 
             # margin for masks computation (a Pekel pixel is 30m large, ~ 45m in its diagonal
             # for 0.5 m images, a 100 pixels margin will allow to cover one Pekel pixel
             margin = 100
-            
+
             # NDXI
             key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
             key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
@@ -492,20 +653,26 @@ def main():
             # --Build samples-- #
 
             # Pekel
-            key_pekel = eoscale_manager.open_raster(raster_path=args.extracted_pekel)
+            key_pekel = eoscale_manager.open_raster(
+                raster_path=args.extracted_pekel
+            )
             pekel_profile = eoscale_manager.get_profile(key_pekel)
-            eo_utils.print_dataset_infos(args.extracted_pekel, pekel_profile, "PEKEL")
+            eo_utils.print_dataset_infos(
+                args.extracted_pekel, pekel_profile, "PEKEL"
+            )
             args.pekel_nodata = pekel_profile["nodata"]
 
             # Pekel valid masks
-            mask_pekel = eoexe.n_images_to_m_images_filter(inputs=[key_pekel],
-                                                           image_filter=compute_pekel_mask,
-                                                           filter_parameters=vars(args),
-                                                           generate_output_profiles=eo_utils.double_uint8_profile,
-                                                           stable_margin=margin,
-                                                           context_manager=eoscale_manager,
-                                                           multiproc_context=args.multiproc_context,
-                                                           filter_desc="Pekel valid mask processing...")
+            mask_pekel = eoexe.n_images_to_m_images_filter(
+                inputs=[key_pekel],
+                image_filter=compute_pekel_mask,
+                filter_parameters=vars(args),
+                generate_output_profiles=eo_utils.double_uint8_profile,
+                stable_margin=margin,
+                context_manager=eoscale_manager,
+                multiproc_context=args.multiproc_context,
+                filter_desc="Pekel valid mask processing...",
+            )
 
             # If user wants a simple threshold on NDWI values, we don't select samples and launch learning/prediction step
             # If there are not enough water samples, we return a void mask
@@ -519,39 +686,50 @@ def main():
                 # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
                 # Alternative would be to select samples in a thresholded NDWI...
                 not_enough_water_samples = True
-                print("** WARNING ** not enough water samples are found in Pekel : return a void mask")
+                print(
+                    "** WARNING ** not enough water samples are found in Pekel : return a void mask"
+                )
 
             # HAND
-            key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
+            key_hand = eoscale_manager.open_raster(
+                raster_path=args.extracted_hand
+            )
             hand_profile = eoscale_manager.get_profile(key_hand)
-            eo_utils.print_dataset_infos(args.extracted_hand, hand_profile, "HAND")
+            eo_utils.print_dataset_infos(
+                args.extracted_hand, hand_profile, "HAND"
+            )
             args.hand_nodata = hand_profile["nodata"]
 
             # Create HAND mask
-            mask_hand = eoexe.n_images_to_m_images_filter(inputs=[key_hand],
-                                                          image_filter=compute_hand_mask,
-                                                          # args.hand_strict impossible because of mask_pekel0 not sure
-                                                          filter_parameters=vars(args),
-                                                          generate_output_profiles=eo_utils.single_float_profile,
-                                                          stable_margin=margin,
-                                                          context_manager=eoscale_manager,
-                                                          multiproc_context=args.multiproc_context,
-                                                          filter_desc="Hand valid mask processing...")
+            mask_hand = eoexe.n_images_to_m_images_filter(
+                inputs=[key_hand],
+                image_filter=compute_hand_mask,
+                # args.hand_strict impossible because of mask_pekel0 not sure
+                filter_parameters=vars(args),
+                generate_output_profiles=eo_utils.single_float_profile,
+                stable_margin=margin,
+                context_manager=eoscale_manager,
+                multiproc_context=args.multiproc_context,
+                filter_desc="Hand valid mask processing...",
+            )
 
             # Flag to command post-process
             do_post_process = True
 
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
-                print("Simple threshold mask NDWI > " + str(args.ndwi_threshold))
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi, key_valid_stack],
-                                                                image_filter=utils.compute_mask_threshold,
-                                                                filter_parameters={
-                                                                    "threshold": 1000 * args.ndwi_threshold},
-                                                                context_manager=eoscale_manager,
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                multiproc_context=args.multiproc_context,
-                                                                filter_desc="Simple NDWI threshold")
+                print(
+                    "Simple threshold mask NDWI > " + str(args.ndwi_threshold)
+                )
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_ndwi, key_valid_stack],
+                    image_filter=utils.compute_mask_threshold,
+                    filter_parameters={"threshold": 1000 * args.ndwi_threshold},
+                    context_manager=eoscale_manager,
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Simple NDWI threshold",
+                )
 
                 time_random_forest = time.time()
                 time_samples = time_random_forest
@@ -560,13 +738,15 @@ def main():
             elif not_enough_water_samples:
                 # We compute a void mask (0 everywhere, except for NO DATA values)
                 # Tips : we threshold NDWI > 1000 : no pixel should be detected.
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=[key_ndwi, key_valid_stack],
-                                                                image_filter=utils.compute_mask_threshold,
-                                                                filter_parameters={"threshold": 1000},
-                                                                context_manager=eoscale_manager,
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                multiproc_context=args.multiproc_context,
-                                                                filter_desc="Void mask")
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_ndwi, key_valid_stack],
+                    image_filter=utils.compute_mask_threshold,
+                    filter_parameters={"threshold": 1000},
+                    context_manager=eoscale_manager,
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Void mask",
+                )
 
                 do_post_process = False
 
@@ -575,86 +755,152 @@ def main():
                 #
                 # Taking optional layers into account
                 keys_files_layers = [
-                    eoscale_manager.open_raster(raster_path=args.files_layers[i])
+                    eoscale_manager.open_raster(
+                        raster_path=args.files_layers[i]
+                    )
                     for i in range(len(args.files_layers))
                 ]
                 # Sample selection
                 valid_stack = eoscale_manager.get_array(key_valid_stack)
                 nb_valid_pixels = np.count_nonzero(valid_stack)
-                args.nb_valid_water_pixels = np.count_nonzero(np.logical_and(local_mask_pekel, valid_stack))
-                args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
-                input_for_samples = [key_valid_stack, mask_hand[0], mask_pekel[0], key_phr, key_ndvi, key_ndwi] + keys_files_layers
+                args.nb_valid_water_pixels = np.count_nonzero(
+                    np.logical_and(local_mask_pekel, valid_stack)
+                )
+                args.nb_valid_other_pixels = (
+                    nb_valid_pixels - args.nb_valid_water_pixels
+                )
+                input_for_samples = [
+                    key_valid_stack,
+                    mask_hand[0],
+                    mask_pekel[0],
+                    key_phr,
+                    key_ndvi,
+                    key_ndwi,
+                ] + keys_files_layers
 
-                samples = eoexe.n_images_to_m_scalars(inputs=input_for_samples,
-                                                      image_filter=build_samples,
-                                                      filter_parameters=vars(args),
-                                                      nb_output_scalars=args.nb_samples_water + args.nb_samples_other,
-                                                      context_manager=eoscale_manager,
-                                                      concatenate_filter=eo_utils.concatenate_samples,
-                                                      output_scalars=[],
-                                                      multiproc_context=args.multiproc_context,
-                                                      filter_desc="Samples water processing...")
+                samples = eoexe.n_images_to_m_scalars(
+                    inputs=input_for_samples,
+                    image_filter=build_samples,
+                    filter_parameters=vars(args),
+                    nb_output_scalars=args.nb_samples_water
+                    + args.nb_samples_other,
+                    context_manager=eoscale_manager,
+                    concatenate_filter=eo_utils.concatenate_samples,
+                    output_scalars=[],
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Samples water processing...",
+                )
                 # samples=[x_samples, y_samples]
 
                 del local_mask_pekel
-                
+
                 time_samples = time.time()
 
                 # --Train classifier from samples-- #
                 classifier = RandomForestClassifier(
-                    n_estimators=args.nb_estimators, max_depth=args.max_depth, random_state=712, n_jobs=1
+                    n_estimators=args.nb_estimators,
+                    max_depth=args.max_depth,
+                    random_state=712,
+                    n_jobs=1,
                 )
-                print("RandomForest parameters:\n", classifier.get_params(), "\n")
+                print(
+                    "RandomForest parameters:\n", classifier.get_params(), "\n"
+                )
                 samples = np.concatenate(samples[:])  # A revoir si possible
-                x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
+                x_samples = samples[
+                    :, 1:
+                ]  # im_phr, im_ndvi, im_ndwi and files_layers
                 y_samples = samples[:, 0]  # mask_pekel
-                RF_utils.train_classifier(classifier, x_samples, y_samples)
-                RF_utils.print_feature_importance(classifier, args.files_layers)
+                rf_utils.train_classifier(classifier, x_samples, y_samples)
+                rf_utils.print_feature_importance(classifier, args.files_layers)
                 gc.collect()
 
                 utils.display_mem_usage(args.debug, "After training step")
-                
+
                 # --Predict-- #
-                input_for_prediction = [key_valid_stack, key_phr, key_ndvi, key_ndwi] + keys_files_layers
-                key_predict = eoexe.n_images_to_m_images_filter(inputs=input_for_prediction,
-                                                                image_filter=rf_prediction,
-                                                                filter_parameters={"classifier": classifier, "debug": args.debug},
-                                                                generate_output_profiles=eo_utils.single_uint8_profile,
-                                                                stable_margin=margin,
-                                                                context_manager=eoscale_manager,
-                                                                multiproc_context=args.multiproc_context,
-                                                                filter_desc="RF prediction processing...")
+                input_for_prediction = [
+                    key_valid_stack,
+                    key_phr,
+                    key_ndvi,
+                    key_ndwi,
+                ] + keys_files_layers
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=input_for_prediction,
+                    image_filter=rf_prediction,
+                    filter_parameters={
+                        "classifier": classifier,
+                        "debug": args.debug,
+                    },
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    stable_margin=margin,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="RF prediction processing...",
+                )
                 time_random_forest = time.time()
                 utils.display_mem_usage(args.debug, "After prediction step")
             if do_post_process:
                 # --Post_processing-- #
-                inputs_for_classif = [key_predict[0], mask_hand[0], mask_pekel[1], key_valid_stack]
-                im_classif = eoexe.n_images_to_m_images_filter(inputs=inputs_for_classif,
-                                                               image_filter=post_process,
-                                                               filter_parameters=vars(args),
-                                                               generate_output_profiles=eo_utils.double_uint8_profile,
-                                                               stable_margin=margin,
-                                                               context_manager=eoscale_manager,
-                                                               multiproc_context=args.multiproc_context,
-                                                               filter_desc="Post processing...")
+                inputs_for_classif = [
+                    key_predict[0],
+                    mask_hand[0],
+                    mask_pekel[1],
+                    key_valid_stack,
+                ]
+                im_classif = eoexe.n_images_to_m_images_filter(
+                    inputs=inputs_for_classif,
+                    image_filter=post_process,
+                    filter_parameters=vars(args),
+                    generate_output_profiles=eo_utils.double_uint8_profile,
+                    stable_margin=margin,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Post processing...",
+                )
 
-                eoscale_manager.write(key=im_classif[1], img_path=args.watermask)  # classif
+                eoscale_manager.write(
+                    key=im_classif[1], img_path=args.watermask
+                )  # classif
                 if args.save_mode == "debug":
-                    eoscale_manager.write(key=im_classif[0], img_path=args.watermask.replace(".tif", "_raw_predict.tif"))
+                    eoscale_manager.write(
+                        key=im_classif[0],
+                        img_path=args.watermask.replace(
+                            ".tif", "_raw_predict.tif"
+                        ),
+                    )
 
             else:
-                eoscale_manager.write(key=key_predict[0], img_path=args.watermask)  # classif
-                
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.watermask
+                )  # classif
+
             utils.display_mem_usage(args.debug, "End of computation")
             end_time = time.time()
 
-            print(f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****")
-            print("Total time (user)       :\t" + utils.convert_time(end_time - t0))
-            print("- Build_stack           :\t" + utils.convert_time(time_stack - t0))
+            print(
+                f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
+            )
+            print(
+                "Total time (user)       :\t"
+                + utils.convert_time(end_time - t0)
+            )
+            print(
+                "- Build_stack           :\t"
+                + utils.convert_time(time_stack - t0)
+            )
             if not args.simple_ndwi_threshold and not not_enough_water_samples:
-                print("- Build_samples         :\t" + utils.convert_time(time_samples - time_stack))
-                print("- Random forest (total) :\t" + utils.convert_time(time_random_forest - time_samples))
-                print("- Post-processing       :\t" + utils.convert_time(end_time - time_random_forest))
+                print(
+                    "- Build_samples         :\t"
+                    + utils.convert_time(time_samples - time_stack)
+                )
+                print(
+                    "- Random forest (total) :\t"
+                    + utils.convert_time(time_random_forest - time_samples)
+                )
+                print(
+                    "- Post-processing       :\t"
+                    + utils.convert_time(end_time - time_random_forest)
+                )
             print("***")
             print("Max workers used for parallel tasks " + str(args.n_workers))
 

@@ -20,17 +20,21 @@
 
 """Tests for vegetationmask generation."""
 
-import pytest
-import os
 import glob
-from tests.utils import get_files_to_process, get_output_path, get_aux_path
+import os
+
+import pytest
+
+from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
 # Input images
 input_files = get_files_to_process("vegetation")
 
 # Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/vegetationmask*.tif"))
+predict_images = glob.glob(
+    os.path.join(pytest.output_dir + "/vegetationmask*.tif")
+)
 
 
 def prepare_vegetationmask(file, nb_workers):
@@ -38,18 +42,30 @@ def prepare_vegetationmask(file, nb_workers):
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
     texture = get_output_path(file, "texture", remove=True)
-    
-    os.system(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-              f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
-    
-    assert os.path.exists(valid_stack), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
-    assert os.path.exists(ndvi), f"The file {ndvi} has not been created. Error during NDVI computation ?"
-    assert os.path.exists(ndwi), f"The file {ndwi} has not been created. Error during NDWI computation ?"
-    assert os.path.exists(texture), f"The file {texture} has not been created. Error during Texture computation ?"
+
+    os.system(
+        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+    )
+
+    assert os.path.exists(
+        valid_stack
+    ), f"The file {valid_stack} has not been created. Error during valid stack computation ?"
+    assert os.path.exists(
+        ndvi
+    ), f"The file {ndvi} has not been created. Error during NDVI computation ?"
+    assert os.path.exists(
+        ndwi
+    ), f"The file {ndwi} has not been created. Error during NDWI computation ?"
+    assert os.path.exists(
+        texture
+    ), f"The file {texture} has not been created. Error during Texture computation ?"
     return valid_stack, ndvi, ndwi, texture
 
 
-def compute_vegetationmask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, texture=None):
+def compute_vegetationmask(
+    file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, texture=None
+):
     output_image = get_output_path(file, "vegetationmask", remove=True)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
@@ -59,11 +75,15 @@ def compute_vegetationmask(file, nb_workers, valid_stack=None, ndvi=None, ndwi=N
         ndwi = get_aux_path(file, "ndwi")
     if texture is None:
         texture = get_aux_path(file, "texture")
-    
-    os.system(f"slurp_vegetationmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-              f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture}")
-    
-    assert os.path.exists(output_image), f"The file {output_image} has not been created. Error during vegetationmask computation ?"
+
+    os.system(
+        f"slurp_vegetationmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture}"
+    )
+
+    assert os.path.exists(
+        output_image
+    ), f"The file {output_image} has not been created. Error during vegetationmask computation ?"
     return output_image
 
 
@@ -88,14 +108,14 @@ def test_computation_vegetationmask(file):
 def test_validation_vegetationmask(predict_file):
     validate_mask(predict_file, "Vegetation")
 
-    
+
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_vegetationmask(file):
     output_image = compute_vegetationmask(file, 1)
     validate_mask(output_image, "Vegetation")
-    
-    
+
+
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_vegetationmask(file):
@@ -104,5 +124,7 @@ def test_prepare_computation_and_validation_vegetationmask(file):
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
     validate_mask(texture, "Prepare")
-    output_image = compute_vegetationmask(file, 1, valid_stack, ndvi, ndwi, texture)
+    output_image = compute_vegetationmask(
+        file, 1, valid_stack, ndvi, ndwi, texture
+    )
     validate_mask(output_image, "Vegetation")
