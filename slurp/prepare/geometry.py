@@ -20,13 +20,18 @@
 
 """
 Brings together the geometry functions using OTB features, to project images into
-georeferenced geometry (with superimpose) or Sharloc, to project images into sensor geometry
+georeferenced geometry (with superimpose) or Shareloc, to project images into sensor geometry
 """
 
 import time
 
+import bindings_cpp
 import numpy as np
 import rasterio as rio
+from shareloc.dtm_reader import dtm_reader
+from shareloc.geofunctions.localization import Localization
+from shareloc.geomodels import GeoModel
+from shareloc.image import Image
 
 from slurp.tools.constant import COMPRESSION
 
@@ -136,6 +141,84 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     return app_roi.GetVectorImageAsNumpyArray("out")
 
 
+def compute_dtm_footprint(geom_model, sensor_image, data_img):
+    """
+    Compute DTM footprint from supposed sensor_image footprint 
+    to load only a portion of the global DTM.
+
+    Load Shareloc direct loc function force shareloc to use north for
+    vertical direction (compatible with images with positive
+    or negative y spacing.
+
+    Args:
+        geom_model (GeoModel): GeoModel factory:
+        A class designed for registered all available geomodels
+        and instantiate them when needed.
+        sensor_image (str): path to input image in its raw geometry (sensor)
+        data_img (Any): Image opened at sensor_image path.
+    """
+    loc_alt_min = Localization(
+        geom_model,
+        elevation=-2000.0,
+        image=Image(sensor_image, vertical_direction="north"),
+        epsg=4326,
+    )
+    loc_alt_max = Localization(
+        geom_model,
+        elevation=10000.0,
+        image=Image(sensor_image, vertical_direction="north"),
+        epsg=4326,
+    )
+
+    # lower right (lr) and upper left (ul) corners coordinates, with two altitudes
+    lon_lat_lr_corner_altmax = loc_alt_max.direct(
+        data_img.shape[0] - 1, data_img.shape[1] - 1
+    )[0][0:2]
+    lon_lat_ul_corner_altmax = loc_alt_max.direct(0, 0)[0][0:2]
+
+    lon_lat_lr_corner_altmin = loc_alt_min.direct(
+        data_img.shape[0] - 1, data_img.shape[1] - 1
+    )[0][0:2]
+    lon_lat_ul_corner_altmin = loc_alt_min.direct(0, 0)[0][0:2]
+
+    # lon = coords[0] / lat = coords[1]
+    # depending on the projection, the upper left corner has not always
+    # the lowest longiture or the highest latitude !!
+    min_lat = min(
+        lon_lat_lr_corner_altmax[1],
+        lon_lat_ul_corner_altmax[1],
+        lon_lat_lr_corner_altmin[1],
+        lon_lat_ul_corner_altmin[1],
+    )
+    min_lon = min(
+        lon_lat_lr_corner_altmax[0],
+        lon_lat_ul_corner_altmax[0],
+        lon_lat_lr_corner_altmin[0],
+        lon_lat_ul_corner_altmin[0],
+    )
+    max_lat = max(
+        lon_lat_lr_corner_altmax[1],
+        lon_lat_ul_corner_altmax[1],
+        lon_lat_lr_corner_altmin[1],
+        lon_lat_ul_corner_altmin[1],
+    )
+    max_lon = max(
+        lon_lat_lr_corner_altmax[0],
+        lon_lat_ul_corner_altmax[0],
+        lon_lat_lr_corner_altmin[0],
+        lon_lat_ul_corner_altmin[0],
+    )
+
+    # compute usable extent and add a margin
+    footprint_dtm = [min_lat, min_lon, max_lat, max_lon]
+    footprint_dtm[0] -= 0.5
+    footprint_dtm[1] -= 0.5
+    footprint_dtm[2] += 0.5
+    footprint_dtm[3] += 0.5
+
+    return footprint_dtm
+
+
 def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     """
     Compute an interpolation grid (lons/lats) -> x/y coords that will help reproject
@@ -146,15 +229,6 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     :param str geoid_file: path to the Geoid
     :param int step: grid step (default, 30)
     """
-    try:
-        import bindings_cpp
-        from shareloc.dtm_reader import dtm_reader
-        from shareloc.geofunctions.localization import Localization
-        from shareloc.geomodels import GeoModel
-        from shareloc.image import Image
-    except ModuleNotFoundError as e:
-        raise ImportError("\n*** Shareloc is not installed ***\n") from e
-
     # Import image geometrical model
     geom_model_optim = GeoModel(sensor_image, "RPCoptim")
 
@@ -190,59 +264,9 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
     all_col, all_row = np.meshgrid(all_x, all_y)
     all_coords = np.vstack((all_col.flatten(), all_row.flatten())).transpose()
 
-
-    # TODO : refac :
-    # New function 'compute DTM footprint' ? 
-
-    # Load Shareloc direct loc function
-    # force shareloc to use north for vertical direction (compatible with images with
-    # positive or negative y spacing
-
-    # open DTM in a ROI (add margin on supposed extent)
-    loc_alt_min = Localization(
-        geom_model_optim,
-        elevation=-2000.0,
-        image=Image(sensor_image, vertical_direction="north"),
-        epsg=4326,
+    footprint_dtm = compute_dtm_footprint(
+        geom_model_optim, sensor_image, data_img
     )
-    loc_alt_max = Localization(
-        geom_model_optim,
-        elevation=10000.0,
-        image=Image(sensor_image, vertical_direction="north"),
-        epsg=4326,
-    )
-
-    # lower right (lr) and upper left (ul) corners coordinates, with two altitudes
-    lon_lat_lr_corner_altmax = loc_alt_max.direct(
-        data_img.shape[0] - 1, data_img.shape[1] - 1
-    )[0][0:2]
-    lon_lat_ul_corner_altmax = loc_alt_max.direct(0, 0)[0][0:2]
-
-    lon_lat_lr_corner_altmin = loc_alt_min.direct(
-        data_img.shape[0] - 1, data_img.shape[1] - 1
-    )[0][0:2]
-    lon_lat_ul_corner_altmin = loc_alt_min.direct(0, 0)[0][0:2]
-
-    # lon = coords[0] / lat = coords[1]
-    # depending on the projection, the upper left corner has not always 
-    # the lowest longiture or the highest latitude !!
-    min_lat = min(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmax[1], 
-                lon_lat_lr_corner_altmin[1], lon_lat_ul_corner_altmin[1])
-    min_lon = min(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmax[0],
-                lon_lat_lr_corner_altmin[0], lon_lat_ul_corner_altmin[0])
-    max_lat = max(lon_lat_lr_corner_altmax[1], lon_lat_ul_corner_altmax[1],
-                lon_lat_lr_corner_altmin[1], lon_lat_ul_corner_altmin[1])
-    max_lon = max(lon_lat_lr_corner_altmax[0], lon_lat_ul_corner_altmax[0],
-                lon_lat_lr_corner_altmin[0], lon_lat_ul_corner_altmin[0])
-
-    # compute usable extent and add a margin 
-    # TODO : check if margin is style necessary
-    footprint_dtm = [min_lat, min_lon, max_lat, max_lon]
-    footprint_dtm[0] -= 0.1
-    footprint_dtm[1] -= 0.1
-    footprint_dtm[2] += 0.1
-    footprint_dtm[3] += 0.1
-    
 
     image = Image(sensor_image, vertical_direction="north")
     dtm_image = dtm_reader(
