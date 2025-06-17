@@ -7,8 +7,8 @@
 #
 """Test prepare module with differents features and different arguments values"""
 
-import glob
 import os
+import subprocess
 
 import pytest
 
@@ -28,5 +28,6 @@ def write_command_compute_prepare(nb_workers):
 
 @pytest.mark.features
 def test_absolute_analyse_glcm():
-    command = write_command_compute_prepare(1) + f"-analyse_glcm True"
-    os.system(command)
+    command = write_command_compute_prepare(1) + f"--analyse_glcm"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error : {result.stderr}"
