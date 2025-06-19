@@ -43,6 +43,7 @@ from slurp.post_process.morphology import morpho_clean, apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_int8, LOW, HIGH
+from skimage.measure import label, regionprops
 
 
 def watershed_regul_buildings(input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params):
@@ -112,109 +113,44 @@ def watershed_categorized_water(wbm, watermask, params):
     :return: categorized mask
     """
     
-    RIVER = 3
-    LAKE = 2
     SEA = 1
+    LAKE = 2
+    RIVER = 3
     
-    
-    def morpho_open(mask, diameter, nb_iter):
-        for i in range(nb_iter):
-            mask = binary_opening(mask, disk(diameter))
-        return mask
-
     # 1st step : obtain a clean watermask
-    clean_watermask = morpho_open(watermask[0], 2, 10)
+    nb_iter = 10
+    for _ in range(nb_iter):
+        clean_watermask = apply_morpho(watermask[0] == 1, "binary_opening", params["binary_opening"])
     watermask_remove = apply_morpho(clean_watermask == 1, "remove_small_objects", params["minimal_size_water_area"])
     
     # 2nd step: segmentation
+    # label image regions
     label_image = label(watermask_remove)
+    # each instance is defined by a region
     regions = regionprops(label_image)
 
-    # create a binary mask for each category of water
+    # create an empty binary mask for each category of water 
     sea_mask = np.zeros(label_image.shape)
     lake_mask = np.zeros(label_image.shape)
     river_mask = np.zeros(label_image.shape)
-
+    
+    # instantiate each binary mask
     for region in regions:
+        # take the center of each region
         coords = np.round(region.centroid).astype(int)
+        # and apply the label of the WBM 
         if (wbm[0, coords[0], coords[1]] == SEA):
             sea_mask = np.where(label_image == region.label, sea_mask + 1, sea_mask)
         elif (wbm[0, coords[0], coords[1]] == LAKE):
             lake_mask = np.where(label_image == region.label, lake_mask + 1, lake_mask)
+        # river and water not defined are in the same class
         else:
-            river_mask = np.where(label_image == region.label, river_mask +1 , river_mask)
-            
-            
-    def combine_masks(sea, lake, river, watermask):
-        final_mask = np.where(sea, sea*params["value_classif_sea"], 
-                          np.where(lake, lake*params["value_classif_lake"], 
-                                   np.where(river, river*params["value_classif_river"], watermask)))
-        return final_mask
-
-    categorized_watermask = combine_masks(sea_mask, lake_mask, river_mask, watermask_remove)
-
-
-    # # Water values for the WBM
-    # sea_value_wbm = 1
-    # lake_value_wbm = 2
-    # river_value_wbm = 3
-    # # Water value for the SLURP watermask
-    # water_value_watermask = 1
-    # # Non water value for both the WBM and SLURP watermask
-    # not_water_value = 0
-    # # Unknown water value
-    # water_unknown_value = 4 
-
-#     # Intersection SLURP watermask and WBM mask
-#     # No water in WBM, water in watermask
-#     no_water_wbm_water_watermask = np.logical_and(watermask[0] == water_value_watermask, wbm[0] == not_water_value)
-#     # Water in WBM, no water in watermask
-#     water_wbm_no_water_watermask = np.logical_and(watermask[0] == not_water_value, wbm[0] != not_water_value)
-#     # Compute the intersection
-#     water_not_defined_watermask = np.where(no_water_wbm_water_watermask, water_unknown_value, wbm[0])
-#     intersection_wbm_watermask = np.where(water_wbm_no_water_watermask, watermask[0], water_not_defined_watermask)
-
-#     # Remove holes and small objects from SLURP watermask
-#     watermask_without_frame = map_array(
-#         input_arr=watermask[0],
-#         input_vals=np.array([0, 1, 255]),
-#         output_vals=np.array([0, 1, 0]))
-#     watermask_remove_small_holes_filled = apply_morpho(watermask_without_frame.astype(bool),"remove_small_holes",
-#                                                        params["minimal_size_water_area"])
-#     watermask_cleaned = apply_morpho(watermask_remove_small_holes_filled.astype(bool), "remove_small_objects",
-#                                                        params["minimal_size_water_area"])
-
-
-#     # Remove holes and small objects from intersection SLURP and WBM
-#     binary_objects = intersection_wbm_watermask.astype(bool)
-#     binary_filled = apply_morpho(binary_objects,"remove_small_holes", params["minimal_size_water_area"])
-#     binary_filled = apply_morpho(binary_filled, "remove_small_objects", params["minimal_size_water_area"])
-#     # Get the intersection classified
-#     objects_filled = segmentation.watershed(
-#         binary_filled, intersection_wbm_watermask.astype(int), mask=binary_filled
-#     )
-
-#     # Compute markers
-#     markers = np.zeros((1, intersection_wbm_watermask.shape[0], intersection_wbm_watermask.shape[1]))
-#     not_water = apply_morpho(objects_filled == not_water_value, "binary_erosion", 5)
-#     sea = apply_morpho(objects_filled == sea_value_wbm, "binary_dilation", 10)
-#     lake = apply_morpho(objects_filled == lake_value_wbm, "binary_dilation", 10)
-#     river = apply_morpho(objects_filled == river_value_wbm, "binary_dilation", 10)
-#     water_unknown_full = apply_morpho(objects_filled == water_unknown_value,"remove_small_objects",
-#                                       params["minimal_size_water_area"])
-#     water_unknown = apply_morpho(water_unknown_full,"binary_erosion", 20)
-#     markers[0][not_water] = not_water_value
-#     markers[0][water_unknown] = params["value_classif_water"]
-#     markers[0][sea] = params["value_classif_sea"]
-#     markers[0][lake] = params["value_classif_lake"]
-#     markers[0][river] = params["value_classif_river"]
-
-#     # Segmentation
-#     seg = segmentation.watershed(watermask_cleaned, markers=markers[0].astype(np.uint8),
-#                                  mask=watermask_cleaned)
-
-#     mask = (watermask[0] != 255)
-#     categorized_watermask = np.where(mask, seg, NODATA_int8)
+            river_mask = np.where(label_image == region.label, river_mask +1 , river_mask)          
+    
+    # combined the binary masks into a stack mask
+    categorized_watermask = np.where(sea_mask, sea_mask*params["value_classif_sea"], 
+                          np.where(lake_mask, lake_mask*params["value_classif_lake"], 
+                                   np.where(river_mask, river_mask*params["value_classif_river"], watermask_remove)))  
 
     return categorized_watermask
 
@@ -231,7 +167,6 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     shadowmask  = input_buffer[5]
     wsf = input_buffer[6]
     
-
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
     stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
@@ -280,6 +215,7 @@ def post_process(input_buffer: list,  input_profiles: list,  params: dict) -> np
     if params["categorized_watermask"]:
         wbm = input_buffer[7]
         stack[2] = watershed_categorized_water(wbm, watermask, params)
+        stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
 
     """
     # Layer 3 : segmentation from watershed, before morpho/clean
