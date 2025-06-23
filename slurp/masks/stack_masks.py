@@ -121,6 +121,7 @@ def watershed_categorized_water(wbm, watermask, params):
     nb_iter = 10
     for _ in range(nb_iter):
         clean_watermask = apply_morpho(watermask[0] == 1, "binary_opening", params["binary_opening"])
+    # remove small objects in order to reduce the segmentation
     watermask_remove = apply_morpho(clean_watermask == 1, "remove_small_objects", params["minimal_size_water_area"])
     
     # 2nd step: segmentation
@@ -143,7 +144,7 @@ def watershed_categorized_water(wbm, watermask, params):
             sea_mask = np.where(label_image == region.label, sea_mask + 1, sea_mask)
         elif (wbm[0, coords[0], coords[1]] == LAKE):
             lake_mask = np.where(label_image == region.label, lake_mask + 1, lake_mask)
-        # river and water not defined are in the same class
+        # river and regions not in the WBM are considered as river
         else:
             river_mask = np.where(label_image == region.label, river_mask +1 , river_mask)          
     
