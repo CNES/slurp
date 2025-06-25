@@ -22,19 +22,19 @@ jobs:
       - name: Download OTB
         run: |
           mkdir -p $HOME/Downloads
-          curl -L https://www.orfeo-toolbox.org/packages/archives/OTB/OTB-9.0.0-Linux.tar.gz -o $HOME/Downloads/OTB-9.0.0-Linux.tar.gz
+          curl -L https://www.orfeo-toolbox.org/packages/archives/OTB/OTB-9.1.1-Linux.tar.gz -o $HOME/Downloads/OTB-9.1.1-Linux.tar.gz
 
       - name: Extract OTB
         run: |
           mkdir -p $HOME/OTB_install
-          tar xf $HOME/Downloads/OTB-9.0.0-Linux.tar.gz --one-top-level=$HOME/OTB_install
+          tar xf $HOME/Downloads/OTB-9.1.1-Linux.tar.gz --one-top-level=$HOME/OTB_install
           ls $HOME/OTB_install
           lsb_release -is
 
       - name: Source OTB Environment
         run: |
           source $HOME/OTB_install/otbenv.profile
-        shell: bash -l {0}
+        shell: bash
 
       - name: Install Eoscale
         run: |
