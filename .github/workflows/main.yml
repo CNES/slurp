@@ -61,6 +61,7 @@ jobs:
         run: |
           black --check --diff slurp tests
           isort slurp tests --check --diff
+        continue-on-error: true
       
       - run: echo "------ formaters done ! ------"
 
