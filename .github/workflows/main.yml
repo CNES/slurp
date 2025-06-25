@@ -19,6 +19,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: install numpy
+        run: |
+          apt-get install python3-numpy
+
       - name: Download OTB
         run: |
           mkdir -p $HOME/Downloads
