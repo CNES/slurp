@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-env:
-    name: Build Environment
+    name: Run CI
     runs-on: ubuntu-latest
     steps:
       - run: echo "------ Building environment ... ------"
@@ -47,12 +47,7 @@ jobs:
           pip install .
 
       - run: echo "------ Environment builded ! ------"
-
-
-  formater:
-    name: Code Formatting Check
-    runs-on: ubuntu-latest
-    steps:
+      
       - run: echo "------ passing formaters ... ------"
 
       - name: Checkout repository
@@ -69,11 +64,6 @@ jobs:
       
       - run: echo "------ formaters done ! ------"
 
-  pylint_analysis:
-    name: Pylint code analysis
-    runs-on: ubuntu-latest
-    needs: build-env
-    steps:
       - run: echo "------ Starting Pylint Analysis ... ------"
 
       - name: Checkout repository
