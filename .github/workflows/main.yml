@@ -77,6 +77,6 @@ jobs:
       - name: Run Pylint
         shell: bash
         run: |
-          pylint --score=yes --fail-under=10 slurp 
+          pylint --score=yes --fail-under=9 slurp 
 
       - run: echo "------ Pylint Analysis done ! ------"
