@@ -32,7 +32,7 @@ jobs:
 
       - name: Source OTB Environment
         run: |
-          source $HOME/OTB_install/OTB-9.0.0-Linux/otbenv.profile
+          source $HOME/OTB_install/otbenv.profile
         shell: bash
 
       - name: Install Eoscale
