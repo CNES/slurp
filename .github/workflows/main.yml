@@ -29,6 +29,7 @@ jobs:
           mkdir -p $HOME/OTB_install
           tar xf $HOME/Downloads/OTB-9.0.0-Linux.tar.gz -C $HOME/OTB_install
           ls $HOME/OTB_install
+          lsb_release -is
 
       - name: Source OTB Environment
         run: |
