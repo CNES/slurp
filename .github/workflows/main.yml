@@ -27,7 +27,7 @@ jobs:
       - name: Extract OTB
         run: |
           mkdir -p $HOME/OTB_install
-          tar xf $HOME/Downloads/OTB-9.0.0-Linux.tar.gz --one-top-level $HOME/OTB_install
+          tar xf $HOME/Downloads/OTB-9.0.0-Linux.tar.gz --one-top-level=$HOME/OTB_install
           ls $HOME/OTB_install
           lsb_release -is
 
