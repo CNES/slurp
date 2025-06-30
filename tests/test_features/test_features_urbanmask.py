@@ -9,6 +9,7 @@
 
 import glob
 import os
+import subprocess
 
 import pytest
 
@@ -26,13 +27,14 @@ def write_command_compute_urbanmask(nb_workers, valid_stack=None):
 
 
 @pytest.mark.features
-@pytest.mark.parametrize("vegmask_max_value", [0, 21, 1000])
-def test_vegmask_max_value(vegmask_max_value):
+@pytest.mark.parametrize("vegmask_min_value", [0, 21, 1000])
+def test_vegmask_max_value(vegmask_min_value):
     command = (
         write_command_compute_urbanmask(1)
-        + f"-vegmask_max_value {vegmask_max_value}"
+        + f"-vegmask_min_value {vegmask_min_value}"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
@@ -44,15 +46,15 @@ def test_nb_samples(nb_samples_other, nb_samples_urban):
         write_command_compute_urbanmask(1)
         + f"-nb_samples_other {nb_samples_other} -nb_samples_other {nb_samples_other}"
     )
-    os.system(command)
-
-    # BUG /!\ works every time !!!
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_files_layers():
     command = (
         write_command_compute_urbanmask(1)
-        + "-files_layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
+        + "-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
