@@ -7,8 +7,8 @@
 #
 """Test vegetation mask with differents features and different arguments values"""
 
-import glob
 import os
+import subprocess
 
 import pytest
 
@@ -27,26 +27,27 @@ def write_command_compute_vegetationmask(nb_workers, valid_stack=None):
 
 @pytest.mark.features
 def test_vegmask_max_value():
-    command = (
-        write_command_compute_vegetationmask(1) + f"-non_veg_clusters {True}"
-    )
-    os.system(command)
+    command = write_command_compute_vegetationmask(1) + f"-non_veg_clusters"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_texture_mode():
-    command = write_command_compute_vegetationmask(1) + f"-texture_mode 'no'"
-    os.system(command)
+    command = write_command_compute_vegetationmask(1) + f"-texture_mode no"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
-@pytest.mark.parametrize("min_ndvi_veg,max_ndvi_noveg", [(0.5, 2), (2, 0.5)])
+@pytest.mark.parametrize("min_ndvi_veg,max_ndvi_noveg", [(1, 2), (2, 1)])
 def test_percentile(min_ndvi_veg, max_ndvi_noveg):
     command = (
         write_command_compute_vegetationmask(1)
         + f"-min_ndvi_veg {min_ndvi_veg} -max_ndvi_noveg {max_ndvi_noveg}"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
@@ -58,16 +59,21 @@ def test_nb_clusters(nb_clusters_veg, nb_clusters_low_veg):
         write_command_compute_vegetationmask(1)
         + f"-nb_clusters_veg {nb_clusters_veg} -nb_clusters_low_veg {nb_clusters_low_veg}"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_max_low_veg():
-    command = write_command_compute_vegetationmask(1) + f"-max_low_veg 3 "
-    os.system(command)
+    command = (
+        write_command_compute_vegetationmask(1) + f"-nb_clusters_low_veg 3 "
+    )
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_debug():
     command = write_command_compute_vegetationmask(1) + f"-debug True "
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"

@@ -40,7 +40,7 @@ def test_absolute_threshold():
 @pytest.mark.features
 @pytest.mark.parametrize("percentile", [0, 2, 100])
 def test_percentile(percentile):
-    command = write_command_compute_shadowmask(1) + f"-percentile {percentile}"
+    command = write_command_compute_shadowmask(1) + f" -percentile {percentile}"
     result = subprocess.run(command.split(), capture_output=True, text=True)
     assert result.returncode == 0, f"Error: {result.stderr}"
 
@@ -50,7 +50,7 @@ def test_percentile(percentile):
 def test_percentile_nir_rgb(th_rgb, th_nir):
     command = (
         write_command_compute_shadowmask(1)
-        + f"-th_nir {th_nir} -th_rgb {th_rgb}"
+        + f" -th_nir {th_nir} -th_rgb {th_rgb}"
     )
     result = subprocess.run(command.split(), capture_output=True, text=True)
     assert result.returncode == 0, f"Error: {result.stderr}"
