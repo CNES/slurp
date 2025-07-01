@@ -7,8 +7,8 @@
 #
 """Test water mask with differents features and different arguments values"""
 
-import glob
 import os
+import subprocess
 
 import pytest
 
@@ -29,23 +29,26 @@ def write_command_compute_watermask(nb_workers, valid_stack=None):
 def test_files_layers():
     command = (
         write_command_compute_watermask(1)
-        + f"-files_layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
+        + f"-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_hand_strict():
-    command = write_command_compute_watermask(1) + f"-hand_strict True"
-    os.system(command)
+    command = write_command_compute_watermask(1) + f"-hand_strict"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_simple_ndwi_threshold():
     command = (
-        write_command_compute_watermask(1) + f"-simple_ndwi_threshold True"
+        write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
@@ -54,7 +57,8 @@ def test_samples_method(samples_method):
     command = (
         write_command_compute_watermask(1) + f"-samples_method {samples_method}"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
@@ -66,22 +70,26 @@ def test_nb_samples(nb_samples_water, nb_samples_other):
         write_command_compute_watermask(1)
         + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
     )
-    os.system(command)
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_nb_samples_auto():
-    command = write_command_compute_watermask(1) + f"-nb_samples_auto True"
-    os.system(command)
+    command = write_command_compute_watermask(1) + f"-nb_samples_auto"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_pekel_filter():
-    command = write_command_compute_watermask(1) + f"-no_pekel_filter True"
-    os.system(command)
+    command = write_command_compute_watermask(1) + f"-no_pekel_filter"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
 
 
 @pytest.mark.features
 def test_hand_filter():
-    command = write_command_compute_watermask(1) + f"-hand_filter True"
-    os.system(command)
+    command = write_command_compute_watermask(1) + f"-hand_filter"
+    result = subprocess.run(command.split(), capture_output=True, text=True)
+    assert result.returncode == 0, f"Error: {result.stderr}"
