@@ -192,7 +192,7 @@ def read_and_overload_arguments(args: dict) -> dict:
     Returns:
         dict: The final dict of arguments.
     """
-    keys_to_keep = ["input", "prepare", "aux_layers", "resources"]
+    keys_to_keep = ["input", "prepare", "aux_layers", "resources", "vegetation"]
 
     # Read the JSON files
     argsdict = io_utils.read_json(
@@ -207,7 +207,7 @@ def read_and_overload_arguments(args: dict) -> dict:
     return argsdict
 
 
-def add_cluster_vegetation_info(
+def analayse_glcm_and_update_config(
     args_dict: dict, args: argparse.Namespace
 ) -> dict:
     """
@@ -223,7 +223,7 @@ def add_cluster_vegetation_info(
     Returns:
         dict: The updated parameter dictionnary.
     """
-    nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.compute_stats(
+    nb_clusters_veg, nb_clusters_low_veg, lcm_summary = analyse_glcm.compute_stats(
         args.file_vhr,
         args.land_cover_map,
         args.cropped_land_cover_map,
@@ -233,6 +233,10 @@ def add_cluster_vegetation_info(
         {
             "nb_clusters_veg": nb_clusters_veg,
             "nb_clusters_low_veg": nb_clusters_low_veg,
+            "pct_veg": lcm_summary["veg"],
+            "pct_low_veg": lcm_summary["low_veg"],
+            "pct_high_veg": lcm_summary["high_veg"],
+            "pct_non_veg": lcm_summary["non_veg"],
         }
     )
     return args
@@ -539,6 +543,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         args (argparse.Namespace): args_dict instancied in Namespace object.
     """
 
+    print(f"DBG> before update_and_save {args=}")
     with open(args.main_config, "r", encoding="utf8") as json_file:
         final_used_config = json.load(json_file)
         for key in final_used_config:
@@ -582,8 +587,8 @@ def main():
             profile = eoscale_manager.get_profile(key_vhr)
 
             # Global land cover map
-            if args.analyse_glcm:  # Outside of the with ?
-                argsdict = add_cluster_vegetation_info(argsdict, args)
+            if args.analyse_glcm:
+                args = analayse_glcm_and_update_config(argsdict, args)
 
             # Valid stack
             if args.overwrite or not path.isfile(args.valid_stack):

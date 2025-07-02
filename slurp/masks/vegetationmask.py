@@ -215,7 +215,7 @@ def stats_concatenate(output_scalars, chunk_output_scalars, tile):
 
 
 
-def frac_veg(classif, veg_rate):
+def frac_veg_from_classif(classif, veg_rate):
     surface = classif.shape[0] * classif.shape[1]
     surface_veg = 0
     i = 9
@@ -226,6 +226,35 @@ def frac_veg(classif, veg_rate):
 
     return i+1
         
+
+def frac_veg_from_segments(segments, params: dict):
+
+    nb_segments = segments.shape[0]
+    ratio_veg = 0
+    index = NB_CLUSTERS-1
+    while ratio_veg < params["pct_veg"] and index > 0:
+        nb_veg_segments = np.where(segments >= index)[0].shape[0]
+        ratio_veg = nb_veg_segments / nb_segments
+        print(f"{index} {ratio_veg=}")
+        index -= 1
+
+    nb_clusters_veg = NB_CLUSTERS - (index+1)
+
+    ratio_non_veg = 0
+    index = 0
+    while ratio_non_veg < params["pct_non_veg"] and index < NB_CLUSTERS:
+        nb_non_veg_segments = np.where(segments <= index)[0].shape[0]
+        ratio_non_veg = nb_non_veg_segments / nb_segments
+        print(f"{index} {ratio_non_veg=}")
+        index += 1
+
+    nb_clusters_no_veg = max(index-1,1)
+
+    print(f"Compute clusters repartition to fit {100*params['pct_veg']}% veg and {100*params['pct_non_veg']}% non veg")
+    print(f"{nb_clusters_veg=} ({ratio_veg=}) and {nb_clusters_no_veg=} ({ratio_non_veg})")
+    
+    return nb_clusters_veg, nb_clusters_no_veg
+    
 
         
 
@@ -550,7 +579,7 @@ def clustering_texture(params: dict, nb_segments: int, stats: np.ndarray,
     
     
 
-def vegetation_labeling_with_LCM(segments, LCM, segmentation):
+def vegetation_labeling_with_LCM(params: dict, segments):
     """
     Label the segmentation with regards to the clustering step and to an external 
     Land Cover Map.
@@ -558,19 +587,58 @@ def vegetation_labeling_with_LCM(segments, LCM, segmentation):
     proportion of vegetated areas thanks to the LCM class
     
     """
-    nb_clusters_veg = frac_veg(classif, params["frac_veg"])
+    nb_clusters_veg, nb_clusters_non_veg = frac_veg_from_segments(segments, params)
 
-    for c in range(kmeans_rad_indices.n_clusters):
-        if (sorted_clusters.index(c) < nb_clusters_veg):
+    nb_clusters_mix = NB_CLUSTERS - nb_clusters_non_veg - nb_clusters_veg
+    
+    map_centroid = []
+    for i in range(NB_CLUSTERS):
+        if i < nb_clusters_non_veg:
             map_centroid.append(NO_VEG_CODE)
+        elif i < nb_clusters_non_veg+nb_clusters_mix:
+            map_centroid.append(UNDEFINED_VEG)
         else:
             map_centroid.append(VEG_CODE)
-                
+    print(f"DBG> map_centroid after LCM : {map_centroid=}")
+            
+    return apply_map(segments, map_centroid)
+
+
+def frac_low_high_veg_from_segments(params: dict, segments_texture, segments_vegetation):
+    nb_segments_veg = np.where(segments_vegetation>=VEG_CODE)[0].shape[0]
+    print(f"DBG> {nb_segments_veg=} {segments_texture[500:550]=} {segments_vegetation[500:550]=}")
+
     
-    return None
+    index = 0
+    ratio_low_veg = 0
+    while ratio_low_veg < params["pct_low_veg"] and index < NB_CLUSTERS:
+        nb_segments_veg_high_veg = np.where(segments_texture[np.where(segments_vegetation>=VEG_CODE)] <= index)[0].shape[0]
+        
+        ratio_low_veg = nb_segments_veg_high_veg / nb_segments_veg
+        print(f"{index} {ratio_low_veg=} {nb_segments_veg_high_veg=}")
+        index += 1
+    
+    nb_clusters_low_veg = max(index-1, 1)
+    nb_clusters_high_veg = NB_CLUSTERS - nb_clusters_low_veg
 
+    return nb_clusters_low_veg, nb_clusters_high_veg
 
+    
+    
 
+def texture_labeling_with_LCM(params: dict, segments_texture, segments_vegetation):
+
+    nb_clusters_low_veg, nb_clusters_high_veg = frac_low_high_veg_from_segments(params, segments_texture, segments_vegetation)
+
+    map_centroid = []
+    for i in range(NB_CLUSTERS):
+        if i < nb_clusters_low_veg:
+            map_centroid.append(LOW_TEXTURE_CODE)
+        else:
+            map_centroid.append(HIGH_TEXTURE_CODE)
+    print(f"DBG> map_centroid after LCM : {map_centroid=}")
+    
+    return apply_map(segments_texture, map_centroid)
 
 def vegetation_labeling_with_rule_of_third(params: dict, segments: np.ndarray): 
     """
@@ -971,12 +1039,18 @@ def main():
             # Clustering #
 
             pred_veg, sorted_ndvi_centroids = clustering_vegetation(vars(args), nb_segments, stats[0])
-            clusters_veg = vegetation_labeling_with_rule_of_third(vars(args), pred_veg)
+            if args.autolabel:
+                clusters_veg = vegetation_labeling_with_LCM(vars(args), pred_veg)
+            else:
+                clusters_veg = vegetation_labeling_with_rule_of_third(vars(args), pred_veg)
             
 
             pred_texture, sorted_texture_centroids = clustering_texture(vars(args),
                                                                         nb_segments, stats[0], clusters_veg)
-            clusters_low_high_veg = texture_labeling_with_rule_of_third(vars(args), pred_texture, clusters_veg)
+            if args.autolabel:
+                clusters_low_high_veg = texture_labeling_with_LCM(vars(args), pred_texture, clusters_veg)
+            else:
+                clusters_low_high_veg = texture_labeling_with_rule_of_third(vars(args), pred_texture, clusters_veg)
                         
             # Sum the two clusterings
             #     0    10   20 +

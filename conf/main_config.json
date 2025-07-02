@@ -99,7 +99,11 @@
 	"non_veg_clusters": null,
 	"nb_clusters_low_veg": 3,
 	"max_texture_th": null,
-	"debug": false
+	"debug": false,
+	"pct_veg":0,
+	"pct_low_veg":0,
+	"pct_high_veg":0,
+	"pct_non_veg":0
     },
 
   "water":

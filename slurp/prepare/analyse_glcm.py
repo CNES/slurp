@@ -112,10 +112,11 @@ def compute_stats(
     nb_total = width * height
     unique, counts = np.unique(data_map, return_counts=True)
 
-    veg, low_veg, high_veg = 0, 0, 0
+    veg, low_veg, high_veg, non_veg = 0, 0, 0, 0
     vegetation_classes = [10, 20, 30, 40, 90, 95, 100]
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
+    non_vegetation_classes =  [70, 80]
     for v, c in zip(unique, counts):
         print(f"{v} : {c}")
         if v in vegetation_classes:
@@ -127,15 +128,22 @@ def compute_stats(
         if v in high_vegetation_classes:
             high_veg += c
 
+        if v in non_vegetation_classes:
+            non_veg += c
+
     nb_clusters_veg, nb_clusters_low_veg = get_advices(
         veg, low_veg, high_veg, nb_total
     )
 
+    lcm_summary = {
+        "veg": veg/nb_total,
+        "low_veg": low_veg/(low_veg+high_veg),
+        "high_veg": high_veg/(low_veg+high_veg),
+        "non_veg": non_veg/nb_total
+    }
+    
     print(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
     print(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
     print(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
-
-    print(f"export VEG_CLUSTERS={nb_clusters_veg}")
-    print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
-
-    return nb_clusters_veg, nb_clusters_low_veg
+    
+    return nb_clusters_veg, nb_clusters_low_veg, lcm_summary
