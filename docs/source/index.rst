@@ -12,7 +12,7 @@ obtain into a single multiclass mask.
 
    Installation procedure <installation>
 
-* .. toctree::
+.. toctree::
    :caption: Documentation
    :maxdepth: 1
 
@@ -20,7 +20,7 @@ obtain into a single multiclass mask.
    API Documentation <apidoc/modules>
    Slurp tutorial <tutorial>
 
-* .. toctree::
+.. toctree::
    :caption: Contributing
    :maxdepth: 1
 
