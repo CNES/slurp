@@ -9,9 +9,11 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
+import slurp.prepare.prepare
 from tests.utils import get_output_path
 
 
@@ -23,10 +25,11 @@ def write_command_compute_prepare(nb_workers):
     ndwi = get_output_path(pytest.features_test_img, "ndwi", remove=True)
     texture = get_output_path(pytest.features_test_img, "texture", remove=True)
 
-    return f"slurp_prepare {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
+    return f"prepare.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
 
 
 @pytest.mark.features
 def test_absolute_analyse_glcm():
-    command = write_command_compute_prepare(1) + f"-analyse_glcm True"
-    os.system(command)
+    command = (write_command_compute_prepare(1) + f"--analyse_glcm").split()
+    sys.argv = command
+    slurp.prepare.prepare.main()

@@ -9,9 +9,11 @@
 
 import os
 import subprocess
+import sys
 
 import pytest
 
+import slurp.masks.watermask
 from tests.utils import get_aux_path, get_output_path
 
 
@@ -22,7 +24,7 @@ def write_command_compute_watermask(nb_workers, valid_stack=None):
     if valid_stack is None:
         valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
-    return f"slurp_watermask {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -watermask {output_image} -valid {valid_stack} "
+    return f"watermask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -watermask {output_image} -valid {valid_stack} "
 
 
 @pytest.mark.features
@@ -30,25 +32,25 @@ def test_files_layers():
     command = (
         write_command_compute_watermask(1)
         + f"-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_hand_strict():
-    command = write_command_compute_watermask(1) + f"-hand_strict"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (write_command_compute_watermask(1) + f"-hand_strict").split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_simple_ndwi_threshold():
     command = (
         write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
@@ -56,9 +58,9 @@ def test_simple_ndwi_threshold():
 def test_samples_method(samples_method):
     command = (
         write_command_compute_watermask(1) + f"-samples_method {samples_method}"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
@@ -69,27 +71,27 @@ def test_nb_samples(nb_samples_water, nb_samples_other):
     command = (
         write_command_compute_watermask(1)
         + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_nb_samples_auto():
-    command = write_command_compute_watermask(1) + f"-nb_samples_auto"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (write_command_compute_watermask(1) + f"-nb_samples_auto").split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_pekel_filter():
-    command = write_command_compute_watermask(1) + f"-no_pekel_filter"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (write_command_compute_watermask(1) + f"-no_pekel_filter").split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_hand_filter():
-    command = write_command_compute_watermask(1) + f"-hand_filter"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (write_command_compute_watermask(1) + f"-hand_filter").split()
+    sys.argv = command
+    slurp.masks.watermask.main()

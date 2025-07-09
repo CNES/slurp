@@ -7,12 +7,11 @@
 #
 """Test urban mask with differents features and different arguments values"""
 
-import glob
-import os
-import subprocess
+import sys
 
 import pytest
 
+import slurp.masks.urbanmask
 from tests.utils import get_aux_path, get_output_path
 
 
@@ -23,7 +22,7 @@ def write_command_compute_urbanmask(nb_workers, valid_stack=None):
     if valid_stack is None:
         valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
-    return f"slurp_urbanmask {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {valid_stack} "
+    return f"urbanmask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {valid_stack} "
 
 
 @pytest.mark.features
@@ -32,9 +31,9 @@ def test_vegmask_max_value(vegmask_min_value):
     command = (
         write_command_compute_urbanmask(1)
         + f"-vegmask_min_value {vegmask_min_value}"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.urbanmask.main()
 
 
 @pytest.mark.features
@@ -45,9 +44,9 @@ def test_nb_samples(nb_samples_other, nb_samples_urban):
     command = (
         write_command_compute_urbanmask(1)
         + f"-nb_samples_other {nb_samples_other} -nb_samples_other {nb_samples_other}"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.urbanmask.main()
 
 
 @pytest.mark.features
@@ -55,6 +54,6 @@ def test_files_layers():
     command = (
         write_command_compute_urbanmask(1)
         + "-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.urbanmask.main()

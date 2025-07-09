@@ -8,9 +8,11 @@
 """Test shadow mask with differents features and different arguments values"""
 
 import subprocess
+import sys
 
 import pytest
 
+import slurp.masks.shadowmask
 from tests.utils import get_aux_path, get_output_path
 
 
@@ -22,7 +24,7 @@ def write_command_compute_shadowmask(nb_workers, valid_stack=None):
         valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
     return (
-        f"slurp_shadowmask {pytest.main_config} "
+        f"shadowmask.py {pytest.main_config} "
         f"-file_vhr {pytest.features_test_img} "
         f"-n_workers {nb_workers} "
         f"-shadowmask {output_image} "
@@ -32,17 +34,21 @@ def write_command_compute_shadowmask(nb_workers, valid_stack=None):
 
 @pytest.mark.features
 def test_absolute_threshold():
-    command = write_command_compute_shadowmask(1) + "-absolute_threshold 10"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (
+        write_command_compute_shadowmask(1) + " -absolute_threshold 10.0"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
 
 
 @pytest.mark.features
 @pytest.mark.parametrize("percentile", [0, 2, 100])
 def test_percentile(percentile):
-    command = write_command_compute_shadowmask(1) + f" -percentile {percentile}"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    command = (
+        write_command_compute_shadowmask(1) + f" -percentile {percentile}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
 
 
 @pytest.mark.features
@@ -51,6 +57,6 @@ def test_percentile_nir_rgb(th_rgb, th_nir):
     command = (
         write_command_compute_shadowmask(1)
         + f" -th_nir {th_nir} -th_rgb {th_rgb}"
-    )
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error: {result.stderr}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
