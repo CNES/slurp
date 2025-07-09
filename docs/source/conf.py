@@ -59,6 +59,7 @@ source_suffix = ".rst"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "myst_parser",
     "sphinx.ext.ifconfig",  # add if config possibility in rst files
     "sphinx.ext.intersphinx",  # other projects automatic links to doc
     "sphinx.ext.mathjax",  # Add rst math capabilities with :math:
@@ -89,7 +90,7 @@ html_title = "slurp Documentation"
 html_short_title = "slurp Documentation"
 
 # Logo
-# html_logo = "images/picto_transparent_mini.png"
+html_logo = "images/logo_SLURP_256.png"
 
 # Favicon
 # html_favicon = "images/favicon_noname.ico"
