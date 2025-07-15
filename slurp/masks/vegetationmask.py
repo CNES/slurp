@@ -361,12 +361,12 @@ def frac_veg_from_segments(segments, params: dict):
     nb_clusters_veg = min(index_cluster_veg+1,NB_CLUSTERS)
     nb_clusters_no_veg = min(index_cluster_no_veg+1,NB_CLUSTERS)
 
-    if params["debug"]:
-        print("**************************************************************")
-        print(f"Compute clusters repartition to fit {100*params['pct_veg']}% veg and {100*params['pct_non_veg']}% non veg")
-        print(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")    
-        print(f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and {nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})")
-        print("**************************************************************")
+    #if params["debug"]:
+    print("**************************************************************")
+    print(f"Compute clusters repartition to fit {100*params['pct_veg']}% veg and {100*params['pct_non_veg']}% non veg")
+    print(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")    
+    print(f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and {nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})")
+    print("**************************************************************")
         
     return nb_clusters_veg, nb_clusters_no_veg
     
@@ -435,8 +435,12 @@ def frac_low_high_veg_from_segments(params: dict, segments_texture, segments_veg
                 
     nb_clusters_low_veg = min(index_cluster + 1, NB_CLUSTERS)
     nb_clusters_high_veg = NB_CLUSTERS - nb_clusters_low_veg
-    
+
+    # if params["debug"]:
+    print("**************************************************************")
+    print(f"Compute clusters repartition to fit {100*params['pct_low_veg']}% low veg")
     print(f"{ratios_surfaces=}\n{nb_clusters_low_veg=} {nb_clusters_high_veg=}")
+    
     return nb_clusters_low_veg, nb_clusters_high_veg
 
     
@@ -890,27 +894,28 @@ def main():
                 stable_margin=0,
                 context_manager=eoscale_manager,
                 multiproc_context=args.multiproc_context,
-                filter_desc="Finalize processing (Cython)...",
+                filter_desc="Finalize processing...",
             )
 
             if args.save_mode == "debug":
+                # Save intermediate masks
                 eoscale_manager.write(
                     key=final_seg[0],
                     img_path=args.vegetationmask.replace(
                         ".tif", "_before_clean.tif"
                     )
                 )
-                
-            if args.autolabel:
+
+                # Save vegetation clusters
                 vegetation_clustering = eoexe.n_images_to_m_images_filter(
                     inputs=[future_seg[0], key_valid_stack],
                     image_filter=finalize_task,
-                    filter_parameters={"data": clusters_veg},
+                    filter_parameters={"data": pred_veg},
                     generate_output_profiles=eo_utils.single_uint8_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
                     multiproc_context=args.multiproc_context,
-                    filter_desc="Finalize processing (Cython)...",
+                    filter_desc="Finalize processing...",
                 )
                 eoscale_manager.write(
                     key=vegetation_clustering[0],
@@ -918,20 +923,21 @@ def main():
                         ".tif", "_vegclusters.tif"
                     )
                 )
+                # Save texture clusters
                 texture_clustering = eoexe.n_images_to_m_images_filter(
                     inputs=[future_seg[0], key_valid_stack],
                     image_filter=finalize_task,
-                    filter_parameters={"data": clusters_low_high_veg},
+                    filter_parameters={"data": pred_texture},
                     generate_output_profiles=eo_utils.single_uint8_profile,
                     stable_margin=0,
                     context_manager=eoscale_manager,
                     multiproc_context=args.multiproc_context,
-                    filter_desc="Finalize processing (Cython)...",
+                    filter_desc="Finalize processing...",
                 )
                 eoscale_manager.write(
                     key=texture_clustering[0],
                     img_path=args.vegetationmask.replace(
-                        ".tif", "_lowhighvegclusters.tif"
+                        ".tif", "_textureclusters.tif"
                     )
                 )
 

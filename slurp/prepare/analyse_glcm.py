@@ -104,8 +104,6 @@ def compute_stats(
         ds.close()
         del ds
 
-    print(f"{data_map.shape}")
-
     width = data_map.shape[0]
     height = data_map.shape[1]
 
@@ -113,7 +111,8 @@ def compute_stats(
     unique, counts = np.unique(data_map, return_counts=True)
 
     veg, low_veg, high_veg, non_veg = 0, 0, 0, 0
-    vegetation_classes = [10, 20, 30, 40, 90, 95, 100]
+    vegetation_classes = [10, 20, 30, 90, 95, 100]
+    undefined_vegetation_classes = [40] # crop-lands may be vegetated or not 
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
     non_vegetation_classes =  [70, 80]
@@ -122,6 +121,9 @@ def compute_stats(
         if v in vegetation_classes:
             veg += c
 
+        if v in undefined_vegetation_classes:
+            veg += int(0.5*c)
+            
         if v in low_vegetation_classes:
             low_veg += c
 
@@ -145,5 +147,8 @@ def compute_stats(
     print(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
     print(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
     print(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
+
+    print(f"Default choices for vegetation mask : {nb_clusters_veg} vegetation clusters" 
+          + f" and {nb_clusters_low_veg} low vegetation clusters.")
     
     return nb_clusters_veg, nb_clusters_low_veg, lcm_summary
