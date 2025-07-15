@@ -235,7 +235,7 @@ def add_cluster_vegetation_info(
             "nb_clusters_low_veg": nb_clusters_low_veg,
         }
     )
-    return args
+    return args_dict
 
 
 def create_valid_stack(
