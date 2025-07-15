@@ -139,6 +139,12 @@ def post_process(
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
     stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
 
+    # If "winter vegetation" is activated, medium "NDVI" but textured segments (classified as 12/13)
+    # by vegetation mask will be considered as high vegetation
+    if params["winter_vegetation"]:
+        mix_textured_veg = np.logical_or(vegmask[0] == 12, vegmask[0] == 13)
+        vegmask[0][mix_textured_veg] = 22
+    
     # Improve buildings detection using a watershed / markers regularization
     seg, markers = watershed_regul_buildings(
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
@@ -186,18 +192,6 @@ def post_process(
     # Markers
     stack[2] = markers
     stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    """
-    # Layer 3 : segmentation from watershed, before morpho/clean
-    stack[3] = seg
-    stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
-    
-    buildings = np.where(urbanmask > params["building_threshold"],1,0)
-    stack[4] = morpho_clean(buildings[0], params)
-    stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
-    """
 
     return stack
 
@@ -250,7 +244,12 @@ def getarguments():
         type=int,
         help="Value of the malus for pixels in shadow, in the watershed regularization step",
     )
-
+    group2.add_argument(
+        "-winter_vegetation",
+        action="store_true",
+        help="Consider textured 'mixed vegetation areas' as high vegetation (to take into account trees with no leaves)"
+    )
+        
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument(
@@ -329,14 +328,15 @@ def main():
     argsdict = io_utils.read_json(
         argparse_dict["main_config"], keys, argparse_dict.get("user_config")
     )
-
+    
     # Overload with manually passed arguments if not None
     for key in argparse_dict.keys():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    print("Arguments parsed and JSON data loaded:")
+    print(f"{argsdict=}")
+    
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
