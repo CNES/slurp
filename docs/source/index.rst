@@ -27,8 +27,3 @@ obtain into a single multiclass mask.
    Guide for developers <developer_guide>
    Contribute to slurp ! <contributing>
 
-Indices and tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
