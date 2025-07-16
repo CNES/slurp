@@ -29,8 +29,8 @@ sys.setrecursionlimit(1500)
 
 # General information about the project.
 project = "slurp"
-copyright = "2022, Y T[3~[D"
-author = "Y T[3~[D"
+copyright = "2022, CNES (Centre National d'Etudes Spatiales)"
+author = "Y. TANGUY et al - CNES"
 
 
 try:
