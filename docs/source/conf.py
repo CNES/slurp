@@ -90,7 +90,7 @@ html_title = "slurp Documentation"
 html_short_title = "slurp Documentation"
 
 # Logo
-html_logo = "images/logo_SLURP_256.png"
+html_logo = "images/logo_SLURP_256_padded.png"
 
 # Favicon
 # html_favicon = "images/favicon_noname.ico"
