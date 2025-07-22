@@ -51,6 +51,13 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-mode",
+        choices= ["all", "water", "vegetation" ],
+        dest="mode",
+        default="all",
+        help="Prepare for all maks, water only or vegetation only",
+    )
+    parser.add_argument(
         "-w",
         "--overwrite",
         action="store_true",
@@ -143,7 +150,7 @@ def getarguments():
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group5.set_defaults(analyse_glcm=True)
+    group5.set_defaults(analyse_glcm=False)
 
     group5.add_argument(
         "-land_cover_map",
@@ -581,8 +588,8 @@ def main():
             key_vhr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_vhr)
 
-            # Global land cover map
-            if args.analyse_glcm:  # Outside of the with ?
+            # Global land cover map (used for vegetation mask, not water mask)
+            if args.analyse_glcm and args.mode != "water": 
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
@@ -631,17 +638,23 @@ def main():
                 all_coords = None
                 roi = None
 
-            # Pekel
-            pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+            if args.mode != "vegetation":
+                # vegetation mask doest not need external data
+                # Pekel
+                pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                
+                # Hand
+                hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # Hand
-            hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+            if args.mode == "water" or args.mode == "vegetation":
+                # Only urban mask ('all' masks mode) need WSF
+                # WSF
+                wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # WSF
-            wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # Texture
-            compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
+            if args.mode != "water":
+                # Only vegetation mask need to compute texture
+                # Texture
+                compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
 
             # Write effective used config
             update_and_save_used_config(argsdict, args)
