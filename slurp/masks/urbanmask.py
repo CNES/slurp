@@ -580,47 +580,47 @@ def main():
                     )
                     print("***")
 
-            if args.nb_valid_built_pixels == nb_valid_pixels:
-                # Corner case : no "non building pixels"
-                print(
-                    f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
-                )
+                elif args.nb_valid_built_pixels >= nb_valid_pixels:
+                    # Corner case : no "non building pixels"
+                    print(
+                        f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
+                    )
 
-                key_predict = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_original_valid_stack],
-                    image_filter=add_nodata,
-                    filter_parameters={"fill_value": 100},
-                    generate_output_profiles=eo_utils.single_uint8_profile,
-                    context_manager=eoscale_manager,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Add nodata...",
-                )
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_original_valid_stack],
+                        image_filter=add_nodata,
+                        filter_parameters={"fill_value": 100},
+                        generate_output_profiles=eo_utils.single_uint8_profile,
+                        context_manager=eoscale_manager,
+                        multiproc_context=args.multiproc_context,
+                        filter_desc="Add nodata...",
+                    )
 
-                # Save proba mask
-                eoscale_manager.write(
-                    key=key_predict[0], img_path=args.urbanmask
-                )
+                    # Save proba mask
+                    eoscale_manager.write(
+                        key=key_predict[0], img_path=args.urbanmask
+                    )
 
-            else:
-                # Corner case : no "building pixels" --> void mask (0)
-                print(
-                    f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
-                )
+                else:
+                    # Corner case : no "building pixels" --> void mask (0)
+                    print(
+                        f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                    )
 
-                key_predict = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_original_valid_stack],
-                    image_filter=add_nodata,
-                    filter_parameters={"fill_value": 0},
-                    generate_output_profiles=eo_utils.single_uint8_profile,
-                    context_manager=eoscale_manager,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Add nodata...",
-                )
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_original_valid_stack],
+                        image_filter=add_nodata,
+                        filter_parameters={"fill_value": 0},
+                        generate_output_profiles=eo_utils.single_uint8_profile,
+                        context_manager=eoscale_manager,
+                        multiproc_context=args.multiproc_context,
+                        filter_desc="Add nodata...",
+                    )
 
-                # Save proba mask
-                eoscale_manager.write(
-                    key=key_predict[0], img_path=args.urbanmask
-                )
+                    # Save proba mask
+                    eoscale_manager.write(
+                        key=key_predict[0], img_path=args.urbanmask
+                    )
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
