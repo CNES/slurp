@@ -27,7 +27,7 @@ import json
 import time
 import traceback
 import pathlib
-from os import makedirs, path
+from os import makedirs, path, getcwd
 from typing import List
 import logging
 
@@ -573,7 +573,9 @@ def main():
     argsdict = read_and_overload_arguments(vars(getarguments()))
     args = argparse.Namespace(**argsdict)
 
+    print(getcwd())
     if args.logs_to_file:
+
         config_file = pathlib.Path("logs/out2stdout.json")
     else:
         config_file = pathlib.Path("logs/out2json.json")
