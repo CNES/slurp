@@ -24,6 +24,7 @@
 import argparse
 import time
 import traceback
+import logging
 from math import ceil, sqrt
 from os import makedirs, path
 
@@ -41,6 +42,8 @@ from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
+
+logger = logging.getLogger("slurp")
 
 NO_VEG_CODE = 0  # Water, other non vegetated areas
 UNDEFINED_VEG = 10  # Non vegetated or few vegetation (weak NDVI signal)
@@ -234,7 +237,7 @@ def apply_clustering(
     """
     # Note : the seed for random generator is fixed to obtain reproductible results
     if params["debug"]:
-        print(f"K-Means on radiometric indices ({nb_polys} elements")
+        logger.debug(f"K-Means on radiometric indices ({nb_polys} elements")
 
     kmeans_rad_indices = KMeans(
         n_clusters=NB_CLUSTERS,
@@ -247,7 +250,7 @@ def apply_clustering(
         np.stack((stats[0:nb_polys], stats[nb_polys : 2 * nb_polys]), axis=1)
     )
     if params["debug"]:
-        print(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
+        logger.debug(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
 
     list_clusters = pd.DataFrame.from_records(
         kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"]
@@ -327,7 +330,7 @@ def apply_clustering(
         )
         threshold_max = np.percentile(texture_values, params["filter_texture"])
         if params["debug"]:
-            print("threshold_texture_max", threshold_max)
+            logger.debug("threshold_texture_max", threshold_max)
 
         # Save histograms
         if params["texture_mode"] == "debug" or params["save_mode"] == "debug":
@@ -354,7 +357,7 @@ def apply_clustering(
         data_textures = np.transpose(texture_values)
         data_textures[data_textures > threshold_max] = threshold_max
         if params["debug"]:
-            print(
+            logger.debug(
                 "K-Means on texture : " + str(len(data_textures)) + " elements"
             )
 
@@ -368,7 +371,7 @@ def apply_clustering(
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
 
         if params["debug"]:
-            print(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
+            logger.debug(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
 
         list_clusters = pd.DataFrame.from_records(
             kmeans_texture.cluster_centers_, columns=["mean_texture"]
@@ -669,8 +672,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
@@ -736,7 +739,7 @@ def main():
             # Recover number total of segments
             nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
             if args.debug:
-                print(
+                logger.debug(
                     "Number of different segments detected : " + str(nb_polys)
                 )
 
@@ -830,57 +833,57 @@ def main():
             )
             end_time = time.time()
 
-            print(
+            logger.info(
                 f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
             )
-            print(
+            logger.info(
                 "Total time (user)       :\t"
                 + utils.convert_time(end_time - t0)
             )
-            print(
+            logger.info(
                 "- Build_stack           :\t"
                 + utils.convert_time(time_stack - t0)
             )
-            print(
+            logger.info(
                 "- Segmentation          :\t"
                 + utils.convert_time(time_seg - time_stack)
             )
-            print(
+            logger.info(
                 "- Stats                 :\t"
                 + utils.convert_time(time_stats - time_seg)
             )
-            print(
+            logger.info(
                 "- Clustering            :\t"
                 + utils.convert_time(time_cluster - time_stats)
             )
-            print(
+            logger.info(
                 "- Finalize Cython       :\t"
                 + utils.convert_time(time_final - time_cluster)
             )
-            print(
+            logger.info(
                 "- Post-processing       :\t"
                 + utils.convert_time(time_closing - time_final)
             )
-            print(
+            logger.info(
                 "- Write final image     :\t"
                 + utils.convert_time(end_time - time_closing)
             )
-            print("***")
+            logger.info("***")
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
 

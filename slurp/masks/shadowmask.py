@@ -26,6 +26,7 @@ This script computes a shadow mask
 import argparse
 import time
 import traceback
+import logging
 from os import makedirs, path
 
 import eoscale.eo_executors as eoexe
@@ -37,6 +38,7 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
 
 def compute_shadowmask(
     input_buffers: list, input_profiles: list, params: dict
@@ -179,8 +181,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
@@ -270,28 +272,28 @@ def main():
             eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
 
             end_time = time.time()
-            print(
+            logger.info(
                 f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
             )
-            print(
+            logger.info(
                 "Total time (user)       :\t"
                 + utils.convert_time(end_time - t0)
             )
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
 

@@ -27,6 +27,7 @@ import time
 
 import bindings_cpp
 import numpy as np
+import logging
 import rasterio as rio
 from shareloc.dtm_reader import dtm_reader
 from shareloc.geofunctions.localization import Localization
@@ -35,6 +36,7 @@ from shareloc.image import Image
 
 from slurp.tools.constant import COMPRESSION
 
+logger = logging.getLogger("slurp")
 
 def superimpose(file_in: str, file_ref: str, file_out: str):
     """
@@ -72,7 +74,7 @@ def superimpose(file_in: str, file_ref: str, file_out: str):
     app.SetParameterOutputImagePixelType("out", output_dtype)
     app.ExecuteAndWriteOutput()
 
-    print("Superimpose in", time.time() - start_time, "seconds.")
+    logger.info("Superimpose in", time.time() - start_time, "seconds.")
 
 
 def rasterization(file_in: str, file_ref: str, file_out: str):
@@ -114,7 +116,7 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
 
     app.ExecuteAndWriteOutput()
 
-    print("Rasterize in", time.time() - start_time, "seconds.")
+    logger.info("Rasterize in", time.time() - start_time, "seconds.")
 
 
 def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
@@ -136,7 +138,7 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     app_roi.SetParameterString("out", "fake.tif")
     app_roi.Execute()
 
-    print("Extract ROI in", time.time() - start_time, "seconds.")
+    logger.info("Extract ROI in", time.time() - start_time, "seconds.")
 
     return app_roi.GetVectorImageAsNumpyArray("out")
 

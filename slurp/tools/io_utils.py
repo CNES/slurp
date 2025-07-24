@@ -23,10 +23,12 @@ import json
 
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
 import rasterio as rio
 
 from slurp.tools.constant import COMPRESSION, DRIVER
 
+logger = logging.getLogger("slurp")
 
 def read_json(
     main_config_file: str, keys: list, user_config_file: str = None
@@ -48,9 +50,9 @@ def read_json(
                 argsdict.update(full_args[key])
 
     except FileNotFoundError:
-        print(f"File {main_config_file} not found.")
+        logger.error(f"File {main_config_file} not found.")
     except json.JSONDecodeError:
-        print(
+        logger.error(
             f"Error decoding JSON data from {main_config_file}. Please check the file format."
         )
 
@@ -63,27 +65,13 @@ def read_json(
                     argsdict.update(full_args[k])
 
         except FileNotFoundError:
-            print(f"File {user_config_file} not found.")
+            logger.error(f"File {user_config_file} not found.")
         except json.JSONDecodeError:
-            print(
+            logger.error(
                 f"Error decoding JSON data from {user_config_file}. Please check the file format."
             )
 
     return argsdict
-
-
-def print_dataset_infos(dataset, prefix=""):
-    """Print information about rasterio dataset."""
-
-    print()
-    print(prefix, "Image name :", dataset.name)
-    print(prefix, "Image size :", dataset.width, "x", dataset.height)
-    print(prefix, "Image bands :", dataset.count)
-    print(prefix, "Image types :", dataset.dtypes)
-    print(prefix, "Image nodata :", dataset.nodatavals, dataset.nodata)
-    print(prefix, "Image crs :", dataset.crs)
-    print(prefix, "Image bounds :", dataset.bounds)
-    print()
 
 
 def save_image(

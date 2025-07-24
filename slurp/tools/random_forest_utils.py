@@ -21,11 +21,13 @@
 
 """Useful functions for Random Forest implementation"""
 import time
+import logging
 
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
+logger = logging.getLogger("slurp")
 
 def print_feature_importance(classifier, layers):
     """Compute feature importance."""
@@ -38,9 +40,9 @@ def print_feature_importance(classifier, layers):
         [tree.feature_importances_ for tree in classifier.estimators_], axis=0
     )
 
-    print("Feature ranking:")
+    logger.info("Feature ranking:")
     for idx in indices:
-        print(
+        logger.info(
             f" {feature_names[idx]:4s} ({importances[idx]:f}) (std={std[idx]:f})"
         )
 
@@ -52,13 +54,13 @@ def train_classifier(classifier, x_samples, y_samples):
         x_samples, y_samples, test_size=0.2, random_state=42
     )
     classifier.fit(x_train, y_train)
-    print("Train time :", time.time() - start_time)
+    logger.info("Train time :", time.time() - start_time)
 
     # Compute accuracy on train and test sets
     x_train_prediction = classifier.predict(x_train)
     x_test_prediction = classifier.predict(x_test)
 
-    print(
+    logger.info(
         "Accuracy on train set :", accuracy_score(y_train, x_train_prediction)
     )
-    print("Accuracy on test set :", accuracy_score(y_test, x_test_prediction))
+    logger.info("Accuracy on test set :", accuracy_score(y_test, x_test_prediction))
