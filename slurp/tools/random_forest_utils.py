@@ -54,13 +54,13 @@ def train_classifier(classifier, x_samples, y_samples):
         x_samples, y_samples, test_size=0.2, random_state=42
     )
     classifier.fit(x_train, y_train)
-    logger.info("Train time :", time.time() - start_time)
+    logger.info("Train time : %s", str(time.time() - start_time))
 
     # Compute accuracy on train and test sets
     x_train_prediction = classifier.predict(x_train)
     x_test_prediction = classifier.predict(x_test)
 
     logger.info(
-        "Accuracy on train set :", accuracy_score(y_train, x_train_prediction)
+        "Accuracy on train set : %s", str(accuracy_score(y_train, x_train_prediction))
     )
-    logger.info("Accuracy on test set :", accuracy_score(y_test, x_test_prediction))
+    logger.info("Accuracy on test set : %s", str(accuracy_score(y_test, x_test_prediction)))

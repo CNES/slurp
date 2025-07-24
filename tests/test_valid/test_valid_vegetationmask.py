@@ -45,7 +45,7 @@ def prepare_vegetationmask(file, nb_workers):
 
     os.system(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
     )
 
     assert os.path.exists(
@@ -78,7 +78,7 @@ def compute_vegetationmask(
 
     os.system(
         f"slurp_vegetationmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture}"
+        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     )
 
     assert os.path.exists(
