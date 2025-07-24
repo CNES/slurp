@@ -21,9 +21,11 @@
 """Brings together some useful functions"""
 
 import os
+import json
 import time
 
-import logging
+
+import logging.config
 import numpy as np
 import psutil
 
@@ -31,15 +33,11 @@ from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
 
-def setup_logger():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.FileHandler("app.log"),
-            logging.StreamHandler()
-        ]
-    )
+def setup_logging(config_file : str):
+    with open(config_file) as f_in:
+        config = json.load(f_in)
+
+    logging.config.dictConfig(config)
 
 
 def convert_time(seconds):

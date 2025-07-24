@@ -25,6 +25,7 @@ import argparse
 import time
 import traceback
 import logging
+import pathlib
 from math import ceil, sqrt
 from os import makedirs, path
 
@@ -534,6 +535,11 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
 
     parser.add_argument("-d", "--debug", action="store_true", help="Debug flag")
 
@@ -672,9 +678,16 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
+    args = argparse.Namespace(**argsdict)
+
+    if args.logs_to_file:
+        config_file = pathlib.Path("logs/out2stdout.json")
+    else:
+        config_file = pathlib.Path("logs/out2json.json")
+    utils.setup_logging(config_file)
+
     logger.info("JSON data loaded:")
     logger.info(argsdict)
-    args = argparse.Namespace(**argsdict)
 
     # Create output folder
     makedirs(path.dirname(args.vegetationmask), exist_ok=True)
