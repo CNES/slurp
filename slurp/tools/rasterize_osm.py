@@ -24,11 +24,13 @@ import argparse
 import os
 import time
 import traceback
+import logging
 
 import otbApplication as otb
 
 from slurp.tools.constant import COMPRESSION
 
+logger = logging.getLogger("slurp")
 
 def rasterize(args):
     """Create a rasterized copy of the image passed in arguments"""
@@ -56,7 +58,7 @@ def rasterize(args):
     if args.dilate > 0:
         app_si.SetParameterString("out", "superimpose")
         app_si.Execute()
-        print("Dilatation of vector data / write final result")
+        logger.info("Dilatation of vector data / write final result")
         app_morpho = otb.Registry.CreateApplication(
             "BinaryMorphologicalOperation"
         )
@@ -76,7 +78,7 @@ def rasterize(args):
         )
         app_morpho.ExecuteAndWriteOutput()
     else:
-        print("Write final result")
+        logger.info("Write final result")
         app_si.SetParameterString(
             "out",
             str(
@@ -88,7 +90,7 @@ def rasterize(args):
 
     os.system("rm tmp_OSM_data.sqlite")
 
-    print("Execution time : " + str(time.time() - start_time))
+    logger.info("Execution time : " + str(time.time() - start_time))
 
 
 def getarguments():
@@ -125,19 +127,19 @@ def main():
         rasterize(arguments)
 
     except FileNotFoundError as fnfe_exception:
-        print("FileNotFoundError", fnfe_exception)
+        logger.error("FileNotFoundError", fnfe_exception)
 
     except PermissionError as pe_exception:
-        print("PermissionError", pe_exception)
+        logger.error("PermissionError", pe_exception)
 
     except ArithmeticError as ae_exception:
-        print("ArithmeticError", ae_exception)
+        logger.error("ArithmeticError", ae_exception)
 
     except MemoryError as me_exception:
-        print("MemoryError", me_exception)
+        logger.error("MemoryError", me_exception)
 
     except Exception as exception:  # pylint: disable=broad-except
-        print("oups...", exception)
+        logger.error("oups...", exception)
         traceback.print_exc()
 
 
