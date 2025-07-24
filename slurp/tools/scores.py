@@ -24,6 +24,7 @@
 import argparse
 import time
 import traceback
+import logging
 from os.path import dirname, join
 
 import geopandas as gpd
@@ -43,13 +44,13 @@ from sklearn.metrics import (
 from slurp.tools import io_utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
 
 def generate_polygons_in_gdf(im, crs, transform):
     """Generate polygons in a geodata-frame"""
     buildings = np.array(list(features.shapes(im, transform=transform)))
     mask = buildings[:, 1] == 1.0
     buildings = buildings[mask]
-    # print(buildings.shape)
     geometry = np.array(
         [shape(buildings[i][0]) for i in range(0, len(buildings))]
     )
@@ -91,7 +92,7 @@ def buildings_count(
 ):
     """Count the number of buildings polygons"""
     start_time = time.time()
-    print("## BUILDINGS ANALYSIS ##")
+    logger.info("## BUILDINGS ANALYSIS ##")
 
     # Generate GeoDataFrame
     gdf_predict = generate_polygons_in_gdf(
@@ -118,7 +119,7 @@ def buildings_count(
     gdf_intersect = gpd.overlay(
         gdf_ref_filtered, gdf_predict, how="intersection", keep_geom_type=True
     )
-    print(
+    logger.info(
         f'Detected buildings : {gdf_intersect["id_1"].nunique()}/{gdf_ref_filtered.shape[0]}'
     )
 
@@ -152,17 +153,17 @@ def buildings_count(
                 > args.thresh_overlay
             ]
         )
-        print(
+        logger.info(
             f"Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}"
         )
         df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
         iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
-        print(
+        logger.info(
             f"Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}"
         )
-        print(f"Mean IoU {df_merged['iou'].mean():.2f}")
+        logger.info(f"Mean IoU {df_merged['iou'].mean():.2f}")
 
-    print("Buildings count execution time :", time.time() - start_time)
+    logger.info("Buildings count execution time :", time.time() - start_time)
 
 
 def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
@@ -179,29 +180,29 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
         rpc,
     )
 
-    print("Merge execution time : " + str(time.time() - start_time))
+    logger.info("Merge execution time : " + str(time.time() - start_time))
 
 
 def get_score(im_ref, im_predict):
     """Print the different scores computed"""
 
     start_time = time.time()
-    print("## SCORES ##")
+    logger.info("## SCORES ##")
 
-    print(f"Accuracy >>> {accuracy_score(im_ref, im_predict):.2f}")
+    logger.info(f"Accuracy >>> {accuracy_score(im_ref, im_predict):.2f}")
     precision = precision_score(im_ref, im_predict)
-    print(f"Precision >>> {precision:.2f}")
+    logger.info(f"Precision >>> {precision:.2f}")
     recall = recall_score(im_ref, im_predict)
-    print(f"Recall >>> {recall:.2f}")
+    logger.info(f"Recall >>> {recall:.2f}")
     f1 = 2 * precision * recall / (precision + recall)
-    print(f"F1 >>> {f1:.2f}")
+    logger.info(f"F1 >>> {f1:.2f}")
 
-    print(f"Jaccard >>> {jaccard_score(im_ref, im_predict):.2f}")
+    logger.info(f"Jaccard >>> {jaccard_score(im_ref, im_predict):.2f}")
     # print("Log loss >>>", log_loss(im_ref, im_predict))
     # print("Confusion matrix >>>", confusion_matrix(im_ref, im_predict))
     # print("F1 >>>", f1_score(im_ref, im_predict))
 
-    print(
+    logger.info(
         "Scores calculation execution time : " + str(time.time() - start_time)
     )
 
@@ -420,19 +421,19 @@ def main():
         get_score(im_ref_1d, im_predict_1d)
 
     except FileNotFoundError as fnfe_exception:
-        print("FileNotFoundError", fnfe_exception)
+        logger.error("FileNotFoundError", fnfe_exception)
 
     except PermissionError as pe_exception:
-        print("PermissionError", pe_exception)
+        logger.error("PermissionError", pe_exception)
 
     except ArithmeticError as ae_exception:
-        print("ArithmeticError", ae_exception)
+        logger.error("ArithmeticError", ae_exception)
 
     except MemoryError as me_exception:
-        print("MemoryError", me_exception)
+        logger.error("MemoryError", me_exception)
 
     except Exception as exception:  # pylint: disable=broad-except
-        print("oups...", exception)
+        logger.error("oups...", exception)
         traceback.print_exc()
 
 

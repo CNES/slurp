@@ -23,10 +23,23 @@
 import os
 import time
 
+import logging
 import numpy as np
 import psutil
 
 from slurp.tools.constant import NODATA_INT8
+
+logger = logging.getLogger("slurp")
+
+def setup_logger():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[
+            logging.FileHandler("app.log"),
+            logging.StreamHandler()
+        ]
+    )
 
 
 def convert_time(seconds):
@@ -75,4 +88,4 @@ def display_mem_usage(debug_mode, message):
         memory_use = (
             python_process.memory_info()[0] / 2.0**30
         )  # memory use in GB...I think
-        print(f">> {message} >> Mem usage : {memory_use} Gb")
+        logger.debug(f">> {message} >> Mem usage : {memory_use} Gb")

@@ -30,6 +30,7 @@ Final mask values
 import argparse
 import time
 import traceback
+import logging
 from os import makedirs, path
 
 import eoscale.eo_executors as eoexe
@@ -43,6 +44,7 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
+logger = logging.getLogger("slurp")
 
 def watershed_regul_buildings(
     input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
@@ -335,8 +337,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
@@ -395,25 +397,25 @@ def main():
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
 
             t1 = time.time()
-            print(
+            logger.info(
                 f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
             )
-            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
 

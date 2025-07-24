@@ -25,7 +25,9 @@ import argparse
 import gc
 import time
 import traceback
+import logging
 from os import makedirs, path
+from typing import get_args
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -39,12 +41,14 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
+
 try:
     from sklearnex import patch_sklearn
 
     patch_sklearn()
 except ModuleNotFoundError:
-    print("Intel(R) Extension/Optimization for scikit-learn not found.")
+    logger.error("Intel(R) Extension/Optimization for scikit-learn not found.")
 
 
 def compute_pekel_mask(
@@ -357,7 +361,7 @@ def post_process(
         if not params["hand_strict"]:
             input_buffer[0][np.logical_not(input_buffer[1])] = 0
         else:
-            print("\nWARNING: hand_filter and hand_strict are incompatible.")
+            logger.warning("\nWARNING: hand_filter and hand_strict are incompatible.")
 
     # Filter for final classification
     if not params["no_pekel_filter"]:
@@ -604,8 +608,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
@@ -627,7 +631,6 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
-            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             args.nodata_phr = profile_phr["nodata"]
             args.shape = (profile_phr["height"], profile_phr["width"])
@@ -657,9 +660,6 @@ def main():
                 raster_path=args.extracted_pekel
             )
             pekel_profile = eoscale_manager.get_profile(key_pekel)
-            eo_utils.print_dataset_infos(
-                args.extracted_pekel, pekel_profile, "PEKEL"
-            )
             args.pekel_nodata = pekel_profile["nodata"]
 
             # Pekel valid masks
@@ -686,7 +686,7 @@ def main():
                 # In case they are too few Pekel pixels, we prefer to threshold NDWI and skip samples selection
                 # Alternative would be to select samples in a thresholded NDWI...
                 not_enough_water_samples = True
-                print(
+                logger.warning(
                     "** WARNING ** not enough water samples are found in Pekel : return a void mask"
                 )
 
@@ -695,9 +695,6 @@ def main():
                 raster_path=args.extracted_hand
             )
             hand_profile = eoscale_manager.get_profile(key_hand)
-            eo_utils.print_dataset_infos(
-                args.extracted_hand, hand_profile, "HAND"
-            )
             args.hand_nodata = hand_profile["nodata"]
 
             # Create HAND mask
@@ -718,7 +715,7 @@ def main():
 
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
-                print(
+                logger.info(
                     "Simple threshold mask NDWI > " + str(args.ndwi_threshold)
                 )
                 key_predict = eoexe.n_images_to_m_images_filter(
@@ -803,7 +800,7 @@ def main():
                     random_state=712,
                     n_jobs=1,
                 )
-                print(
+                logger.info(
                     "RandomForest parameters:\n", classifier.get_params(), "\n"
                 )
                 samples = np.concatenate(samples[:])  # A revoir si possible
@@ -877,47 +874,47 @@ def main():
             utils.display_mem_usage(args.debug, "End of computation")
             end_time = time.time()
 
-            print(
+            logger.info(
                 f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
             )
-            print(
+            logger.info(
                 "Total time (user)       :\t"
                 + utils.convert_time(end_time - t0)
             )
-            print(
+            logger.info(
                 "- Build_stack           :\t"
                 + utils.convert_time(time_stack - t0)
             )
             if not args.simple_ndwi_threshold and not not_enough_water_samples:
-                print(
+                logger.info(
                     "- Build_samples         :\t"
                     + utils.convert_time(time_samples - time_stack)
                 )
-                print(
+                logger.info(
                     "- Random forest (total) :\t"
                     + utils.convert_time(time_random_forest - time_samples)
                 )
-                print(
+                logger.info(
                     "- Post-processing       :\t"
                     + utils.convert_time(end_time - time_random_forest)
                 )
-            print("***")
-            print("Max workers used for parallel tasks " + str(args.n_workers))
+            logger.info("***")
+            logger.info("Max workers used for parallel tasks " + str(args.n_workers))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
 
