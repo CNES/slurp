@@ -23,10 +23,12 @@ Use a global land cover map to calculate the better number of vegetation cluster
 """
 
 import numpy as np
+import logging
 import rasterio as rio
 
 from slurp.prepare import geometry
 
+logger = logging.getLogger("slurp")
 
 def get_advices(veg, low_veg, high_veg, nb_total):
     """
@@ -92,7 +94,7 @@ def compute_stats(
     if not cropped:
         # get ROI before computing stats
         if sensor_mode:
-            print(
+            logger.error(
                 "ERROR : GLCM analysis not implemented for sensor mode yet. Returns default clustering values"
             )
             return 3, 3
@@ -104,7 +106,7 @@ def compute_stats(
         ds.close()
         del ds
 
-    print(f"{data_map.shape}")
+    logger.info(f"{data_map.shape}")
 
     width = data_map.shape[0]
     height = data_map.shape[1]
@@ -117,7 +119,7 @@ def compute_stats(
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
     for v, c in zip(unique, counts):
-        print(f"{v} : {c}")
+        logger.info(f"{v} : {c}")
         if v in vegetation_classes:
             veg += c
 
@@ -131,11 +133,11 @@ def compute_stats(
         veg, low_veg, high_veg, nb_total
     )
 
-    print(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
-    print(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
-    print(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
+    logger.info(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
+    logger.info(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
+    logger.info(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
 
-    print(f"export VEG_CLUSTERS={nb_clusters_veg}")
-    print(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
+    logger.info(f"export VEG_CLUSTERS={nb_clusters_veg}")
+    logger.info(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
 
     return nb_clusters_veg, nb_clusters_low_veg

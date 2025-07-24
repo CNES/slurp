@@ -24,6 +24,7 @@ import argparse
 import gc
 import time
 import traceback
+import logging
 from os import makedirs, path
 
 import eoscale.eo_executors as eoexe
@@ -37,12 +38,15 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
+
 try:
     from sklearnex import patch_sklearn
 
     patch_sklearn()
 except ModuleNotFoundError:
-    print("Intel(R) Extension/Optimization for scikit-learn not found.")
+    logger.error("Intel(R) Extension/Optimization for scikit-learn not found.")
+
 
 
 def apply_vegetationmask(
@@ -375,8 +379,8 @@ def main():
         if argparse_dict[key] is not None:
             argsdict[key] = argparse_dict[key]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Create output folder
@@ -397,7 +401,6 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
-            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
             key_original_valid_stack = eoscale_manager.open_raster(
@@ -517,7 +520,7 @@ def main():
                         random_state=0,
                         n_jobs=args.n_jobs,
                     )
-                    print(
+                    logger.info(
                         "RandomForest parameters:\n",
                         classifier.get_params(),
                         "\n",
@@ -562,30 +565,30 @@ def main():
 
                     end_time = time.time()
 
-                    print(
+                    logger.info(
                         f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
                     )
-                    print(
+                    logger.info(
                         "Total time (user)       :\t"
                         + utils.convert_time(end_time - t0)
                     )
-                    print(
+                    logger.info(
                         "- Build_stack           :\t"
                         + utils.convert_time(time_stack - t0)
                     )
-                    print(
+                    logger.info(
                         "- Build_samples         :\t"
                         + utils.convert_time(time_samples - time_stack)
                     )
-                    print(
+                    logger.info(
                         "- Random forest (total) :\t"
                         + utils.convert_time(time_random_forest - time_samples)
                     )
-                    print("***")
+                    logger.info("***")
 
             if args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
-                print(
+                logger.info(
                     f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
                 )
 
@@ -606,7 +609,7 @@ def main():
 
             else:
                 # Corner case : no "building pixels" --> void mask (0)
-                print(
+                logger.info(
                     f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
                 )
 
@@ -626,19 +629,19 @@ def main():
                 )
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
 

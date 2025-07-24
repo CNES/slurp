@@ -28,6 +28,7 @@ import time
 import traceback
 from os import makedirs, path
 from typing import List
+import logging
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -39,6 +40,7 @@ from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 
+logger = logging.getLogger(__name__)
 
 def getarguments():
     """Parse command line arguments."""
@@ -405,9 +407,9 @@ def pekel_extraction(
                     "Method for Pekel extraction not accepted. Use 'month' or 'all'"
                 )
         else:
-            print("Not extracting Pekel : the file already exists.")
+            logger.info("Not extracting Pekel : the file already exists.")
     else:
-        print("Pass Pekel extraction")
+        logger.info("Pass Pekel extraction")
 
 
 def hand_extraction(
@@ -440,9 +442,9 @@ def hand_extraction(
                 roi,
             )
         else:
-            print("Not extracting Hand : the file already exists.")
+            logger.info("Not extracting Hand : the file already exists.")
     else:
-        print("Pass Hand extraction")
+        logger.info("Pass Hand extraction")
 
 
 def wsf_extraction(
@@ -476,9 +478,9 @@ def wsf_extraction(
                 roi,
             )
         else:
-            print("Not extracting WSF : the file already exists.")
+            logger.info("Not extracting WSF : the file already exists.")
     else:
-        print("Pass WSF extraction")
+        logger.info("Pass WSF extraction")
 
 
 def compute_texture(
@@ -525,9 +527,9 @@ def compute_texture(
                 key=key_texture[0], img_path=args.file_texture
             )
         else:
-            print("Not computing texture file : the file already exists.")
+            logger.info("Not computing texture file : the file already exists.")
     else:
-        print("Pass texture computation")
+        logger.info("Pass texture computation")
 
 
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
@@ -562,10 +564,10 @@ def main():
     sensor geometry, geoid and DTM.
 
     """
-
+    utils.setup_logger()
     argsdict = read_and_overload_arguments(vars(getarguments()))
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
@@ -594,7 +596,7 @@ def main():
                     key=valid_stack_key[0], img_path=args.valid_stack
                 )
             else:
-                print(
+                logger.info(
                     "Not computing valid stack mask : the file already exists."
                 )
                 valid_stack_key = [
@@ -608,7 +610,7 @@ def main():
                 )
                 eoscale_manager.write(key=ndvi_key[0], img_path=args.file_ndvi)
             else:
-                print("Not computing NDVI : the file already exists.")
+                logger.info("Not computing NDVI : the file already exists.")
 
             # NDWI
             if args.overwrite or not path.isfile(args.file_ndwi):
@@ -617,7 +619,7 @@ def main():
                 )
                 eoscale_manager.write(key=ndwi_key[0], img_path=args.file_ndwi)
             else:
-                print("Not computing NDWI : the file already exists.")
+                logger.info("Not computing NDWI : the file already exists.")
 
             if args.sensor_mode:
                 grid_sensor, grid_geo, all_coords, roi = (
@@ -649,25 +651,25 @@ def main():
             eoscale_manager._release_all()
 
             t1 = time.time()
-            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
-    print("End of prepare step")
+    logger.info("End of prepare step")
 
 
 if __name__ == "__main__":
