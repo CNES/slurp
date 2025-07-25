@@ -31,7 +31,7 @@
       "class": "logging.handlers.RotatingFileHandler",
       "level": "DEBUG",
       "formatter": "json",
-      "filename": "logs/my_app.log.jsonl",
+      "filename": "slurp/tools/logs/out_logs.log.jsonl",
       "maxBytes": 10000,
       "backupCount": 3
     }
