@@ -53,7 +53,7 @@ def prepare_watermask(file, nb_workers):
     os.system(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
-        f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand}"
+        f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand} -log_f"
     )
 
     assert os.path.exists(
@@ -97,7 +97,7 @@ def compute_watermask(
 
     os.system(
         f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand}"
+        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand} -log_f"
     )
 
     assert os.path.exists(
