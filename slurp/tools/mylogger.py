@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Union
 import json
 import logging
 
@@ -33,7 +34,7 @@ class MyJSONFormatter(logging.Formatter):
     def __init__(
         self,
         *,
-        fmt_keys: dict[str, str] | None = None,
+        fmt_keys: Union[dict, None] = None,
     ):
         super().__init__()
         self.fmt_keys = fmt_keys if fmt_keys is not None else {}
@@ -71,5 +72,5 @@ class MyJSONFormatter(logging.Formatter):
 
 
 class NonErrorFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+    def filter(self, record: logging.LogRecord) -> Union[bool, logging.LogRecord]:
         return record.levelno <= logging.INFO
