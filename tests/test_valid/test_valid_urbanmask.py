@@ -52,7 +52,7 @@ def prepare_urbanmask(file, nb_workers):
 
     os.system(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf}"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf} -log_f"
     )
 
     assert os.path.exists(
@@ -87,7 +87,7 @@ def compute_urbanmask(
 
     os.system(
         f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
-        f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}"
+        f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf} -log_f"
     )
 
     assert os.path.exists(

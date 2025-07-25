@@ -573,12 +573,10 @@ def main():
     argsdict = read_and_overload_arguments(vars(getarguments()))
     args = argparse.Namespace(**argsdict)
 
-    print(getcwd())
     if args.logs_to_file:
-
-        config_file = pathlib.Path("logs/out2stdout.json")
+        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
-        config_file = pathlib.Path("logs/out2json.json")
+        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)
 
     logger.info("JSON data loaded:")
