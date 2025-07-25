@@ -579,6 +579,8 @@ def main():
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)
 
+    logger.info("--"*50)
+    logger.info("SLURP_PREPARE")
     logger.info("JSON data loaded:")
     logger.info(argsdict)
 
