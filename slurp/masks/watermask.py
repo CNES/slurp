@@ -617,9 +617,9 @@ def main():
     args = argparse.Namespace(**argsdict)
 
     if args.logs_to_file:
-        config_file = pathlib.Path("logs/out2stdout.json")
+        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
-        config_file = pathlib.Path("logs/out2json.json")
+        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)
 
     logger.info("JSON data loaded:")
@@ -814,7 +814,7 @@ def main():
                     n_jobs=1,
                 )
                 logger.info(
-                    "RandomForest parameters:\n", classifier.get_params(), "\n"
+                    "RandomForest parameters: \n%s\n", str(classifier.get_params())
                 )
                 samples = np.concatenate(samples[:])  # A revoir si possible
                 x_samples = samples[
