@@ -88,7 +88,7 @@ def compute_shadowmask(
     return final_shadow_mask
 
 
-def getarguments():
+def getarguments() -> dict:
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
@@ -139,6 +139,7 @@ def getarguments():
     group3.add_argument(
         "-remove_small_objects",
         type=int,
+        default=0,
         help="The maximum area, in pixels, of a contiguous object that will be removed",
     )
 
@@ -150,6 +151,7 @@ def getarguments():
     group5.add_argument(
         "-tile_max_size",
         type=int,
+        default=0,
         help="Max tile size to be processed (0 : default)",
     )
     group5.add_argument(
@@ -158,15 +160,17 @@ def getarguments():
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
 
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
 
     return args
 
 
-def main():
-    """Main function that compute Shadowmask"""
-
-    argparse_dict = vars(getarguments())
+def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
+                    th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
+                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str) -> list:
+    """
+    TODO ? faire en sorte que ca soit l'équivalent de la CLI pour que ca soit montrable dans un notebook
+    """
     t0 = time.time()
 
     # Read the JSON files
@@ -179,90 +183,78 @@ def main():
         "shadows",
     ]
     argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+        main_config, keys, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
-
-    args = argparse.Namespace(**argsdict)
-
-    if args.logs_to_file:
-        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+    if logs_to_file:
+        config_log = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
-        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
-    utils.setup_logging(config_file)
+        config_log = pathlib.Path("slurp/tools/logs/out2stdout.json")
+    utils.setup_logging(config_log)
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
 
     # Create output folder
-    makedirs(path.dirname(args.shadowmask), exist_ok=True)
+    makedirs(path.dirname(shadowmask), exist_ok=True)
 
     # Mask calculation
-    with eom.EOContextManager(
-        nb_workers=args.n_workers,
-        tile_mode=True,
-        tile_max_size=args.tile_max_size,
-    ) as eoscale_manager:
+    with eom.EOContextManager(nb_workers=n_workers, tile_mode=True, tile_max_size=tile_max_size) as eoscale_manager:
         try:
 
             # Store image in shared memory
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
+            key_phr = eoscale_manager.open_raster(raster_path=file_vhr)
             local_phr = eoscale_manager.get_array(key_phr)
             nodata = eoscale_manager.get_profile(key_phr)["nodata"]
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(
-                raster_path=args.valid_stack
+                raster_path=valid_stack
             )
 
-            if args.absolute_threshold is False:
+            if absolute_threshold is False:
                 # Compute threshold for each band
                 th_bands = np.zeros(4)
                 for cpt in range(3):
                     min_band = np.percentile(
                         local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        args.percentile,
+                        percentile,
                     )
                     max_percentile = np.percentile(
                         local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        100 - args.percentile,
+                        100 - percentile,
                     )
-                    th_bands[cpt] = min_band + args.th_rgb * (
-                        max_percentile - min_band
+                    th_bands[cpt] = min_band + th_rgb * (
+                            max_percentile - min_band
                     )
 
                 cpt = 3
                 min_band = np.percentile(
                     local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    args.percentile,
+                    percentile,
                 )
                 max_percentile = np.percentile(
                     local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    100 - args.percentile,
+                    100 - percentile,
                 )
-                th_bands[cpt] = min_band + args.th_nir * (
-                    max_percentile - min_band
+                th_bands[cpt] = min_band + th_nir * (
+                        max_percentile - min_band
                 )
             else:
                 # Use an absolute threshold instead of relative threshold
                 # Useful when using calibrated images
                 th_bands = np.zeros(4)
                 for i in range(4):
-                    th_bands[i] = args.absolute_threshold
+                    th_bands[i] = absolute_threshold
 
             params = {
                 "thresholds": th_bands,
-                "binary_opening": args.binary_opening,
-                "remove_small_objects": args.remove_small_objects,
+                "binary_opening": binary_opening,
+                "remove_small_objects": remove_small_objects,
             }
 
-            if args.watermask and path.isfile(args.watermask):
+            if watermask and path.isfile(watermask):
                 key_watermask = eoscale_manager.open_raster(
-                    raster_path=args.watermask
+                    raster_path=watermask
                 )
             else:
                 profile = eoscale_manager.get_profile(key_phr)
@@ -276,17 +268,17 @@ def main():
                 image_filter=compute_shadowmask,
                 filter_parameters=params,
                 generate_output_profiles=eo_utils.single_uint8_profile,
-                stable_margin=args.remove_small_objects,
+                stable_margin=remove_small_objects,
                 context_manager=eoscale_manager,
-                multiproc_context=args.multiproc_context,
+                multiproc_context=multiproc_context,
                 filter_desc="Shadow mask processing...",
             )
 
-            eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
+            eoscale_manager.write(key=mask_shadow[0], img_path=shadowmask)
 
             end_time = time.time()
             logger.info(
-                f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
+                f"**** Shadow mask for {file_vhr} (saved as {shadowmask}) ****"
             )
             logger.info(
                 "Total time (user)       :\t"
@@ -309,6 +301,13 @@ def main():
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the shadow mask computation.
+    It parses the command line arguments and calls the slurp_shadowmask function.
+    """
+    args = getarguments()
+    slurp_shadowmask(**args)
 
 if __name__ == "__main__":
     main()
