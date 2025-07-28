@@ -139,6 +139,7 @@ def getarguments() -> dict:
     group3.add_argument(
         "-remove_small_objects",
         type=int,
+        default=0,
         help="The maximum area, in pixels, of a contiguous object that will be removed",
     )
 
@@ -150,6 +151,7 @@ def getarguments() -> dict:
     group5.add_argument(
         "-tile_max_size",
         type=int,
+        default=0,
         help="Max tile size to be processed (0 : default)",
     )
     group5.add_argument(
@@ -164,7 +166,7 @@ def getarguments() -> dict:
 
 
 def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
-                    th_nir : int, absolute_threshold : bool, percentile : int, binary_opening : int,
+                    th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
                     remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str) -> list:
     """
     TODO ? faire en sorte que ca soit l'équivalent de la CLI pour que ca soit montrable dans un notebook
@@ -200,8 +202,8 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
         try:
 
             # Store image in shared memory
-            key_phr = eom.open_raster(raster_path=file_vhr)
-            local_phr = eom.get_array(key_phr)
+            key_phr = eoscale_manager.open_raster(raster_path=file_vhr)
+            local_phr = eoscale_manager.get_array(key_phr)
             nodata = eoscale_manager.get_profile(key_phr)["nodata"]
 
             # Valid stack
@@ -299,9 +301,13 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the shadow mask computation.
+    It parses the command line arguments and calls the slurp_shadowmask function.
+    """
+    args = getarguments()
+    slurp_shadowmask(**args)
 
 if __name__ == "__main__":
-    args = getarguments()
-    print(args)
-    print(**args)
-    slurp_shadowmask(**args)
+    main()
