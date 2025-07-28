@@ -302,4 +302,6 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
 
 if __name__ == "__main__":
     args = getarguments()
+    print(args)
+    print(**args)
     slurp_shadowmask(**args)
