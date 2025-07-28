@@ -394,7 +394,6 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
-            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
             key_original_valid_stack = eoscale_manager.open_raster(
@@ -515,11 +514,9 @@ def main():
                         n_jobs=args.n_jobs,
                     )
                     print(
-                        "RandomForest parameters:\n",
-                        classifier.get_params(),
-                        "\n",
+                        "RandomForest parameters: \n%s\n",
+                        str(classifier.get_params())
                     )
-
                     random_forest_utils.train_classifier(classifier, x_samples, y_samples)
                     random_forest_utils.print_feature_importance(
                         classifier, args.files_layers
@@ -580,47 +577,47 @@ def main():
                     )
                     print("***")
 
-                elif args.nb_valid_built_pixels >= nb_valid_pixels:
-                    # Corner case : no "non building pixels"
-                    print(
-                        f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
-                    )
+            if args.nb_valid_built_pixels == nb_valid_pixels:
+                # Corner case : no "non building pixels"
+                print(
+                    f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
+                )
 
-                    key_predict = eoexe.n_images_to_m_images_filter(
-                        inputs=[key_original_valid_stack],
-                        image_filter=add_nodata,
-                        filter_parameters={"fill_value": 100},
-                        generate_output_profiles=eo_utils.single_uint8_profile,
-                        context_manager=eoscale_manager,
-                        multiproc_context=args.multiproc_context,
-                        filter_desc="Add nodata...",
-                    )
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_original_valid_stack],
+                    image_filter=add_nodata,
+                    filter_parameters={"fill_value": 100},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Add nodata...",
+                )
 
-                    # Save proba mask
-                    eoscale_manager.write(
-                        key=key_predict[0], img_path=args.urbanmask
-                    )
+                # Save proba mask
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.urbanmask
+                )
 
-                else:
-                    # Corner case : no "building pixels" --> void mask (0)
-                    print(
-                        f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
-                    )
+            else:
+                # Corner case : no "building pixels" --> void mask (0)
+                print(
+                    f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                )
 
-                    key_predict = eoexe.n_images_to_m_images_filter(
-                        inputs=[key_original_valid_stack],
-                        image_filter=add_nodata,
-                        filter_parameters={"fill_value": 0},
-                        generate_output_profiles=eo_utils.single_uint8_profile,
-                        context_manager=eoscale_manager,
-                        multiproc_context=args.multiproc_context,
-                        filter_desc="Add nodata...",
-                    )
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_original_valid_stack],
+                    image_filter=add_nodata,
+                    filter_parameters={"fill_value": 0},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Add nodata...",
+                )
 
-                    # Save proba mask
-                    eoscale_manager.write(
-                        key=key_predict[0], img_path=args.urbanmask
-                    )
+                # Save proba mask
+                eoscale_manager.write(
+                    key=key_predict[0], img_path=args.urbanmask
+                )
 
         except FileNotFoundError as fnfe_exception:
             print("FileNotFoundError", fnfe_exception)
