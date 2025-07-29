@@ -50,10 +50,10 @@ def read_json(
                 argsdict.update(full_args[key])
 
     except FileNotFoundError:
-        logger.error(f"File %s not found.", main_config_file)
+        logger.error("File %s not found.", main_config_file)
     except json.JSONDecodeError:
         logger.error(
-            f"Error decoding JSON data from %s. Please check the file format.", main_config_file
+            "Error decoding JSON data from %s. Please check the file format.", main_config_file
         )
 
     if user_config_file:
@@ -65,10 +65,10 @@ def read_json(
                     argsdict.update(full_args[k])
 
         except FileNotFoundError:
-            logger.error(f"File %s not found.", user_config_file)
+            logger.error("File %s not found.", user_config_file)
         except json.JSONDecodeError:
             logger.error(
-                f"Error decoding JSON data from %s. Please check the file format.", user_config_file
+                "Error decoding JSON data from %s. Please check the file format.", user_config_file
             )
 
     return argsdict
