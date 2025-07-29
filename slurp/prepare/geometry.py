@@ -28,11 +28,14 @@ import time
 import bindings_cpp
 import numpy as np
 import logging
+import scipy
+import otbApplication as otb
 import rasterio as rio
 from shareloc.dtm_reader import dtm_reader
 from shareloc.geofunctions.localization import Localization
 from shareloc.geomodels import GeoModel
 from shareloc.image import Image
+from shareloc.proj_utils import transform_physical_point_to_index
 
 from slurp.tools.constant import COMPRESSION
 
@@ -46,11 +49,6 @@ def superimpose(file_in: str, file_ref: str, file_out: str):
     :param str file_ref: path to the input reference image
     :param str file_out: path for the output reprojected image
     """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
-
     ds = rio.open(file_in)
     # default value
     output_dtype = otb.ImagePixelType_float
@@ -85,11 +83,6 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
     :param str file_ref: path to the input reference image
     :param str file_out: path for the output reprojected image
     """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
-
     ds = rio.open(file_in)
     # default value
     output_dtype = otb.ImagePixelType_float
@@ -126,10 +119,6 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     :param str file_in: path to the image to crop
     :param str file_ref: path to the input reference image
     """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
     start_time = time.time()
     app_roi = otb.Registry.CreateApplication("ExtractROI")
     app_roi.SetParameterString("in", file_in)
@@ -351,8 +340,6 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
 def sensor_projection(
     input_data,
     sensor_image,
-    dtm_file,
-    geoid_file,
     projected_data,
     grid_sensor,
     grid_geo,
@@ -368,14 +355,6 @@ def sensor_projection(
     :param str geoid_file: path to the Geoid
     :param str projected_data: path to the output projected data
     """
-    try:
-        from shareloc.image import Image
-        from shareloc.proj_utils import transform_physical_point_to_index
-    except ModuleNotFoundError as e:
-        raise ImportError("\n*** Shareloc is not installed ***\n") from e
-
-    import scipy
-
     # construct all pixels positions
     interp_lon = scipy.interpolate.interpn(
         grid_sensor,

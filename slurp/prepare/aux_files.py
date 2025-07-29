@@ -58,8 +58,6 @@ def aux_file_recovery(
         geometry.sensor_projection(
             global_data,
             file_ref,
-            dtm_file,
-            geoid_file,
             reprojected_data,
             grid_sensor,
             grid_geo,
