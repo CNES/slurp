@@ -133,11 +133,11 @@ def compute_stats(
         veg, low_veg, high_veg, nb_total
     )
 
-    logger.info(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
-    logger.info(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
-    logger.info(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
+    logger.info("Vegetation (% area) \t: %.2f%%", 100 * veg / nb_total)
+    logger.info(f"Low vegetation (% area) \t: %.2f%%", 100*low_veg/nb_total)
+    logger.info(f"High vegetation (% area) \t: %.2f%%", 100*high_veg/nb_total)
 
-    logger.info(f"export VEG_CLUSTERS={nb_clusters_veg}")
-    logger.info(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
+    logger.info(f"export VEG_CLUSTERS= %d", nb_clusters_veg)
+    logger.info(f"export LOW_VEG_CLUSTERS= %d",nb_clusters_low_veg)
 
     return nb_clusters_veg, nb_clusters_low_veg

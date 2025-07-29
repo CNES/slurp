@@ -577,23 +577,19 @@ def main():
                     end_time = time.time()
 
                     logger.info(
-                        f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
+                        f"**** Urban proba mask for %s (saved as %s) ****", args.file_vhr, args.urbanmask
                     )
                     logger.info(
-                        "Total time (user)       :\t"
-                        + utils.convert_time(end_time - t0)
+                        "Total time (user)       :\t%s", utils.convert_time(end_time - t0)
                     )
                     logger.info(
-                        "- Build_stack           :\t"
-                        + utils.convert_time(time_stack - t0)
+                        "- Build_stack           :\t%s", utils.convert_time(time_stack - t0)
                     )
                     logger.info(
-                        "- Build_samples         :\t"
-                        + utils.convert_time(time_samples - time_stack)
+                        "- Build_samples         :\t%s", utils.convert_time(time_samples - time_stack)
                     )
                     logger.info(
-                        "- Random forest (total) :\t"
-                        + utils.convert_time(time_random_forest - time_samples)
+                        "- Random forest (total) :\t%s", utils.convert_time(time_random_forest - time_samples)
                     )
                     logger.info("***")
 

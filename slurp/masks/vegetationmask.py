@@ -849,36 +849,28 @@ def main():
                 "**** Shadow mask for %s (saved as %s) ****", args.file_vhr, args.vegetationmask
             )
             logger.info(
-                "Total time (user)       :\t%s"
-                + utils.convert_time(end_time - t0)
+                "Total time (user)       :\t%s", utils.convert_time(end_time - t0)
             )
             logger.info(
-                "- Build_stack           :\t%s"
-                + utils.convert_time(time_stack - t0)
+                "- Build_stack           :\t%s", utils.convert_time(time_stack - t0)
             )
             logger.info(
-                "- Segmentation          :\t%s"
-                + utils.convert_time(time_seg - time_stack)
+                "- Segmentation          :\t%s", utils.convert_time(time_seg - time_stack)
             )
             logger.info(
-                "- Stats                 :\t%s"
-                + utils.convert_time(time_stats - time_seg)
+                "- Stats                 :\t%s", utils.convert_time(time_stats - time_seg)
             )
             logger.info(
-                "- Clustering            :\t%s"
-                + utils.convert_time(time_cluster - time_stats)
+                "- Clustering            :\t%s", utils.convert_time(time_cluster - time_stats)
             )
             logger.info(
-                "- Finalize Cython       :\t%s"
-                + utils.convert_time(time_final - time_cluster)
+                "- Finalize Cython       :\t%s", utils.convert_time(time_final - time_cluster)
             )
             logger.info(
-                "- Post-processing       :\t%s"
-                + utils.convert_time(time_closing - time_final)
+                "- Post-processing       :\t%s", utils.convert_time(time_closing - time_final)
             )
             logger.info(
-                "- Write final image     :\t%s"
-                + utils.convert_time(end_time - time_closing)
+                "- Write final image     :\t%s", utils.convert_time(end_time - time_closing)
             )
             logger.info("***")
 

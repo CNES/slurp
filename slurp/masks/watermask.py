@@ -891,25 +891,20 @@ def main():
                 f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
             )
             logger.info(
-                "Total time (user)       :\t"
-                + utils.convert_time(end_time - t0)
+                "Total time (user)       :\t%s", utils.convert_time(end_time - t0)
             )
             logger.info(
-                "- Build_stack           :\t"
-                + utils.convert_time(time_stack - t0)
+                "- Build_stack           :\t%s", utils.convert_time(time_stack - t0)
             )
             if not args.simple_ndwi_threshold and not not_enough_water_samples:
                 logger.info(
-                    "- Build_samples         :\t"
-                    + utils.convert_time(time_samples - time_stack)
+                    "- Build_samples         :\t%s", utils.convert_time(time_samples - time_stack)
                 )
                 logger.info(
-                    "- Random forest (total) :\t"
-                    + utils.convert_time(time_random_forest - time_samples)
+                    "- Random forest (total) :\t%s", utils.convert_time(time_random_forest - time_samples)
                 )
                 logger.info(
-                    "- Post-processing       :\t"
-                    + utils.convert_time(end_time - time_random_forest)
+                    "- Post-processing       :\t%s", utils.convert_time(end_time - time_random_forest)
                 )
             logger.info("***")
             logger.info("Max workers used for parallel tasks %s", str(args.n_workers))

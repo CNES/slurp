@@ -72,7 +72,7 @@ def superimpose(file_in: str, file_ref: str, file_out: str):
     app.SetParameterOutputImagePixelType("out", output_dtype)
     app.ExecuteAndWriteOutput()
 
-    logger.info("Superimpose in", time.time() - start_time, "seconds.")
+    logger.info("Superimpose in %f seconds.", time.time() - start_time)
 
 
 def rasterization(file_in: str, file_ref: str, file_out: str):
@@ -109,7 +109,7 @@ def rasterization(file_in: str, file_ref: str, file_out: str):
 
     app.ExecuteAndWriteOutput()
 
-    logger.info("Rasterize in", time.time() - start_time, "seconds.")
+    logger.info("Rasterize in %f seconds.", time.time() - start_time)
 
 
 def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
@@ -127,7 +127,7 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     app_roi.SetParameterString("out", "fake.tif")
     app_roi.Execute()
 
-    logger.info("Extract ROI in", time.time() - start_time, "seconds.")
+    logger.info("Extract ROI in %f seconds", time.time() - start_time)
 
     return app_roi.GetVectorImageAsNumpyArray("out")
 

@@ -90,7 +90,7 @@ def rasterize(args):
 
     os.system("rm tmp_OSM_data.sqlite")
 
-    logger.info("Execution time : " + str(time.time() - start_time))
+    logger.info("Execution time : %s", str(time.time() - start_time))
 
 
 def getarguments():

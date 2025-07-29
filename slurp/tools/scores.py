@@ -163,7 +163,7 @@ def buildings_count(
         )
         logger.info(f"Mean IoU {df_merged['iou'].mean():.2f}")
 
-    logger.info("Buildings count execution time :", time.time() - start_time)
+    logger.info("Buildings count execution time : %s", time.time() - start_time)
 
 
 def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
@@ -180,7 +180,7 @@ def get_merged_image(im_ref, im_predict, path_out, crs, transform, rpc):
         rpc,
     )
 
-    logger.info("Merge execution time : " + str(time.time() - start_time))
+    logger.info("Merge execution time : %s", str(time.time() - start_time))
 
 
 def get_score(im_ref, im_predict):
@@ -203,7 +203,7 @@ def get_score(im_ref, im_predict):
     # print("F1 >>>", f1_score(im_ref, im_predict))
 
     logger.info(
-        "Scores calculation execution time : " + str(time.time() - start_time)
+        "Scores calculation execution time : %s", str(time.time() - start_time)
     )
 
 
