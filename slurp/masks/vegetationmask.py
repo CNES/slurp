@@ -752,7 +752,7 @@ def main():
             nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
             if args.debug:
                 logger.debug(
-                    "Number of different segments detected : " + str(nb_polys)
+                    "Number of different segments detected : %s", str(nb_polys)
                 )
 
             # Stats calculation

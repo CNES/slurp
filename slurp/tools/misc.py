@@ -40,7 +40,7 @@ def display_top(snapshot, key_type="lineno", limit=10):
     )
     top_stats = snapshot.statistics(key_type)
 
-    logger.info(f"Top {limit} lines")
+    logger.info(f"Top %d lines", limit)
     for index, stat in enumerate(top_stats[:limit], 1):
         frame = stat.traceback[0]
         # replace "/path/to/module/file.py" with "module/file.py"
@@ -50,16 +50,15 @@ def display_top(snapshot, key_type="lineno", limit=10):
         )
         line = linecache.getline(frame.filename, frame.lineno).strip()
         if line:
-            logger.info(f"    {line}")
+            logger.info(f"    %d", line)
 
     other = top_stats[limit:]
     if other:
         size = sum(stat.size for stat in other)
-        logger.info(f"{len(other)} other: {size / 1024:.1f} KiB")
+        logger.info("%d other: %.1f KiB", len(other), size / 1024)
     total = sum(stat.size for stat in top_stats)
-    logger.info(f"Total allocated size: {total / 1024:.1f} KiB")
-
+    logger.info("Total allocated size: %.1f KiB", total / 1024)
 
 def display_mem(step):
     mem_used = psutil.Process().memory_info().rss / (1024 * 1024)
-    logger.info(">>>" + str(step) + "\t >>> Mem used : \t" + str(mem_used) + " Mb")
+    logger.info(">>> %s\t >>> Mem used : \t%.2f Mb", step, mem_used)

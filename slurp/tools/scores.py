@@ -120,7 +120,7 @@ def buildings_count(
         gdf_ref_filtered, gdf_predict, how="intersection", keep_geom_type=True
     )
     logger.info(
-        f'Detected buildings : {gdf_intersect["id_1"].nunique()}/{gdf_ref_filtered.shape[0]}'
+        f'Detected buildings : %d / %d', gdf_intersect["id_1"].nunique(), gdf_ref_filtered.shape[0]
     )
 
     # Intersection and union calculation
@@ -154,14 +154,14 @@ def buildings_count(
             ]
         )
         logger.info(
-            f"Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}"
+            f"Detected buildings above %d % : %d / %d", args.thresh_overlay, detected_buildings, gdf_ref_filtered.shape[0]
         )
         df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
         iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
         logger.info(
-            f"Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}"
+            f"Detected buildings with an IoU above %d % : %d /%d", args.thresh_iou, iou_buildings, gdf_ref_filtered.shape[0]
         )
-        logger.info(f"Mean IoU {df_merged['iou'].mean():.2f}")
+        logger.info("Mean IoU %.2f", df_merged['iou'].mean())
 
     logger.info("Buildings count execution time : %s", time.time() - start_time)
 
@@ -189,15 +189,15 @@ def get_score(im_ref, im_predict):
     start_time = time.time()
     logger.info("## SCORES ##")
 
-    logger.info(f"Accuracy >>> {accuracy_score(im_ref, im_predict):.2f}")
+    logger.info(f"Accuracy >>> %.2f", accuracy_score(im_ref, im_predict))
     precision = precision_score(im_ref, im_predict)
-    logger.info(f"Precision >>> {precision:.2f}")
+    logger.info(f"Precision >>> %.2f", precision)
     recall = recall_score(im_ref, im_predict)
-    logger.info(f"Recall >>> {recall:.2f}")
+    logger.info(f"Recall >>> %.2f", recall)
     f1 = 2 * precision * recall / (precision + recall)
-    logger.info(f"F1 >>> {f1:.2f}")
+    logger.info(f"F1 >>> %.2f", f1)
 
-    logger.info(f"Jaccard >>> {jaccard_score(im_ref, im_predict):.2f}")
+    logger.info(f"Jaccard >>> %.2f", jaccard_score(im_ref, im_predict))
     # print("Log loss >>>", log_loss(im_ref, im_predict))
     # print("Confusion matrix >>>", confusion_matrix(im_ref, im_predict))
     # print("F1 >>>", f1_score(im_ref, im_predict))
@@ -421,19 +421,19 @@ def main():
         get_score(im_ref_1d, im_predict_1d)
 
     except FileNotFoundError as fnfe_exception:
-        logger.error("FileNotFoundError", fnfe_exception)
+        logger.error("FileNotFoundError %s", fnfe_exception)
 
     except PermissionError as pe_exception:
-        logger.error("PermissionError", pe_exception)
+        logger.error("PermissionError %s", pe_exception)
 
     except ArithmeticError as ae_exception:
-        logger.error("ArithmeticError", ae_exception)
+        logger.error("ArithmeticError %s", ae_exception)
 
     except MemoryError as me_exception:
-        logger.error("MemoryError", me_exception)
+        logger.error("MemoryError %s", me_exception)
 
     except Exception as exception:  # pylint: disable=broad-except
-        logger.error("oups...", exception)
+        logger.error("oups... %s", exception)
         traceback.print_exc()
 
 

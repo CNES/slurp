@@ -729,7 +729,7 @@ def main():
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
                 logger.info(
-                    "Simple threshold mask NDWI > " + str(args.ndwi_threshold)
+                    "Simple threshold mask NDWI > %s",  str(args.ndwi_threshold)
                 )
                 key_predict = eoexe.n_images_to_m_images_filter(
                     inputs=[key_ndwi, key_valid_stack],

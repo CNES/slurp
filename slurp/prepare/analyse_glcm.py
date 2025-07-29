@@ -106,7 +106,7 @@ def compute_stats(
         ds.close()
         del ds
 
-    logger.info(f"{data_map.shape}")
+    logger.info("%s", data_map.shape)
 
     width = data_map.shape[0]
     height = data_map.shape[1]
@@ -119,7 +119,7 @@ def compute_stats(
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
     for v, c in zip(unique, counts):
-        logger.info(f"{v} : {c}")
+        logger.info(f"%d : %d", v, c)
         if v in vegetation_classes:
             veg += c
 
@@ -134,10 +134,10 @@ def compute_stats(
     )
 
     logger.info("Vegetation (% area) \t: %.2f%%", 100 * veg / nb_total)
-    logger.info(f"Low vegetation (% area) \t: %.2f%%", 100*low_veg/nb_total)
-    logger.info(f"High vegetation (% area) \t: %.2f%%", 100*high_veg/nb_total)
+    logger.info("Low vegetation (% area) \t: %.2f%%", 100*low_veg/nb_total)
+    logger.info("High vegetation (% area) \t: %.2f%%", 100*high_veg/nb_total)
 
-    logger.info(f"export VEG_CLUSTERS= %d", nb_clusters_veg)
-    logger.info(f"export LOW_VEG_CLUSTERS= %d",nb_clusters_low_veg)
+    logger.info("export VEG_CLUSTERS= %d", nb_clusters_veg)
+    logger.info("export LOW_VEG_CLUSTERS= %d",nb_clusters_low_veg)
 
     return nb_clusters_veg, nb_clusters_low_veg
