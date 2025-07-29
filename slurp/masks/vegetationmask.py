@@ -846,56 +846,57 @@ def main():
             end_time = time.time()
 
             logger.info(
-                f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
+                "**** Shadow mask for %s (saved as %s) ****", args.file_vhr, args.vegetationmask
             )
             logger.info(
-                "Total time (user)       :\t"
+                "Total time (user)       :\t%s"
                 + utils.convert_time(end_time - t0)
             )
             logger.info(
-                "- Build_stack           :\t"
+                "- Build_stack           :\t%s"
                 + utils.convert_time(time_stack - t0)
             )
             logger.info(
-                "- Segmentation          :\t"
+                "- Segmentation          :\t%s"
                 + utils.convert_time(time_seg - time_stack)
             )
             logger.info(
-                "- Stats                 :\t"
+                "- Stats                 :\t%s"
                 + utils.convert_time(time_stats - time_seg)
             )
             logger.info(
-                "- Clustering            :\t"
+                "- Clustering            :\t%s"
                 + utils.convert_time(time_cluster - time_stats)
             )
             logger.info(
-                "- Finalize Cython       :\t"
+                "- Finalize Cython       :\t%s"
                 + utils.convert_time(time_final - time_cluster)
             )
             logger.info(
-                "- Post-processing       :\t"
+                "- Post-processing       :\t%s"
                 + utils.convert_time(time_closing - time_final)
             )
             logger.info(
-                "- Write final image     :\t"
+                "- Write final image     :\t%s"
                 + utils.convert_time(end_time - time_closing)
             )
             logger.info("***")
 
+
         except FileNotFoundError as fnfe_exception:
-            logger.error("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError %s", fnfe_exception)
 
         except PermissionError as pe_exception:
-            logger.error("PermissionError", pe_exception)
+            logger.error("PermissionError %s", pe_exception)
 
         except ArithmeticError as ae_exception:
-            logger.error("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError %s", ae_exception)
 
         except MemoryError as me_exception:
-            logger.error("MemoryError", me_exception)
+            logger.error("MemoryError %s", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            logger.error("oups...", exception)
+            logger.error("oups... %s", exception)
             traceback.print_exc()
 
 

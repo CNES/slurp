@@ -600,7 +600,7 @@ def main():
             if args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 logger.info(
-                    f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
+                    f"**** Only urban areas in %s -> mask saved as %s ****", args.file_vhr, args.urbanmask
                 )
 
                 key_predict = eoexe.n_images_to_m_images_filter(
@@ -621,7 +621,7 @@ def main():
             else:
                 # Corner case : no "building pixels" --> void mask (0)
                 logger.info(
-                    f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                    f"**** No urban areas in %s -> void mask saved as %s ****", args.file_vhr, args.urbanmask
                 )
 
                 key_predict = eoexe.n_images_to_m_images_filter(
@@ -639,20 +639,21 @@ def main():
                     key=key_predict[0], img_path=args.urbanmask
                 )
 
+
         except FileNotFoundError as fnfe_exception:
-            logger.error("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError %s", fnfe_exception)
 
         except PermissionError as pe_exception:
-            logger.error("PermissionError", pe_exception)
+            logger.error("PermissionError %s", pe_exception)
 
         except ArithmeticError as ae_exception:
-            logger.error("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError %s", ae_exception)
 
         except MemoryError as me_exception:
-            logger.error("MemoryError", me_exception)
+            logger.error("MemoryError %s", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            logger.error("oups...", exception)
+            logger.error("oups... %s", exception)
             traceback.print_exc()
 
 

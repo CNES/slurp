@@ -411,24 +411,26 @@ def main():
 
             t1 = time.time()
             logger.info(
-                f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
+                "**** Shadow mask for %s (saved as %s) ****", args.file_vhr, args.shadowmask
             )
-            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info(
+                "Total time (user)       :\t%s", utils.convert_time(t1 - t0)
+            )
 
         except FileNotFoundError as fnfe_exception:
-            logger.error("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError %s", fnfe_exception)
 
         except PermissionError as pe_exception:
-            logger.error("PermissionError", pe_exception)
+            logger.error("PermissionError %s", pe_exception)
 
         except ArithmeticError as ae_exception:
-            logger.error("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError %s", ae_exception)
 
         except MemoryError as me_exception:
-            logger.error("MemoryError", me_exception)
+            logger.error("MemoryError %s", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            logger.error("oups...", exception)
+            logger.error("oups... %s", exception)
             traceback.print_exc()
 
 
