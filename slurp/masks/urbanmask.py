@@ -577,7 +577,7 @@ def main():
                     end_time = time.time()
 
                     logger.info(
-                        f"**** Urban proba mask for %s (saved as %s) ****", args.file_vhr, args.urbanmask
+                        "**** Urban proba mask for %s (saved as %s) ****", args.file_vhr, args.urbanmask
                     )
                     logger.info(
                         "Total time (user)       :\t%s", utils.convert_time(end_time - t0)
@@ -596,7 +596,7 @@ def main():
             if args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 logger.info(
-                    f"**** Only urban areas in %s -> mask saved as %s ****", args.file_vhr, args.urbanmask
+                    "**** Only urban areas in %s -> mask saved as %s ****", args.file_vhr, args.urbanmask
                 )
 
                 key_predict = eoexe.n_images_to_m_images_filter(
@@ -617,7 +617,7 @@ def main():
             else:
                 # Corner case : no "building pixels" --> void mask (0)
                 logger.info(
-                    f"**** No urban areas in %s -> void mask saved as %s ****", args.file_vhr, args.urbanmask
+                    "**** No urban areas in %s -> void mask saved as %s ****", args.file_vhr, args.urbanmask
                 )
 
                 key_predict = eoexe.n_images_to_m_images_filter(

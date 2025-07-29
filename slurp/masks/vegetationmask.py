@@ -238,7 +238,7 @@ def apply_clustering(
     """
     # Note : the seed for random generator is fixed to obtain reproductible results
     if params["debug"]:
-        logger.debug(f"K-Means on radiometric indices ({nb_polys} elements")
+        logger.debug("K-Means on radiometric indices (%d elements", nb_polys)
 
     kmeans_rad_indices = KMeans(
         n_clusters=NB_CLUSTERS,
@@ -251,7 +251,7 @@ def apply_clustering(
         np.stack((stats[0:nb_polys], stats[nb_polys : 2 * nb_polys]), axis=1)
     )
     if params["debug"]:
-        logger.debug(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
+        logger.debug("%s", np.sort(kmeans_rad_indices.cluster_centers_, axis=0))
 
     list_clusters = pd.DataFrame.from_records(
         kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"]
@@ -331,7 +331,7 @@ def apply_clustering(
         )
         threshold_max = np.percentile(texture_values, params["filter_texture"])
         if params["debug"]:
-            logger.debug("threshold_texture_max", threshold_max)
+            logger.debug("threshold_texture_max %d", threshold_max)
 
         # Save histograms
         if params["texture_mode"] == "debug" or params["save_mode"] == "debug":
@@ -359,7 +359,7 @@ def apply_clustering(
         data_textures[data_textures > threshold_max] = threshold_max
         if params["debug"]:
             logger.debug(
-                "K-Means on texture : " + str(len(data_textures)) + " elements"
+                "K-Means on texture : %s elements", str(len(data_textures))
             )
 
         kmeans_texture = KMeans(
@@ -372,7 +372,7 @@ def apply_clustering(
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
 
         if params["debug"]:
-            logger.debug(f"{np.sort(kmeans_texture.cluster_centers_,axis=0)=}")
+            logger.debug("%s", np.sort(kmeans_texture.cluster_centers_, axis=0))
 
         list_clusters = pd.DataFrame.from_records(
             kmeans_texture.cluster_centers_, columns=["mean_texture"]

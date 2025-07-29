@@ -888,7 +888,7 @@ def main():
             end_time = time.time()
 
             logger.info(
-                f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
+                f"**** Water mask for %s (saved as %s) ****", args.file_vhr, args.watermask
             )
             logger.info(
                 "Total time (user)       :\t%s", utils.convert_time(end_time - t0)
