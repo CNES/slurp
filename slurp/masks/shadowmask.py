@@ -144,7 +144,7 @@ def getarguments() -> dict:
     )
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
-    group4.add_argument("-shadowmask", help="Output classification filename")
+    group4.add_argument("-shadowmask", type=str, help="Output classification filename")
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
@@ -185,6 +185,8 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
+    print('/'*20)
+    print(shadowmask)
     file_vhr = argsdict.get("file_vhr", file_vhr)
     valid_stack = argsdict.get("valid_stack", valid_stack)
     watermask = argsdict.get("watermask", watermask)
