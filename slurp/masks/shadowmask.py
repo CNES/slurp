@@ -185,6 +185,20 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
+    file_vhr = argsdict.get("file_vhr", file_vhr)
+    valid_stack = argsdict.get("valid_stack", valid_stack)
+    watermask = argsdict.get("watermask", watermask)
+    th_rgb = argsdict.get("th_rgb", th_rgb)
+    th_nir = argsdict.get("th_nir", th_nir)
+    absolute_threshold = argsdict.get("absolute_threshold", absolute_threshold)
+    percentile = argsdict.get("percentile", percentile)
+    binary_opening = argsdict.get("binary_opening", binary_opening)
+    remove_small_objects = argsdict.get("remove_small_objects", remove_small_objects)
+    shadowmask = argsdict.get("shadowmask", shadowmask)
+    n_workers = argsdict.get("n_workers", n_workers)
+    tile_max_size = argsdict.get("tile_max_size", tile_max_size)
+    multiproc_context = argsdict.get("multiproc_context", multiproc_context)
+
     if logs_to_file:
         config_log = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
