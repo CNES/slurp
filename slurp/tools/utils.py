@@ -34,7 +34,7 @@ from slurp.tools.constant import NODATA_INT8
 logger = logging.getLogger("slurp")
 
 def setup_logging(config_file : str):
-    with open(config_file) as f_in:
+    with open(config_file, encoding='utf-8') as f_in:
         config = json.load(f_in)
 
     logging.config.dictConfig(config)
@@ -86,4 +86,4 @@ def display_mem_usage(debug_mode, message):
         memory_use = (
             python_process.memory_info()[0] / 2.0**30
         )  # memory use in GB...I think
-        logger.debug(f">> {message} >> Mem usage : {memory_use} Gb")
+        logger.debug(">> %s >> Mem usage : %s Gb",message, memory_use)

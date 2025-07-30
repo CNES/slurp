@@ -20,9 +20,9 @@
 
 """Brings together functions used by eoscale"""
 import copy
+import logging
 
 import numpy as np
-import logging
 
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 

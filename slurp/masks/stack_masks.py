@@ -190,17 +190,15 @@ def post_process(
     stack[2] = markers
     stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
 
-    """
-    # Layer 3 : segmentation from watershed, before morpho/clean
-    stack[3] = seg
-    stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
-    
-    buildings = np.where(urbanmask > params["building_threshold"],1,0)
-    stack[4] = morpho_clean(buildings[0], params)
-    stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
-    """
+    # # Layer 3 : segmentation from watershed, before morpho/clean
+    # stack[3] = seg
+    # stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
+    #
+    # # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
+    #
+    # buildings = np.where(urbanmask > params["building_threshold"],1,0)
+    # stack[4] = morpho_clean(buildings[0], params)
+    # stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     return stack
 

@@ -21,10 +21,10 @@
 """Compute building and road masks from VHR images thanks to OSM layers"""
 
 import argparse
+import logging
 import gc
 import time
 import traceback
-import logging
 import pathlib
 from os import makedirs, path
 
@@ -413,7 +413,6 @@ def main():
 
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
-            profile_phr = eoscale_manager.get_profile(key_phr)
 
             # Valid stack
             key_original_valid_stack = eoscale_manager.open_raster(

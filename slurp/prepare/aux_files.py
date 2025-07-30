@@ -21,9 +21,9 @@
 
 """Brings together the auxiliary files reading functions"""
 
+import logging
 import numpy as np
 import scipy
-import logging
 
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_INT16
@@ -35,8 +35,6 @@ def aux_file_recovery(
     global_data: str,
     reprojected_data: str,
     sensor_mode: bool,
-    dtm_file: str = "",
-    geoid_file: str = "",
     grid_sensor: tuple = (),
     grid_geo: tuple = (),
     all_coords: np.ndarray = None,
@@ -52,7 +50,8 @@ def aux_file_recovery(
     :returns: global data cropped onto target image geometry
     """
     logger.info(
-        f"Recover file {global_data=} to {reprojected_data=} onto {file_ref=} geometry"
+        "Recover file global_data=%s to reprojected_data=%s onto file_ref=%s geometry",
+        global_data, reprojected_data, file_ref
     )
     if sensor_mode:
         geometry.sensor_projection(

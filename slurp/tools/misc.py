@@ -40,17 +40,20 @@ def display_top(snapshot, key_type="lineno", limit=10):
     )
     top_stats = snapshot.statistics(key_type)
 
-    logger.info(f"Top %d lines", limit)
+    logger.info("Top %d lines", limit)
     for index, stat in enumerate(top_stats[:limit], 1):
         frame = stat.traceback[0]
         # replace "/path/to/module/file.py" with "module/file.py"
         filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-        logger.info(
-            f"#{index}: {filename}:{frame.lineno}: {stat.size / 1024:.1f} KiB"
-        )
+        logger.info("#%d: %s:%d: %.1f KiB",
+                    index,
+                    filename,
+                    frame.lineno,
+                    stat.size / 1024
+                    )
         line = linecache.getline(frame.filename, frame.lineno).strip()
         if line:
-            logger.info(f"    %d", line)
+            logger.info("    %d", line)
 
     other = top_stats[limit:]
     if other:

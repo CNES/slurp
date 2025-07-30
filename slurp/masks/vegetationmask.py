@@ -27,7 +27,7 @@ import traceback
 import logging
 import pathlib
 from math import ceil, sqrt
-from os import makedirs, path, getcwd
+from os import makedirs, path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom

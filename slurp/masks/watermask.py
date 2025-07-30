@@ -28,7 +28,6 @@ import traceback
 import logging
 import pathlib
 from os import makedirs, path
-from typing import get_args
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -888,7 +887,7 @@ def main():
             end_time = time.time()
 
             logger.info(
-                f"**** Water mask for %s (saved as %s) ****", args.file_vhr, args.watermask
+                "**** Water mask for %s (saved as %s) ****", args.file_vhr, args.watermask
             )
             logger.info(
                 "Total time (user)       :\t%s", utils.convert_time(end_time - t0)

@@ -5,19 +5,6 @@
     "simple": {
       "format": "%(levelname)s: %(message)s",
       "datefmt": "%Y-%m-%dT%H:%M:%S%z"
-    },
-    "json": {
-      "()": "slurp.tools.mylogger.MyJSONFormatter",
-      "fmt_keys": {
-        "level": "levelname",
-        "message": "message",
-        "timestamp": "timestamp",
-        "logger": "name",
-        "module": "module",
-        "function": "funcName",
-        "line": "lineno",
-        "thread_name": "threadName"
-      }
     }
   },
   "handlers": {

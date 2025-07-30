@@ -24,10 +24,10 @@ georeferenced geometry (with superimpose) or Shareloc, to project images into se
 """
 
 import time
+import logging
 
 import bindings_cpp
 import numpy as np
-import logging
 import scipy
 import otbApplication as otb
 import rasterio as rio

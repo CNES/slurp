@@ -20,10 +20,10 @@
 
 """Brings together useful functions common to the different scripts"""
 import json
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
-import logging
 import rasterio as rio
 
 from slurp.tools.constant import COMPRESSION, DRIVER

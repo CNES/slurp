@@ -120,7 +120,7 @@ def buildings_count(
         gdf_ref_filtered, gdf_predict, how="intersection", keep_geom_type=True
     )
     logger.info(
-        f'Detected buildings : %d / %d', gdf_intersect["id_1"].nunique(), gdf_ref_filtered.shape[0]
+        "Detected buildings : %d / %d", gdf_intersect["id_1"].nunique(), gdf_ref_filtered.shape[0]
     )
 
     # Intersection and union calculation
@@ -154,14 +154,14 @@ def buildings_count(
             ]
         )
         logger.info(
-            f"Detected buildings above %d % : %d / %d", args.thresh_overlay, detected_buildings, gdf_ref_filtered.shape[0]
+            "Detected buildings above %d % : %d / %d", args.thresh_overlay, detected_buildings, gdf_ref_filtered.shape[0]
         )
         df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
         iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
         logger.info(
-            f"Detected buildings with an IoU above %d % : %d /%d", args.thresh_iou, iou_buildings, gdf_ref_filtered.shape[0]
+            "Detected buildings with an IoU above %d % : %d /%d", args.thresh_iou, iou_buildings, gdf_ref_filtered.shape[0]
         )
-        logger.info("Mean IoU %.2f", df_merged['iou'].mean())
+        logger.info("Mean IoU %.2f", df_merged["iou"].mean())
 
     logger.info("Buildings count execution time : %s", time.time() - start_time)
 
