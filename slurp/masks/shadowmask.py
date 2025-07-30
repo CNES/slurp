@@ -185,8 +185,9 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    print('/'*20)
-    print(shadowmask)
+    #Supress all keys with None values in argsdict
+    argsdict = {k: v for k, v in argsdict.items() if v is not None}
+
     file_vhr = argsdict.get("file_vhr", file_vhr)
     valid_stack = argsdict.get("valid_stack", valid_stack)
     watermask = argsdict.get("watermask", watermask)
