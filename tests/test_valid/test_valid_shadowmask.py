@@ -50,6 +50,8 @@ def compute_shadowmask(file, nb_workers, valid_stack=None):
     output_image = get_output_path(file, "shadowmask", remove=True)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
+    print(f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-shadowmask {output_image} -valid {valid_stack} -log_f")
     os.system(
         f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-shadowmask {output_image} -valid {valid_stack} -log_f"
