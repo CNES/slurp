@@ -40,6 +40,8 @@ def extract_field_info(model_class, prefix=""):
 def generate_markdown_table(config_class):
     table_data = extract_field_info(config_class)
     df = pd.DataFrame(table_data, columns=["Nom du Champ", "Type Attendu", "Description"])
+
+    df.to_csv("pydantic_class_filled.csv")
     return df
 
 
@@ -232,4 +234,4 @@ def load_user_config(file_path: str) -> 'UserConfig':
 markdown_table = generate_markdown_table(MainConfig)
 
 # Affichage du tableau
-print(markdown_table.head())
+print(markdown_table)

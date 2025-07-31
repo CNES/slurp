@@ -143,7 +143,7 @@ def getarguments() -> dict:
     )
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
-    group4.add_argument("-shadowmask", type=str, help="Output classification filename")
+    group4.add_argument("-shadowmask", help="Output classification filename")
 
     group5 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
     group5.add_argument("-n_workers", type=int, help="Number of CPU")
