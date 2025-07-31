@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import rasterio as rio
-from slurp.tools.pydantic_class import load_main_config, load_user_config
+from slurp.tools.pydantic_class import load_config, MainConfig, UserConfig
 
 from slurp.tools.constant import COMPRESSION, DRIVER
 
@@ -44,7 +44,7 @@ def read_json(
     """
     # Read the JSON data from the main config
     try:
-        config = load_main_config(main_config_file)
+        config = load_config(main_config_file, MainConfig)
         full_args = config.dict()
         argsdict = full_args[keys[0]]
         for key in keys[1:]:
@@ -60,7 +60,7 @@ def read_json(
     if user_config_file:
         # Read the JSON data from the input file
         try:
-            config = load_user_config(user_config_file)
+            config = load_config(user_config_file, UserConfig)
             full_args = config.dict()
             for k in full_args.keys():
                 argsdict.update(full_args[k])
