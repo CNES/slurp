@@ -585,17 +585,27 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-    return parser.parse_args()
+    args = vars(parser.parse_args())
+
+    return args
 
 
 # --Main function-- #
 
 
-def main():
-    """Main function that compute Urbanmask"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool,
+                    file_ndvi : str, file_ndwi : str, extracted_pekel : str, extracted_hand : str, files_layers : list,
+                    file_filters : list, thresh_pekel : float, hand_strict : bool, thresh_hand : int, strict_thresh : float,
+                    save_mode : str, simple_ndwi_threshold : bool, ndwi_threshold : float,
+                    samples_method : str, nb_samples_water : int, nb_samples_other : int, nb_samples_auto : bool,
+                    auto_pct : float, smart_area_pct : int, smart_minimum : int, grid_spacing : int,
+                    max_depth : int, nb_estimators : int, n_jobs : int,
+                    no_pekel_filter : bool, hand_filter : bool, binary_closing : int,
+                    area_closing : int, remove_small_holes : int, watermask : str,
+                    value_classif : int, n_workers : int, tile_max_size : int, multiproc_context : str):
+    """
+    Main API to compute water mask.
+    """
     # Read the JSON files
     keys = [
         "input",
@@ -606,17 +616,21 @@ def main():
         "water",
     ]
     argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+        main_config, keys, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    cli_params = ["main_config", "debug", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi", "file_ndwi",
+                         "extracted_pekel", "extracted_hand", "files_layers", "thresh_pekel", "hand_strict", "thresh_hand", "strict_thresh",
+                         "save_mode", "simple_ndwi_threshold", "ndwi_threshold", "samples_method", "nb_samples_water", "nb_samples_other",
+                         "nb_samples_auto", "auto_pct", "smart_area_pct", "smart_minimum", "grid_spacing", "max_depth", "nb_estimators",
+                         "n_jobs", "no_pekel_filter", "hand_filter", "binary_closing", "area_closing", "remove_small_holes",
+                         "watermask", "value_classif", "n_workers", "tile_max_size", "multiproc_context"]
 
-    args = argparse.Namespace(**argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    if args.logs_to_file:
+    if logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
@@ -624,6 +638,7 @@ def main():
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Create output folder
     makedirs(path.dirname(args.watermask), exist_ok=True)
@@ -930,6 +945,13 @@ def main():
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the water mask computation.
+    It parses the command line arguments and calls the slurp_watermask function.
+    """
+    args = getarguments()
+    slurp_watermask(**args)
 
 if __name__ == "__main__":
     main()
