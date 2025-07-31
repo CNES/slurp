@@ -651,15 +651,20 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = vars(parser.parse_args())
 
-    return parser.parse_args()
+    return args
 
 
-def main():
-    """Main function that compute Vegetationmask"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool,
+                        file_ndvi : str, file_ndwi : str, file_texture : str, texture_mode : str, filter_texture : int, save_mode : str,
+                        slic_seg_size : int, slic_compactness : float, nb_clusters_veg : int, min_ndvi_veg : int,
+                        max_ndvi_noveg : int, non_veg_clusters : bool, nb_clusters_low_veg : int, max_texture_th : int,
+                        binary_dilation : int, remove_small_objects : int, remove_small_holes : int,
+                        vegetationmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
+    """
+    Main API to compute shadow mask.
+    """
     # Read the JSON files
     keys = [
         "input",
@@ -670,23 +675,27 @@ def main():
         "vegetation",
     ]
     argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+        main_config, keys, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    cli_params = ["main_config", "debug", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi", "file_ndwi",
+                  "file_texture", "texture_mode", "filter_texture", "save_mode","slic_seg_size", "slic_compactness", "nb_clusters_veg",
+                  "min_ndvi_veg", "max_ndvi_noveg", "non_veg_clusters", "nb_clusters_low_veg", "max_texture_th", "binary_dilation",
+                  "remove_small_objects", "remove_small_holes", "vegetationmask", "n_workers", "tile_max_size", "multiproc_context"]
 
-    args = argparse.Namespace(**argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    if args.logs_to_file:
+    if logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)
+
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Create output folder
     makedirs(path.dirname(args.vegetationmask), exist_ok=True)
@@ -898,6 +907,13 @@ def main():
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the vegetation mask computation.
+    It parses the command line arguments and calls the slurp_vegetationmask function.
+    """
+    args = getarguments()
+    slurp_vegetationmask(**args)
 
 if __name__ == "__main__":
     main()
