@@ -139,7 +139,6 @@ def getarguments() -> dict:
     group3.add_argument(
         "-remove_small_objects",
         type=int,
-        default=0,
         help="The maximum area, in pixels, of a contiguous object that will be removed",
     )
 
@@ -151,7 +150,6 @@ def getarguments() -> dict:
     group5.add_argument(
         "-tile_max_size",
         type=int,
-        default=0,
         help="Max tile size to be processed (0 : default)",
     )
     group5.add_argument(
@@ -163,6 +161,17 @@ def getarguments() -> dict:
     args = vars(parser.parse_args())
 
     return args
+
+def update_params(params, argsdict):
+    for param in params:
+        # If the parameter from the CLI is None, we take the value from argsdict
+        # else we update argsdict with the value from the CLI
+        if locals()[param] is None:
+            locals()[param] = argsdict.get(param)
+        else:
+            argsdict[param] = locals()[param]
+
+    return locals(), argsdict
 
 
 def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
@@ -185,22 +194,14 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    #Supress all keys with None values in argsdict
-    argsdict = {k: v for k, v in argsdict.items() if v is not None}
+    cli_params = ["file_vhr", "valid_stack", "watermask", "th_rgb",
+                  "th_nir", "absolute_threshold", "percentile", "binary_opening",
+                  "remove_small_objects", "shadowmask", "n_workers", "tile_max_size", "multiproc_context"]
 
-    file_vhr = argsdict.get("file_vhr", file_vhr)
-    valid_stack = argsdict.get("valid_stack", valid_stack)
-    watermask = argsdict.get("watermask", watermask)
-    th_rgb = argsdict.get("th_rgb", th_rgb)
-    th_nir = argsdict.get("th_nir", th_nir)
-    absolute_threshold = argsdict.get("absolute_threshold", absolute_threshold)
-    percentile = argsdict.get("percentile", percentile)
-    binary_opening = argsdict.get("binary_opening", binary_opening)
-    remove_small_objects = argsdict.get("remove_small_objects", remove_small_objects)
-    shadowmask = argsdict.get("shadowmask", shadowmask)
-    n_workers = argsdict.get("n_workers", n_workers)
-    tile_max_size = argsdict.get("tile_max_size", tile_max_size)
-    multiproc_context = argsdict.get("multiproc_context", multiproc_context)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
     if logs_to_file:
         config_log = pathlib.Path("slurp/tools/logs/out2json.json")
@@ -210,50 +211,55 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Create output folder
-    makedirs(path.dirname(shadowmask), exist_ok=True)
+    makedirs(path.dirname(args.shadowmask), exist_ok=True)
 
     # Mask calculation
-    with eom.EOContextManager(nb_workers=n_workers, tile_mode=True, tile_max_size=tile_max_size) as eoscale_manager:
+    with eom.EOContextManager(
+            nb_workers=args.n_workers,
+            tile_mode=True,
+            tile_max_size=args.tile_max_size,
+    ) as eoscale_manager:
         try:
 
             # Store image in shared memory
-            key_phr = eoscale_manager.open_raster(raster_path=file_vhr)
+            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             local_phr = eoscale_manager.get_array(key_phr)
             nodata = eoscale_manager.get_profile(key_phr)["nodata"]
 
             # Valid stack
             key_valid_stack = eoscale_manager.open_raster(
-                raster_path=valid_stack
+                raster_path=args.valid_stack
             )
 
-            if absolute_threshold is False:
+            if args.absolute_threshold is False:
                 # Compute threshold for each band
                 th_bands = np.zeros(4)
                 for cpt in range(3):
                     min_band = np.percentile(
                         local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        percentile,
+                        args.percentile,
                     )
                     max_percentile = np.percentile(
                         local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        100 - percentile,
+                        100 - args.percentile,
                     )
-                    th_bands[cpt] = min_band + th_rgb * (
+                    th_bands[cpt] = min_band + args.th_rgb * (
                             max_percentile - min_band
                     )
 
                 cpt = 3
                 min_band = np.percentile(
                     local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    percentile,
+                    args.percentile,
                 )
                 max_percentile = np.percentile(
                     local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    100 - percentile,
+                    100 - args.percentile,
                 )
-                th_bands[cpt] = min_band + th_nir * (
+                th_bands[cpt] = min_band + args.th_nir * (
                         max_percentile - min_band
                 )
             else:
@@ -261,17 +267,17 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
                 # Useful when using calibrated images
                 th_bands = np.zeros(4)
                 for i in range(4):
-                    th_bands[i] = absolute_threshold
+                    th_bands[i] = args.absolute_threshold
 
             params = {
                 "thresholds": th_bands,
-                "binary_opening": binary_opening,
-                "remove_small_objects": remove_small_objects,
+                "binary_opening": args.binary_opening,
+                "remove_small_objects": args.remove_small_objects,
             }
 
-            if watermask and path.isfile(watermask):
+            if args.watermask and path.isfile(args.watermask):
                 key_watermask = eoscale_manager.open_raster(
-                    raster_path=watermask
+                    raster_path=args.watermask
                 )
             else:
                 profile = eoscale_manager.get_profile(key_phr)
@@ -285,13 +291,13 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
                 image_filter=compute_shadowmask,
                 filter_parameters=params,
                 generate_output_profiles=eo_utils.single_uint8_profile,
-                stable_margin=remove_small_objects,
+                stable_margin=args.remove_small_objects,
                 context_manager=eoscale_manager,
-                multiproc_context=multiproc_context,
+                multiproc_context=args.multiproc_context,
                 filter_desc="Shadow mask processing...",
             )
 
-            eoscale_manager.write(key=mask_shadow[0], img_path=shadowmask)
+            eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
 
             end_time = time.time()
             logger.info(
