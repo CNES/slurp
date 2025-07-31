@@ -175,45 +175,9 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
 
     return args
-
-
-def read_and_overload_arguments(args: dict) -> dict:
-    """
-    This function aims to read and overload arguments.
-    To run the prepare pipeline, the user has to give at least 1 JSON file
-    called main_config. It contains all the common parameters that the user might
-    not want to modify on each run of prepare pipeline (e.g 'resources' arg).
-
-    If the user want to overload this first JSON file or add new keys, he can do it by giving
-    a second file called user_config. The user can also overload the first JSON file
-    by giving other arguments that matches the keys in the main_config JSON file (e.g
-    -file_vhr, etc ...).
-
-    Args:
-        arguments (dict): list of all arguments including main_config and user_config
-        + all others arguments to overload.
-
-    Returns:
-        dict: The final dict of arguments.
-    """
-    keys_to_keep = ["input", "prepare", "aux_layers", "resources"]
-
-    # Read the JSON files
-    argsdict = io_utils.read_json(
-        args["main_config"], keys_to_keep, args.get("user_config")
-    )
-
-    # Overload with manually passed arguments if not None
-    for key in args.keys():
-        if args[key] is not None:
-            argsdict[key] = args[key]
-
-    return argsdict
-
 
 def add_cluster_vegetation_info(
     args_dict: dict, args: argparse.Namespace
@@ -559,7 +523,12 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         json.dump(final_used_config, file_to_save, indent=4)
 
 
-def main():
+def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
+                  file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
+                  file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
+                  pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
+                  wsf: str, extracted_wsf: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
+                  land_cover_map: str, cropped_land_cover_map: bool, n_workers: int, tile_max_size: int, multiproc_context: str):
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
@@ -570,10 +539,25 @@ def main():
     sensor geometry, geoid and DTM.
 
     """
-    argsdict = read_and_overload_arguments(vars(getarguments()))
-    args = argparse.Namespace(**argsdict)
+    # Read the JSON files
+    keys = ["input", "prepare", "aux_layers", "resources"]
+    argsdict = io_utils.read_json(
+        main_config, keys, user_config)
 
-    if args.logs_to_file:
+    cli_params = ["main_config", "overwrite", "effective_used_config", "logs_to_file", "user_config",
+                  "file_vhr", "sensor_mode", "dtm", "geoid_file", "valid_stack", "cloud_mask",
+                  "file_ndvi", "file_ndwi", "red", "nir", "green", "pekel_method", "pekel",
+                  "pekel_obs", "pekel_monthly_occurrence", "extracted_pekel", "hand", "extracted_hand",
+                  "wsf", "extracted_wsf", "file_texture", "texture_rad", "analyse_glcm",
+                  "land_cover_map", "cropped_land_cover_map", "n_workers",
+                  "tile_max_size", "multiproc_context"]
+
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
+
+    if logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
@@ -583,6 +567,7 @@ def main():
     logger.info("SLURP_PREPARE")
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
     with eom.EOContextManager(
@@ -685,6 +670,13 @@ def main():
 
     logger.info("End of prepare step")
 
+def main():
+    """
+    Main function to run the preparation step of SLURP.
+    It parses the command line arguments and calls the slurp_prepare function.
+    """
+    args = getarguments()
+    slurp_prepare(**args)
 
 if __name__ == "__main__":
     main()
