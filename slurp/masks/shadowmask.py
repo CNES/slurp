@@ -176,9 +176,9 @@ def update_params(params, argsdict):
 
 def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
                     th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
-                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str) -> list:
+                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
     """
-    TODO ? faire en sorte que ca soit l'équivalent de la CLI pour que ca soit montrable dans un notebook
+    Main API to compute shadow mask.
     """
     t0 = time.time()
 
