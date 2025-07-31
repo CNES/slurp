@@ -316,15 +316,21 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = vars(parser.parse_args())
 
-    return parser.parse_args()
+    return args
 
 
-def main():
-    """Main function that stacks the masks compute before"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+                    valid_stack: bool, vegetationmask: str, watermask: str, urbanmask: str, shadowmask: str,
+                    extracted_wsf: str, building_threshold: int, building_erosion: int, bonus_gt: int,
+                    malus_shadow: int, stackmask: str, value_classif_low_veg: int, value_classif_high_veg: int,
+                    value_classif_water: int, value_classif_buildings: int, value_classif_bare_ground: int,
+                    value_classif_false_positive_buildings: int, value_classif_background: int, n_workers: int, tile_max_size: int,
+                    multiproc_context: str):
+    """
+    Main API to compute urban mask.
+    """
     # Read the JSON files
     keys = [
         "input",
@@ -335,17 +341,21 @@ def main():
         "stack",
     ]
     argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+        main_config, keys, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    cli_params = ["main_config", "logs_to_file", "user_config", "file_vhr", "valid_stack", "vegetationmask", "watermask", "urbanmask",
+                  "shadowmask", "extracted_wsf", "building_threshold", "building_erosion", "bonus_gt",
+                  "malus_shadow", "stackmask", "value_classif_low_veg", "value_classif_high_veg",
+                  "value_classif_water", "value_classif_buildings", "value_classif_bare_ground",
+                  "value_classif_false_positive_buildings", "value_classif_background", "n_workers",
+                  "tile_max_size", "multiproc_context"]
 
-    args = argparse.Namespace(**argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    if args.logs_to_file:
+    if logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
@@ -353,6 +363,7 @@ def main():
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Create output folder
     makedirs(path.dirname(args.stackmask), exist_ok=True)
@@ -431,6 +442,13 @@ def main():
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the stack mask computation.
+    It parses the command line arguments and calls the slurp_stackmask function.
+    """
+    args = getarguments()
+    slurp_stackmask(**args)
 
 if __name__ == "__main__":
     main()

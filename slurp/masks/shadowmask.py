@@ -162,17 +162,6 @@ def getarguments() -> dict:
 
     return args
 
-def update_params(params, argsdict):
-    for param in params:
-        # If the parameter from the CLI is None, we take the value from argsdict
-        # else we update argsdict with the value from the CLI
-        if locals()[param] is None:
-            locals()[param] = argsdict.get(param)
-        else:
-            argsdict[param] = locals()[param]
-
-    return locals(), argsdict
-
 
 def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
                     th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
