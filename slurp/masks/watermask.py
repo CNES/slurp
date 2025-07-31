@@ -618,7 +618,7 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    cli_params = args = ["main_config", "debug", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi", "file_ndwi",
+    cli_params = ["main_config", "debug", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi", "file_ndwi",
                          "extracted_pekel", "extracted_hand", "files_layers", "thresh_pekel", "hand_strict", "thresh_hand", "strict_thresh",
                          "save_mode", "simple_ndwi_threshold", "ndwi_threshold", "samples_method", "nb_samples_water", "nb_samples_other",
                          "nb_samples_auto", "auto_pct", "smart_area_pct", "smart_minimum", "grid_spacing", "max_depth", "nb_estimators",
