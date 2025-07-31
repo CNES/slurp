@@ -339,7 +339,7 @@ def pekel_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.pekel and args.extracted_pekel:
-        if args.overwrite or not path.isfile(args.extracted_pekel):
+        if args.extracted_pekel is not None and (args.overwrite or not path.isfile(args.extracted_pekel)):
             makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
             if args.pekel_method == "month":
                 file_pekel = path.join(
@@ -397,7 +397,7 @@ def hand_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.hand and args.extracted_hand:
-        if args.overwrite or not path.isfile(args.extracted_hand):
+        if args.extracted_hand is not None and (args.overwrite or not path.isfile(args.extracted_hand)):
             makedirs(path.dirname(args.extracted_hand), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
@@ -433,7 +433,7 @@ def wsf_extraction(
     """
 
     if args.wsf and args.extracted_wsf:
-        if args.overwrite or not path.isfile(args.extracted_wsf):
+        if args.extracted_wsf is not None and (args.overwrite or not path.isfile(args.extracted_wsf)):
             makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
@@ -470,7 +470,7 @@ def compute_texture(
     valid stack image.
     """
     if args.texture_rad:
-        if args.overwrite or not path.isfile(args.file_texture):
+        if args.file_texture is not None and (args.overwrite or not path.isfile(args.file_texture)):
             makedirs(path.dirname(args.file_texture), exist_ok=True)
             # take percentiles to avoid outliers that could affect texture computation
             # compute texture on NIR band
@@ -587,7 +587,7 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            if args.overwrite or not path.isfile(args.valid_stack):
+            if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
                 valid_stack_key = create_valid_stack(
                     args, eoscale_manager, key_vhr, profile
                 )
@@ -603,7 +603,7 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
                 ]
 
             # NDVI
-            if args.overwrite or not path.isfile(args.file_ndvi):
+            if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
                 ndvi_key = compute_ndvi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
@@ -612,7 +612,7 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
                 logger.info("Not computing NDVI : the file already exists.")
 
             # NDWI
-            if args.overwrite or not path.isfile(args.file_ndwi):
+            if args.file_ndwi is not None and (args.overwrite or not path.isfile(args.file_ndwi)):
                 ndwi_key = compute_ndwi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
