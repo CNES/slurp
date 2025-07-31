@@ -365,29 +365,43 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = vars(parser.parse_args())
 
-    return parser.parse_args()
+    return args
 
 
-def main():
-    """Main function that compute Urbanmask"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+                    valid_stack: bool, file_ndvi: str, file_ndwi: str, extracted_wsf: str, files_layers: list, watermask: str,
+                    vegetationmask: str, shadowmask: str, vegmask_min_value: int, veg_binary_dilation: int, value_classif: int,
+                    gt_binary_erosion: int, save_mode: str, nb_samples_urban: int, nb_samples_other: int, max_depth: int,
+                    nb_estimators: int, n_jobs: int, urbanmask: str, n_workers: int, tile_max_size: int, multiproc_context: str):
+    """
+    Main API to compute urban mask.
+    """
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "resources", "urban"]
+    keys = [
+        "input",
+        "aux_layers",
+        "masks",
+        "resources",
+        "post_process",
+        "urban",
+    ]
     argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+        main_config, keys, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    cli_params = ["main_config", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi",
+                  "file_ndwi", "extracted_wsf", "files_layers", "watermask",
+                  "vegetationmask", "shadowmask", "vegmask_min_value", "veg_binary_dilation", "value_classif",
+                  "gt_binary_erosion", "save_mode", "nb_samples_urban", "nb_samples_other", "max_depth",
+                  "nb_estimators", "n_jobs", "urbanmask", "n_workers", "tile_max_size", "multiproc_context"]
 
-    args = argparse.Namespace(**argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    if args.logs_to_file:
+    if logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
@@ -395,6 +409,7 @@ def main():
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
+    args = argparse.Namespace(**argsdict)
 
     # Create output folder
     makedirs(path.dirname(args.urbanmask), exist_ok=True)
@@ -655,6 +670,13 @@ def main():
             logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the urban mask computation.
+    It parses the command line arguments and calls the slurp_urbanmask function.
+    """
+    args = getarguments()
+    slurp_urbanmask(**args)
 
 if __name__ == "__main__":
     main()
