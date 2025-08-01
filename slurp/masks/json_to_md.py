@@ -7,7 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 import mkdocs.plugins
 
-from pydantic_class import MainConfig, UserConfig
+from slurp.tools.pydantic_class import MainConfig, UserConfig
 
 
 def sort_fields(schema: dict[str, Any], excluded_fields: list[str]) -> tuple[
