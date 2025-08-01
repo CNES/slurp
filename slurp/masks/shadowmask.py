@@ -28,7 +28,8 @@ import time
 import traceback
 import logging
 import pathlib
-from os import makedirs, path
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -157,10 +158,16 @@ def getarguments() -> dict:
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = parser.parse_args()
 
-    args = vars(parser.parse_args())
+    arglist = []
+    for arg in parser._actions:
+        arglist.append(arg.dest)
 
-    return args
+    with open("slurp/tools/logs/args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
 def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
@@ -183,9 +190,10 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    cli_params = ["file_vhr", "valid_stack", "watermask", "th_rgb",
-                  "th_nir", "absolute_threshold", "percentile", "binary_opening",
-                  "remove_small_objects", "shadowmask", "n_workers", "tile_max_size", "multiproc_context"]
+    # Read the list back from the JSON file
+    with open("slurp/tools/logs/args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("slurp/tools/logs/args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
