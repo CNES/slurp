@@ -225,5 +225,5 @@ def load_config(file_path: str, config_class: BaseModel) -> BaseModel:
 
 
 # Generate markdown table from pydantic class
-generate_markdown_table(MainConfig, "docs/source/main_config_descr.md")
-generate_markdown_table(UserConfig, "docs/source/user_config_descr.md")
+# generate_markdown_table(MainConfig, "docs/source/main_config_descr.md")
+# generate_markdown_table(UserConfig, "docs/source/user_config_descr.md")
