@@ -585,9 +585,15 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
-    return args
+    # Print the list of arguments
+    print(f'Arguments defined: {list(parser._actions)}')
+
+    for arg in parser._actions:
+        print(f'Argument: {arg.dest}, Help: {arg.help}')
+
+    return vars(args)
 
 
 # --Main function-- #
