@@ -162,7 +162,7 @@ def getarguments() -> dict:
 
     arglist = []
     for arg in parser._actions:
-        if arg.dest not in ["help", "main_config", "logs_to_file", "user_config"]:
+        if arg.dest not in ["help"]:
             arglist.append(arg.dest)
 
     with open("slurp/tools/logs/args_list.json", 'w') as f:
