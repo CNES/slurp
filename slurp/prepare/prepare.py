@@ -23,11 +23,11 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
-import json
 import time
 import traceback
 import pathlib
-from os import makedirs, path, getcwd
+import json
+from os import makedirs, path, remove
 from typing import List
 import logging
 
@@ -175,9 +175,17 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("slurp/tools/logs/args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 def add_cluster_vegetation_info(
     args_dict: dict, args: argparse.Namespace
@@ -544,13 +552,10 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    cli_params = ["main_config", "overwrite", "effective_used_config", "logs_to_file", "user_config",
-                  "file_vhr", "sensor_mode", "dtm", "geoid_file", "valid_stack", "cloud_mask",
-                  "file_ndvi", "file_ndwi", "red", "nir", "green", "pekel_method", "pekel",
-                  "pekel_obs", "pekel_monthly_occurrence", "extracted_pekel", "hand", "extracted_hand",
-                  "wsf", "extracted_wsf", "file_texture", "texture_rad", "analyse_glcm",
-                  "land_cover_map", "cropped_land_cover_map", "n_workers",
-                  "tile_max_size", "multiproc_context"]
+    # Read the list back from the JSON file
+    with open("slurp/tools/logs/args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("slurp/tools/logs/args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI

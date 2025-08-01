@@ -32,7 +32,8 @@ import time
 import traceback
 import logging
 import pathlib
-from os import makedirs, path
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -316,9 +317,17 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("slurp/tools/logs/args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
 def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
@@ -343,12 +352,10 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    cli_params = ["main_config", "logs_to_file", "user_config", "file_vhr", "valid_stack", "vegetationmask", "watermask", "urbanmask",
-                  "shadowmask", "extracted_wsf", "building_threshold", "building_erosion", "bonus_gt",
-                  "malus_shadow", "stackmask", "value_classif_low_veg", "value_classif_high_veg",
-                  "value_classif_water", "value_classif_buildings", "value_classif_bare_ground",
-                  "value_classif_false_positive_buildings", "value_classif_background", "n_workers",
-                  "tile_max_size", "multiproc_context"]
+    # Read the list back from the JSON file
+    with open("slurp/tools/logs/args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("slurp/tools/logs/args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
