@@ -5,7 +5,6 @@ import json
 
 # Création d'une fonction qui extrait les informations nécessaires des classes Pydantic
 import pandas as pd
-from pydantic import BaseModel
 
 def extract_field_info(model_class, prefix=""):
     table_data = []

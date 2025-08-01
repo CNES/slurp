@@ -1,8 +1,5 @@
-"""
-Generate Markdown tables for Tools and Tutorial schemas.
-"""
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Dict, Tuple
 
 import pandas as pd
 import mkdocs.plugins
@@ -10,8 +7,8 @@ import mkdocs.plugins
 from pydantic_class import MainConfig, UserConfig
 
 
-def sort_fields(schema: dict[str, Any], excluded_fields: list[str]) -> tuple[
-    list[str], list[str], list[str]]:
+def sort_fields(schema: Dict[str, Any], excluded_fields: List[str]) -> Tuple[
+    List[str], List[str], List[str]]:
     """
     Sorts the fields of a schema into mandatory, recommended, and optional categories.
 
@@ -48,7 +45,7 @@ def sort_fields(schema: dict[str, Any], excluded_fields: list[str]) -> tuple[
     return mandatory_fields, recommended_fields, optional_fields
 
 
-def resolve_ref(ref: str, schema: dict[str, Any]) -> dict[str, Any]:
+def resolve_ref(ref: str, schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Resolves a JSON reference ('$ref') in the schema.
 
@@ -72,8 +69,8 @@ def resolve_ref(ref: str, schema: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
-def parse_field_metadata(field_name: str, field_status: str, field_meta: dict[str, Any],
-                         schema: dict[str, Any], fields_df: pd.DataFrame) -> None:
+def parse_field_metadata(field_name: str, field_status: str, field_meta: Dict[str, Any],
+                         schema: Dict[str, Any], fields_df: pd.DataFrame) -> None:
     """
     Parses metadata of a specific field from a schema and adds the relevant information to a DataFrame.
 
@@ -144,8 +141,8 @@ def parse_field_metadata(field_name: str, field_status: str, field_meta: dict[st
                                            selectable_values, field_status]
 
 
-def fields_descriptions(fields_status: list[tuple[str, list[str]]],
-                        schema: dict[str, Any]) -> pd.DataFrame:
+def fields_descriptions(fields_status: List[Tuple[str, List[str]]],
+                        schema: Dict[str, Any]) -> pd.DataFrame:
     """
     Creates a DataFrame containing field metadata descriptions and status.
 
@@ -175,7 +172,7 @@ def fields_descriptions(fields_status: list[tuple[str, list[str]]],
     return fields_df
 
 
-def schema_to_md(schema: dict[str, Any], output_md_file: Path) -> None:
+def schema_to_md(schema: Dict[str, Any], output_md_file: Path) -> None:
     """
     Converts a schema to a Markdown table and saves it to a file.
 
@@ -197,7 +194,7 @@ def fields_to_df(excluded_fields, schema):
 
     Parameters
     ----------
-    excluded_fields : list[Str]
+    excluded_fields : list[str]
         A list of fields not kept in the DataFrame
     schema : dict[str, Any]
         A dictionary representing the schema containing field properties.
