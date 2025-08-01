@@ -5,7 +5,7 @@ import mkdocs.plugins
 from pydantic_class import MainConfig, UserConfig  # assuming MainConfig and UserConfig are Pydantic models
 
 
-def sort_fields(schema: Dict[str, Any], excluded_fields: List[str]) -> Tuple[
+def sort_fields(schema: Dict[str, Any]) -> Tuple[
     List[str], List[str], List[str]]:
     """
     Sorts the fields of a schema into mandatory, recommended, and optional categories.
@@ -14,8 +14,6 @@ def sort_fields(schema: Dict[str, Any], excluded_fields: List[str]) -> Tuple[
     ----------
     schema : dict[str, Any]
         A dictionary representing the schema containing field properties.
-    excluded_fields : list[str]
-        List of field names that should be excluded from sorting.
 
     Returns
     -------
@@ -29,8 +27,6 @@ def sort_fields(schema: Dict[str, Any], excluded_fields: List[str]) -> Tuple[
     recommended_fields = []
     optional_fields = []
     for field_name, meta in schema["properties"].items():
-        if field_name in excluded_fields:
-            continue
         if "default" not in meta:
             mandatory_fields.append(field_name)
         if "recommended" in meta:
@@ -121,7 +117,7 @@ def parse_field_metadata(field_name: str, field_status: str, field_meta: Dict[st
                 # Resolve the reference and recursively get the field metadata
                 referenced_meta_schema = resolve_ref(val["$ref"], schema)
                 mandatory_fields, recommended_fields, optional_fields = sort_fields(
-                    referenced_meta_schema, [])
+                    referenced_meta_schema)
                 for status, fields in [("**mandatory**", mandatory_fields),
                                        ("**recommended/optional**", recommended_fields),
                                        ("**optional**", optional_fields)]:
@@ -185,14 +181,12 @@ def schema_to_md(schema: Dict[str, Any], output_md_file: Path) -> None:
     fields_df_desc.to_markdown(buf=output_md_file, index=False)
 
 
-def fields_to_df(excluded_fields, schema):
+def fields_to_df(schema):
     """
     Converts a schema to a DataFrame
 
     Parameters
     ----------
-    excluded_fields : list[str]
-        A list of fields not kept in the DataFrame
     schema : dict[str, Any]
         A dictionary representing the schema containing field properties.
     Returns
@@ -200,7 +194,7 @@ def fields_to_df(excluded_fields, schema):
     pd.DataFrame
         A DataFrame describing the schema.
     """
-    mandatory_fields, recommended_fields, optional_fields = sort_fields(schema, excluded_fields)
+    mandatory_fields, recommended_fields, optional_fields = sort_fields(schema)
     fields_df_desc = fields_descriptions(
         [("**mandatory**", mandatory_fields), ("**recommended/optional**", recommended_fields),
          ("**optional**", optional_fields)],
