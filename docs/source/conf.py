@@ -24,6 +24,10 @@ from pkg_resources import get_distribution
 
 sys.path.insert(0, os.path.abspath("../.."))
 sys.setrecursionlimit(1500)
+import docs.source.json_to_md as generate_md
+
+# Generate the markdown table for MainConfig and UserConfig schemas
+generate_md.main()
 
 # -- Project information -----------------------------------------------------
 
