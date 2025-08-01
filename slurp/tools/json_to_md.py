@@ -1,10 +1,8 @@
 from pathlib import Path
 from typing import Any, List, Dict, Tuple
-
 import pandas as pd
 import mkdocs.plugins
-
-from pydantic_class import MainConfig, UserConfig
+from pydantic_class import MainConfig, UserConfig  # assuming MainConfig and UserConfig are Pydantic models
 
 
 def sort_fields(schema: Dict[str, Any], excluded_fields: List[str]) -> Tuple[
@@ -183,8 +181,7 @@ def schema_to_md(schema: Dict[str, Any], output_md_file: Path) -> None:
     output_md_file : Path
         The output path where the Markdown file will be saved.
     """
-    excluded_fields = list(RecommendedParametersValidatorMixin.model_fields.keys()) + ["flagship"]
-    fields_df_desc = fields_to_df(excluded_fields, schema)
+    fields_df_desc = fields_to_df(schema)
     fields_df_desc.to_markdown(buf=output_md_file, index=False)
 
 
@@ -217,6 +214,7 @@ def on_pre_build(*args, **kwargs):
     """
     main()
 
+
 def main() -> None:
     """
     Main function that generates Markdown tables for MainConfig and UserConfig schemas.
@@ -228,4 +226,5 @@ def main() -> None:
     schema_to_md(tuto_schema,
                  "docs/source/user_config_descr.md")
 
+# Call the main function to start the generation
 main()
