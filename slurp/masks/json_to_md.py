@@ -7,8 +7,7 @@ from typing import Any, Optional
 import pandas as pd
 import mkdocs.plugins
 
-from check_metadata import DATA_DIRECTORY
-from metadata_models import Tutorials, Tools, RecommendedParametersValidatorMixin
+from pydantic_class import MainConfig, UserConfig
 
 
 def sort_fields(schema: dict[str, Any], excluded_fields: list[str]) -> tuple[
@@ -223,16 +222,12 @@ def on_pre_build(*args, **kwargs):
 
 def main() -> None:
     """
-    Main function that generates Markdown tables for Tools and Tutorial schemas.
-
-    The function retrieves the JSON schema for both `Tools` and `Tutorials`,
-    generates the Markdown representation for their fields, and saves the result
-    to markdown files under the 'contribute' section.
+    Main function that generates Markdown tables for MainConfig and UserConfig schemas.
     """
-    catalog_schema = Tools.model_json_schema()
+    catalog_schema = MainConfig.model_json_schema()
     schema_to_md(catalog_schema,
                  "docs/source/main_config_descr.md")
-    tuto_schema = Tutorials.model_json_schema()
+    tuto_schema = UserConfig.model_json_schema()
     schema_to_md(tuto_schema,
                  "docs/source/user_config_descr.md")
 
