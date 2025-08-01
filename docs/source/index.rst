@@ -16,6 +16,7 @@ obtain into a single multiclass mask.
    :caption: Documentation
    :maxdepth: 1
 
+   SLURP configuration <slurp_config>
    Usage <usage>
    API Documentation <apidoc/modules>
    Slurp tutorial <tutorial>

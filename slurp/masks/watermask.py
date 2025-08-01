@@ -27,8 +27,8 @@ import time
 import traceback
 import logging
 import pathlib
-from os import makedirs, path
-from typing import get_args
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -226,7 +226,6 @@ def build_samples(
     nb_water_subset = np.count_nonzero(
         np.logical_and(valid_water_pixels, input_buffer[0])
     )
-    nb_other_subset = nb_valid_subset - nb_water_subset
 
     # valid pixels for 'other' (every thing but water) : valid mask + hand > 0
     # This criteria should be reconsidered (ie : think of a relative threshold to select samples not too far from water)
@@ -585,9 +584,17 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("slurp/tools/logs/args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
 # --Main function-- #
@@ -618,12 +625,10 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
     argsdict = io_utils.read_json(
         main_config, keys, user_config)
 
-    cli_params = ["main_config", "debug", "logs_to_file", "user_config", "file_vhr", "valid_stack", "file_ndvi", "file_ndwi",
-                         "extracted_pekel", "extracted_hand", "files_layers", "thresh_pekel", "hand_strict", "thresh_hand", "strict_thresh",
-                         "save_mode", "simple_ndwi_threshold", "ndwi_threshold", "samples_method", "nb_samples_water", "nb_samples_other",
-                         "nb_samples_auto", "auto_pct", "smart_area_pct", "smart_minimum", "grid_spacing", "max_depth", "nb_estimators",
-                         "n_jobs", "no_pekel_filter", "hand_filter", "binary_closing", "area_closing", "remove_small_holes",
-                         "watermask", "value_classif", "n_workers", "tile_max_size", "multiproc_context"]
+    # Read the list back from the JSON file
+    with open("slurp/tools/logs/args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("slurp/tools/logs/args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
