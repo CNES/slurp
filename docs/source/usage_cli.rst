@@ -80,6 +80,15 @@ algorithms on your images.
 Two scripts (to calculate all the masks and the scores) are available in
 conf/ directory.
 
+
+Log Display Options
+-------------------
+
+By default, logs are displayed in the console.
+
+When the CLI argument `--logs_to_file` is specified,
+logs will instead be saved to the file `logs/out_logs.log` located in your current working directory.
+
 Data preparation
 ----------------
 
