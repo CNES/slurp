@@ -41,7 +41,7 @@ from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("slurp")
 
 def getarguments():
     """Parse command line arguments."""

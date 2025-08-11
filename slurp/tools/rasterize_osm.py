@@ -24,11 +24,14 @@ import argparse
 import os
 import time
 import traceback
+import pathlib
+from os import makedirs, path
 import logging
 
 import otbApplication as otb
 
 from slurp.tools.constant import COMPRESSION
+from slurp.tools import utils
 
 logger = logging.getLogger("slurp")
 
@@ -124,6 +127,15 @@ def main():
     """Main function to rasterize"""
     try:
         arguments = getarguments()
+
+        if arguments.logs_to_file:
+            config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+            if not path.exists("logs"):
+                makedirs("logs")
+        else:
+            config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
+        utils.setup_logging(config_file)
+
         rasterize(arguments)
 
     except FileNotFoundError as fnfe_exception:

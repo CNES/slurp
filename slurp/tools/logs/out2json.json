@@ -25,7 +25,7 @@
       "class": "logging.handlers.RotatingFileHandler",
       "level": "INFO",
       "formatter": "simple",
-      "filename": "slurp/tools/logs/out_logs.log",
+      "filename": "logs/out_logs.log",
       "maxBytes": 10000,
       "backupCount": 3
     }
