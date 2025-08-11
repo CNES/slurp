@@ -27,7 +27,7 @@ import json
 import time
 import traceback
 import pathlib
-from os import makedirs, path, getcwd
+from os import makedirs, path
 from typing import List
 import logging
 
@@ -41,7 +41,7 @@ from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("slurp")
 
 def getarguments():
     """Parse command line arguments."""
@@ -575,6 +575,8 @@ def main():
 
     if args.logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+        if not path.exists("logs"):
+            makedirs("logs")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)

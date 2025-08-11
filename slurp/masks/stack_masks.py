@@ -347,6 +347,8 @@ def main():
 
     if args.logs_to_file:
         config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+        if not path.exists("logs"):
+            makedirs("logs")
     else:
         config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_file)
