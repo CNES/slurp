@@ -1,6 +1,6 @@
-=====
-Usage
-=====
+=========
+CLI Usage
+=========
 
 By default, a fake command line is deployed with argparse:
 
