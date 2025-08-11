@@ -23,8 +23,11 @@
 
 import argparse
 import time
+import json
 import traceback
 import logging
+import pathlib
+from os import makedirs, path
 from os.path import dirname, join
 
 import geopandas as gpd
@@ -41,7 +44,7 @@ from sklearn.metrics import (
     recall_score,
 )
 
-from slurp.tools import io_utils
+from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
@@ -81,7 +84,11 @@ def get_union_gdf(gdf, gdf_ref, gdf_predict, crs):
 
 
 def buildings_count(
-    args,
+    unit,
+    area,
+    union,
+    thresh_overlay,
+    thresh_iou,
     im_ref,
     im_predict,
     dir_out,
@@ -89,6 +96,7 @@ def buildings_count(
     transform_ref,
     crs_predict,
     transform_predict,
+    save,
 ):
     """Count the number of buildings polygons"""
     start_time = time.time()
@@ -100,7 +108,7 @@ def buildings_count(
     )
     gdf_ref = generate_polygons_in_gdf(im_ref, crs_ref, transform_ref)
 
-    if args.unit != "meter":
+    if unit != "meter":
         # change spacing unit in meter
         crs_ref = gdf_ref.estimate_utm_crs()
         gdf_ref = gdf_ref.to_crs(crs_ref)
@@ -109,9 +117,9 @@ def buildings_count(
         gdf_predict = gdf_predict.to_crs(crs_ref)
 
     # Remove small builidings from ground truth
-    gdf_ref_filtered = gdf_ref[gdf_ref.geometry.area > args.area]
+    gdf_ref_filtered = gdf_ref[gdf_ref.geometry.area > area]
 
-    if args.save:
+    if save:
         gdf_predict.to_file(join(dir_out, "buildings_predict.shp"))
         gdf_ref_filtered.to_file(join(dir_out, "buildings_ref.shp"))
 
@@ -124,7 +132,7 @@ def buildings_count(
     )
 
     # Intersection and union calculation
-    if args.union:
+    if union:
         gdf_intersect["area_inter"] = gdf_intersect.area
         gdf_intersect_area = (
             gdf_intersect.groupby("id_1")["area_inter"].sum().reset_index()
@@ -132,7 +140,7 @@ def buildings_count(
         gdf_union = get_union_gdf(gdf_intersect, gdf_ref, gdf_predict, crs_ref)
         gdf_union["area_union"] = gdf_union.area
 
-        if args.save:
+        if save:
             gdf_intersect.to_file(join(dir_out, "intersection.shp"))
             gdf_union.to_file(join(dir_out, "union.shp"))
 
@@ -150,16 +158,16 @@ def buildings_count(
         detected_buildings = len(
             df_merged[
                 100 * df_merged["area_inter"] / df_merged["area_ref"]
-                > args.thresh_overlay
+                > thresh_overlay
             ]
         )
         logger.info(
-            f"Detected buildings above {args.thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}"
+            f"Detected buildings above {thresh_overlay}% : {detected_buildings}/{gdf_ref_filtered.shape[0]}"
         )
         df_merged["iou"] = df_merged["area_inter"] / df_merged["area_union"]
-        iou_buildings = len(df_merged[100 * df_merged["iou"] > args.thresh_iou])
+        iou_buildings = len(df_merged[100 * df_merged["iou"] > thresh_iou])
         logger.info(
-            f"Detected buildings with an IoU above {args.thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}"
+            f"Detected buildings with an IoU above {thresh_iou}% : {iou_buildings}/{gdf_ref_filtered.shape[0]}"
         )
         logger.info(f"Mean IoU {df_merged['iou'].mean():.2f}")
 
@@ -333,84 +341,110 @@ def getarguments():
         default=False,
         help="Save SHP files containing the buildings",
     )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
+def slurp_scores(gt : str, im : str, out : str, value_classif_ref : list,
+                 value_classif : list, startx : int = None,
+                 starty : int = None, sizex : int = None,
+                 sizey : int = None, polygonize : bool = False,
+                 union : bool = False, area : int = 0, unit : str = "meter",
+                 thresh_iou : int = 50, thresh_overlay : int = 50,
+                 save : bool = False):
     """Main function that compute scores"""
     try:
-        args = getarguments()
+        if logs_to_file:
+            config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+            if not path.exists("logs"):
+                makedirs("logs")
+        else:
+            config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
+        utils.setup_logging(config_file)
 
         # Get ground truth
-        ds_ref = rio.open(args.gt)
+        ds_ref = rio.open(gt)
         crs_ref = ds_ref.crs
         transform_ref = ds_ref.transform
         im_ref = (
             ds_ref.read(
                 1,
-                window=Window(args.startx, args.starty, args.sizex, args.sizey),
+                window=Window(startx, starty, sizex, sizey),
             )
-            if args.startx
+            if startx
             else ds_ref.read(1)
         )
         ds_ref.close()
         del ds_ref
 
-        classif_ref = args.value_classif_ref[0]
+        classif_ref = value_classif_ref[0]
         if classif_ref == 0:
             im_ref = im_ref + 1
             classif_ref += 1
-            args.value_classif_ref = np.array(args.value_classif_ref) + 1
-        if len(args.value_classif_ref) > 1:
-            for value_ref in args.value_classif_ref[1:]:
+            value_classif_ref = np.array(value_classif_ref) + 1
+        if len(value_classif_ref) > 1:
+            for value_ref in value_classif_ref[1:]:
                 im_ref[im_ref == value_ref] = classif_ref
         im_ref[im_ref != classif_ref] = 0
         im_ref[im_ref == classif_ref] = 1
 
         # Get predicted mask
-        ds_predict = rio.open(args.im)
+        ds_predict = rio.open(im)
         crs_predict = ds_predict.crs
         transform_predict = ds_predict.transform
         rpc = ds_predict.tags(ns="RPC")
         im_predict = (
             ds_predict.read(
                 1,
-                window=Window(args.startx, args.starty, args.sizex, args.sizey),
+                window=Window(startx, starty, sizex, sizey),
             )
-            if args.startx
+            if startx
             else ds_predict.read(1)
         )
         ds_predict.close()
         del ds_predict
 
-        classif_predict = args.value_classif[0]
+        classif_predict = value_classif[0]
         if classif_predict == 0:
             im_predict = im_predict + 1
             classif_predict += 1
-            args.value_classif = np.array(args.value_classif) + 1
-        if len(args.value_classif) > 1:
-            for value_predict in args.value_classif[1:]:
+            value_classif = np.array(value_classif) + 1
+        if len(value_classif) > 1:
+            for value_predict in value_classif[1:]:
                 im_predict[im_predict == value_predict] = classif_predict
         im_predict[im_predict != classif_predict] = 0
         im_predict[im_predict == classif_predict] = 1
 
         # Count buildings
-        if args.polygonize:
+        if polygonize:
             buildings_count(
-                args,
+                unit,
+                area,
+                union,
+                thresh_overlay,
+                thresh_iou,
                 im_ref,
                 im_predict,
-                dirname(args.out),
+                dirname(out),
                 crs_ref,
                 transform_ref,
                 crs_predict,
                 transform_predict,
+                save
             )
 
         # Create merge image
         get_merged_image(
-            im_ref, im_predict, args.out, crs_predict, transform_predict, rpc
+            im_ref, im_predict, out, crs_predict, transform_predict, rpc
         )
 
         # Transform in 1d array
@@ -436,6 +470,14 @@ def main():
         logger.error("oups...", exception)
         traceback.print_exc()
 
+
+def main():
+    """
+    Main function to compute scores.
+    It parses the command line arguments and calls the slurp_scores function.
+    """
+    args = getarguments()
+    slurp_scores(**args)
 
 if __name__ == "__main__":
     main()
