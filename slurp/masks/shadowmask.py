@@ -165,7 +165,7 @@ def getarguments() -> dict:
         if arg.dest not in ["help"]:
             arglist.append(arg.dest)
 
-    with open("slurp/tools/logs/args_list.json", 'w') as f:
+    with open("args_list.json", 'w') as f:
         json.dump(arglist, f)
 
     return vars(args)
@@ -192,9 +192,9 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
         main_config, keys, user_config)
 
     # Read the list back from the JSON file
-    with open("slurp/tools/logs/args_list.json", 'r') as f:
+    with open("args_list.json", 'r') as f:
         cli_params = json.load(f)
-    remove("slurp/tools/logs/args_list.json")
+    remove("args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
@@ -203,6 +203,8 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
 
     if logs_to_file:
         config_log = pathlib.Path("slurp/tools/logs/out2json.json")
+        if not path.exists("logs"):
+            makedirs("logs")
     else:
         config_log = pathlib.Path("slurp/tools/logs/out2stdout.json")
     utils.setup_logging(config_log)
