@@ -1,84 +1,18 @@
-=====
-Usage
-=====
+=========
+API Usage
+=========
 
-By default, a fake command line is deployed with argparse:
-
-To use it:
-
-.. code-block:: console
-
-    $ slurp -h
-    
-
-To use slurp in a project:
+SLURP can be used as a Python library. Please start by installing it through pip.
 
 .. code-block:: python
 
-    import slurp
+   pip install slurp-masks
 
+Then you can import it in your Python scripts or notebooks.
 
-SLURP uses some global data, such as Global Surface Water (Pekel) for
-water detection or World Settlement Footprint (WSF) for building
-detection.
+.. code-block:: python
 
-Data preparation can be achieved with Orfeo ToolBox or other tools, in
-order to bring all necessary data in the same projection. You can either
-build your mask step by step, or use a batch script to launch and build
-the final mask automatically.
-
-.. raw:: html
-
-    <table>
-      <tr>
-        <td style="text-align:center;"><img src="_static/images/example_step0_PHR_image.png" alt="Initial VHR image" width="89%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step1_watermask.png" alt="Water mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step2_vegetationmask.png" alt="Vegetation mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step3_shadowmask.png" alt="Shadow mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step4_urbanproba.png" alt="Urban probability" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step5_stack_regul.png" alt="Final mask" width="80%"></td>
-      </tr>
-      <tr>
-        <td style="text-align:center;"><b>Bring your own VHR 4 bands (R/G/B/NIR) image</b></td>
-        <td style="text-align:center;"><b>Learn 'Pekel' water occurrence</b></td>
-        <td style="text-align:center;"><b>Detect low/high vegetation</b></td>
-        <td style="text-align:center;"><b>Detect shadows (avoid water confusion)</b></td>
-        <td style="text-align:center;"><b>Compute urban probability</b></td>
-        <td style="text-align:center;"><b>Regularize contours</b></td>
-      </tr>
-    </table>
-
-
-
-Getting Started
----------------
-
-Once your environment has been set up, you can run SLURP.
-
-A tutorial (with and without OTB) is available :
-`Tutorial.md <Tutorial.md>`__.
-
-Use SLURP on TREX
------------------
-
-On TREX, you can directly use SLURP by sourcing the following
-environment.
-
-.. code-block:: console
-
-   source /work/CAMPUS/users/tanguyy/PLUTO/slurp_demo/init_slurp.sh
-
-This will load OTB 9.0 and all Python dependencies
-
-You can also use a shell script with SLURM to launch different masks
-algorithms on your images.
-
-.. code-block:: console
-
-   sbatch --export="PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2" /softs/projets/pluto/demo_slurp/compute_all_masks.pbs
-
-Two scripts (to calculate all the masks and the scores) are available in
-conf/ directory.
+   import slurp-masks as slurp
 
 Data preparation
 ----------------
@@ -105,22 +39,19 @@ It requires an OTB installation.
    conf/main_config.json with default values.
 2. Update input, aux_layers, resources and prepare blocs inside the JSON
    file.
-3. Run the command :
+3. Use the python function:
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_prepare <JSON file>
+   slurp.slurp_prepare(main_config, overwrite, effective_used_config, logs_to_file, user_config,
+                       file_vhr, sensor_mode, dtm, geoid_file, valid_stack, cloud_mask,
+                       file_ndvi, file_ndwi, red, nir, green, pekel_method, pekel,
+                       pekel_obs, pekel_monthly_occurrence, extracted_pekel, hand, extracted_hand,
+                       wsf, extracted_wsf, file_texture, texture_rad, analyse_glcm,
+                       land_cover_map, cropped_land_cover_map, n_workers, tile_max_size, multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_prepare <JSON file> -file_vhr <VHR input image> -file_ndvi <path to store NDVI>``
-
-Type ``slurp_prepare -h`` for complete list options :
-
-    - overwriting of output files (-w)
-    - bands identification (-red <1/3>, etc.),
-    - files to extract and reproject (-pekel, -hand, -wsf, etc.),
-    - output paths (-extracted_pekel, etc.),
-    - etc.
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
 Features
 --------
@@ -141,20 +72,22 @@ post-processed to clean artefacts.
    further you can modify resources, post_process and water blocs.
 3. Run the command :
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_watermask <JSON file>
+   slurp_watermask(main_config, debug, logs_to_file, user_config, file_vhr, valid_stack,
+                   file_ndvi, file_ndwi, extracted_pekel, extracted_hand, files_layers,
+                   file_filters, thresh_pekel, hand_strict, thresh_hand, strict_thresh,
+                   save_mode, simple_ndwi_threshold, ndwi_threshold,
+                   samples_method, nb_samples_water, nb_samples_other, nb_samples_auto,
+                   auto_pct, smart_area_pct, smart_minimum, grid_spacing,
+                   max_depth, nb_estimators, n_jobs,
+                   no_pekel_filter, hand_filter, binary_closing,
+                   area_closing, remove_small_holes, watermask,
+                   value_classif, n_workers, tile_max_size, multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_watermask <JSON file> -file_vhr <VHR input image> -watermask <your watermask.tif>``
 
-Type ``slurp_watermask -h`` for complete list of options :
-
-    - samples method (-samples_method, -nb_samples_water, etc.),
-    - add other raster features (-layers layer1 [layer 2 ..]),
-    - post-process mask (-remove_small_holes, -binary_closing, etc.),
-    - saving of intermediate files (-save),
-    - etc.
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
 Vegetation mask
 ~~~~~~~~~~~~~~~
@@ -174,19 +107,18 @@ texture denotes for low vegetation).
    further you can modify resources and vegetation blocs.
 3. Run the command :
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_vegetationmask <JSON file>
+   slurp_vegetationmask(main_config, debug, logs_to_file, user_config, file_vhr, valid_stack,
+                        file_ndvi, file_ndwi, file_texture, texture_mode, filter_texture, save_mode,
+                        slic_seg_size, slic_compactness, nb_clusters_veg, min_ndvi_veg,
+                        max_ndvi_noveg, non_veg_clusters, nb_clusters_low_veg, max_texture_th,
+                        binary_dilation, remove_small_objects, remove_small_holes,
+                        vegetationmask, n_workers, tile_max_size, multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_vegetationmask <JSON file> -file_vhr <VHR input image> -vegetationmask <your vegetation mask.tif>``
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
-Type ``slurp_vegetationmask -h`` for complete list of options :
-
-    - segmentation mode and parameter for SLIC algorithms
-    - number of workers (parallel processing for primitives and segmentation tasks)
-    - number of clusters affected to vegetation (3 by default - 33%)
-    - etc.
 
 Urban (building) mask
 ~~~~~~~~~~~~~~~~~~~~~
@@ -205,19 +137,17 @@ probability” layer ([0..100]) that can be used by the stack algorithm.
    further you can modify resources and urban blocs.
 3. Run the command :
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_urbanmask <JSON file>
+   slurp_urbanmask(main_config, logs_to_file, user_config, file_vhr,
+                   valid_stack, file_ndvi, file_ndwi, extracted_wsf, files_layers, watermask,
+                   vegetationmask, shadowmask, vegmask_min_value, veg_binary_dilation, value_classif,
+                   gt_binary_erosion, save_mode, nb_samples_urban, nb_samples_other, max_depth,
+                   nb_estimators, n_jobs, urbanmask, n_workers, tile_max_size, multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_urbanmask <JSON file> -file_vhr <VHR input image> -urbanmask <your urban mask.tif>``
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
-Type ``slurp_urbanmask -h`` for complete list of options :
-
-    - samples parameters),
-    - add other raster features (-layers layer1 [layer 2 ..])
-    - elimination of pixels identified as water or vegetation (-watermask <your watermask.tif>, -vegetationmask <your vegetationmask.tif>),
-    - etc.
 
 Shadow mask
 ~~~~~~~~~~~
@@ -236,18 +166,14 @@ in the regularization step.
    further you can modify resources, post_process and shadow blocs.
 3. Run the command :
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_shadowmask <JSON file>
+   slurp_shadowmask(main_config, logs_to_file, user_config, file_vhr, valid_stack, watermask,
+                    th_rgb, th_nir, absolute_threshold, percentile, binary_opening,
+                    remove_small_objects, shadowmask, n_workers, tile_max_size, multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_shadowmask <JSON file> -file_vhr <VHR input image> -shadowmask <your shadow mask.tif>``
-
-Type ``slurp_shadowmask -h`` for complete list of options :
-
-    - relative thresholds (-th_rgb, -th_nir, etc.),
-    - post-process mask (-remove_small_objects, -binary_opening, etc.),
-    - etc.
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
 Stack and regularize buildings
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -269,19 +195,18 @@ gradient image, thus regularizing buildings shapes.
    go further you can modify resources, post_process and stack blocs.
 3. Run the command :
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_stackmasks <JSON file>
+   slurp_stackmasks(main_config, logs_to_file, user_config, file_vhr,
+                    valid_stack, vegetationmask, watermask, urbanmask, shadowmask,
+                    extracted_wsf, building_threshold, building_erosion, bonus_gt,
+                    malus_shadow, stackmask, value_classif_low_veg, value_classif_high_veg,
+                    value_classif_water, value_classif_buildings, value_classif_bare_ground,
+                    value_classif_false_positive_buildings, value_classif_background, n_workers, tile_max_size,
+                    multiproc_context)
 
-You can override the JSON with CLI arguments. For example :
-``slurp_stackmasks <JSON file> -file_vhr <VHR input image> -remove_small_objects 500 -binary_closing 3``
-
-Type ``slurp_stackmasks -h`` for complete list of options :
-
-    - watershed parameters,
-    - post-process parameters (-remove_small_objects, -binary_opening, etc.),
-    - classif value of each element of the final mask
-    - etc.
+Please check complete arguments description available `here <TODO>`_.
+Beware that API arguments override the JSON arguments.
 
 Quantify the quality of a mask
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -294,42 +219,13 @@ each raster and compare them, giving the number of expected buildings
 identified and the IoU score. The analysis can be performed on a window
 of the input files.
 
-.. code-block:: console
+.. code-block:: python
 
-   slurp_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
+   slurp_scores(gt, im, out, value_classif_ref, value_classif, startx,
+                starty, sizex, sizey, polygonize, union, area, unit,
+                thresh_iou, thresh_overlay, save)
 
-Type ``slurp_scores -h`` for complete list of options :
 
-    -  selection of a window (-startx, -starty, -sizex, -sizey),
-    -  detection of the buildings (-polygonize) and iou score
-       (-polygonize.union) with some parameters (-polygonize.area,
-       -polygonize.unit, etc.),
-    -  saving of intermediate files (-save)
-
-Tests
------
-
-The project comes with a suite of unit and functional tests. All the
-tests are available in tests/ directory.
-
-To run them, launch the command ``pytest`` in the root of the slurp
-project. To run tests on a specific mask, execute
-``pytest tests/<file_name>"``.
-
-By default, the tests generate the masks and then validate them by
-comparing them with a reference. You can choose to only compute the
-masks with ``pytest -m computation`` or validate them with
-``pytest -m validation``. To validate data preparation, you can use
-``pytest -m prepare`` or ``pytest -m all`` for the complete test : these
-two last modes require OTB installation.
-
-You can change the default configuration for the tests by modifying the
-JSON file “tests/config_tests”.
-
-Documentation
--------------
-
-Go in docs/ directory
 
 Contribution
 ------------
