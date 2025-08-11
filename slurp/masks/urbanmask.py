@@ -373,7 +373,7 @@ def getarguments():
         if arg.dest not in ["help"]:
             arglist.append(arg.dest)
 
-    with open("slurp/tools/logs/args_list.json", 'w') as f:
+    with open("args_list.json", 'w') as f:
         json.dump(arglist, f)
 
     return vars(args)
@@ -400,9 +400,9 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
         main_config, keys, user_config)
 
     # Read the list back from the JSON file
-    with open("slurp/tools/logs/args_list.json", 'r') as f:
+    with open("args_list.json", 'r') as f:
         cli_params = json.load(f)
-    remove("slurp/tools/logs/args_list.json")
+    remove("args_list.json")
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
