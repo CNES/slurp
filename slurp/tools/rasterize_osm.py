@@ -22,6 +22,7 @@
 """Module to rasterize image with OTB"""
 import argparse
 import os
+import json
 import time
 import traceback
 import pathlib
@@ -35,30 +36,30 @@ from slurp.tools import utils
 
 logger = logging.getLogger("slurp")
 
-def rasterize(args):
+def rasterize(osm : str, im : str, dilate : int = 0, out : str = "raster"):
     """Create a rasterized copy of the image passed in arguments"""
     start_time = time.time()
 
     app_reproj = otb.Registry.CreateApplication("VectorDataExtractROI")
-    app_reproj.SetParameterString("io.vd", args.osm)
-    app_reproj.SetParameterString("io.in", args.im)
+    app_reproj.SetParameterString("io.vd", osm)
+    app_reproj.SetParameterString("io.in", im)
     app_reproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
     app_reproj.ExecuteAndWriteOutput()
 
     app_raster = otb.Registry.CreateApplication("Rasterization")
     app_raster.SetParameterString("in", "tmp_OSM_data.sqlite")
-    app_raster.SetParameterString("im", args.im)
+    app_raster.SetParameterString("im", im)
     app_raster.SetParameterString("out", "raster")
     app_raster.SetParameterString("mode", "binary")
     app_raster.SetParameterFloat("mode.binary.foreground", 1)
     app_raster.Execute()
 
     app_si = otb.Registry.CreateApplication("Superimpose")
-    app_si.SetParameterString("inr", args.im)
+    app_si.SetParameterString("inr", im)
     app_si.SetParameterInputImage(
         "inm", app_raster.GetParameterOutputImage("out")
     )
-    if args.dilate > 0:
+    if dilate > 0:
         app_si.SetParameterString("out", "superimpose")
         app_si.Execute()
         logger.info("Dilatation of vector data / write final result")
@@ -68,12 +69,12 @@ def rasterize(args):
         app_morpho.SetParameterInputImage(
             "in", app_si.GetParameterOutputImage("out")
         )
-        app_morpho.SetParameterInt("xradius", args.dilate)
-        app_morpho.SetParameterInt("yradius", args.dilate)
+        app_morpho.SetParameterInt("xradius", dilate)
+        app_morpho.SetParameterInt("yradius", dilate)
         app_morpho.SetParameterString(
             "out",
             str(
-                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+                out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
             ),
         )
         app_morpho.SetParameterOutputImagePixelType(
@@ -85,7 +86,7 @@ def rasterize(args):
         app_si.SetParameterString(
             "out",
             str(
-                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+                out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
             ),
         )
         app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
@@ -106,6 +107,11 @@ def getarguments():
     parser.add_argument(
         "-osm", required=True, action="store", help="OSM building layer"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
     parser.add_argument(
         "-im", required=True, action="store", help="Reference image"
     )
@@ -119,16 +125,23 @@ def getarguments():
     parser.add_argument(
         "-out", required=True, action="store", help="Result file"
     )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
+def rasterize_osm(osm : str, logs_to_file: bool, im : str, dilate : int = 0, out : str = "raster"):
     """Main function to rasterize"""
     try:
-        arguments = getarguments()
-
-        if arguments.logs_to_file:
+        if logs_to_file:
             config_file = pathlib.Path("slurp/tools/logs/out2json.json")
             if not path.exists("logs"):
                 makedirs("logs")
@@ -136,7 +149,7 @@ def main():
             config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
         utils.setup_logging(config_file)
 
-        rasterize(arguments)
+        rasterize(osm, im, dilate, out)
 
 
     except FileNotFoundError as fnfe_exception:
@@ -155,6 +168,14 @@ def main():
         logger.error("oups...", exception)
         traceback.print_exc()
 
+
+def main():
+    """
+    Main function to run the osm rasterization.
+    It parses the command line arguments and calls the rasterize_osm function.
+    """
+    args = getarguments()
+    rasterize_osm(**args)
 
 if __name__ == "__main__":
     main()
