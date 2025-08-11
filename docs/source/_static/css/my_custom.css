@@ -9,3 +9,22 @@
 .wy-nav-content {
     max-width: 100% !important;
 }
+
+table {
+  table-layout: fixed;  /* fix column widths */
+  width: 100%;          /* full width */
+}
+
+table th:nth-child(1),
+table td:nth-child(1) {
+  width: 170px;         /* set desired max width for Description column */
+  white-space: normal;  /* allow wrapping */
+  word-wrap: break-word;
+}
+
+table th:nth-child(4),
+table td:nth-child(4) {
+  width: 600px;         /* set desired max width for Description column */
+  white-space: normal;  /* allow wrapping */
+  word-wrap: break-word;
+}
