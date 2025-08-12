@@ -26,9 +26,8 @@ import gc
 import time
 import traceback
 import logging
-import pathlib
 import json
-from os import makedirs, path, remove
+from os import makedirs, path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -39,7 +38,7 @@ from sklearn.ensemble import RandomForestClassifier
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import random_forest_utils as rf_utils
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
@@ -343,6 +342,25 @@ def mask_filter(im_in, mask_ref):
     return im_filtered
 
 
+def apply_ndwi_thresh(args, eoscale_manager, key_ndwi, key_valid_stack):
+    logger.info(
+        "Simple threshold mask NDWI > " + str(args.ndwi_threshold)
+    )
+    key_predict = eoexe.n_images_to_m_images_filter(
+        inputs=[key_ndwi, key_valid_stack],
+        image_filter=utils.compute_mask_threshold,
+        filter_parameters={"threshold": 1000 * args.ndwi_threshold},
+        context_manager=eoscale_manager,
+        generate_output_profiles=eo_utils.single_uint8_profile,
+        multiproc_context=args.multiproc_context,
+        filter_desc="Simple NDWI threshold",
+    )
+    time_random_forest = time.time()
+    time_samples = time_random_forest
+    do_post_process = False
+    return do_post_process, key_predict, time_random_forest, time_samples
+
+
 def post_process(
     input_buffer: list, input_profiles: list, params: dict
 ) -> list:
@@ -622,26 +640,12 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
         "post_process",
         "water",
     ]
-    argsdict = io_utils.read_json(
-        main_config, keys, user_config)
-
-    # Read the list back from the JSON file
-    with open("args_list.json", 'r') as f:
-        cli_params = json.load(f)
-    remove("args_list.json")
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
-
-    if logs_to_file:
-        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
-        if not path.exists("logs"):
-            makedirs("logs")
-    else:
-        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
-    utils.setup_logging(config_file)
 
     logger.info("JSON data loaded:")
     logger.info(argsdict)
@@ -750,22 +754,10 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
 
             if args.simple_ndwi_threshold:
                 # Simple NDWI threshold, but taking account valid stack to take care of NO_DATA values
-                logger.info(
-                    "Simple threshold mask NDWI > " + str(args.ndwi_threshold)
-                )
-                key_predict = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_ndwi, key_valid_stack],
-                    image_filter=utils.compute_mask_threshold,
-                    filter_parameters={"threshold": 1000 * args.ndwi_threshold},
-                    context_manager=eoscale_manager,
-                    generate_output_profiles=eo_utils.single_uint8_profile,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Simple NDWI threshold",
-                )
-
-                time_random_forest = time.time()
-                time_samples = time_random_forest
-                do_post_process = False
+                do_post_process, key_predict, time_random_forest, time_samples = apply_ndwi_thresh(args,
+                                                                                                   eoscale_manager,
+                                                                                                   key_ndwi,
+                                                                                                   key_valid_stack)
 
             elif not_enough_water_samples:
                 # We compute a void mask (0 everywhere, except for NO DATA values)
@@ -951,6 +943,7 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
         except Exception as exception:  # pylint: disable=broad-except
             logger.error("oups...", exception)
             traceback.print_exc()
+
 
 def main():
     """
