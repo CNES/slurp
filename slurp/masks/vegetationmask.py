@@ -241,73 +241,8 @@ def apply_clustering(
     if params["debug"]:
         logger.debug(f"K-Means on radiometric indices ({nb_polys} elements")
 
-    kmeans_rad_indices = KMeans(
-        n_clusters=NB_CLUSTERS,
-        init="k-means++",
-        n_init=5,
-        verbose=0,
-        random_state=712,
-    )
-    pred_veg = kmeans_rad_indices.fit_predict(
-        np.stack((stats[0:nb_polys], stats[nb_polys : 2 * nb_polys]), axis=1)
-    )
-    if params["debug"]:
-        logger.debug(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
-
-    list_clusters = pd.DataFrame.from_records(
-        kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"]
-    )
-    list_clusters_by_ndvi = list_clusters.sort_values(
-        by="ndvi", ascending=True
-    ).index
-
-    map_centroid = []
-
-    nb_clusters_no_veg = 0
-    nb_clusters_veg = 0
-    if params["min_ndvi_veg"]:
-        # Attribute veg class by threshold
-        for t in range(kmeans_rad_indices.n_clusters):
-            if list_clusters.iloc[t]["ndvi"] > float(params["min_ndvi_veg"]):
-                map_centroid.append(VEG_CODE)
-                nb_clusters_veg += 1
-            elif list_clusters.iloc[t]["ndvi"] < float(
-                params["max_ndvi_noveg"]
-            ):
-                if params["non_veg_clusters"]:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v)
-                else:
-                    map_centroid.append(NO_VEG_CODE)  # 0
-                nb_clusters_no_veg += 1
-            else:
-                map_centroid.append(UNDEFINED_VEG)
-
-    else:
-        # Attribute class by thirds
-        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
-        if params["nb_clusters_veg"] >= 7:
-            nb_clusters_no_veg = NB_CLUSTERS - params["nb_clusters_veg"]
-            nb_clusters_veg = params["nb_clusters_veg"]
-
-        for t in range(kmeans_rad_indices.n_clusters):
-            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
-                if params["non_veg_clusters"]:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v)
-                else:
-                    map_centroid.append(NO_VEG_CODE)  # 0
-            elif (
-                t
-                in list_clusters_by_ndvi[
-                    nb_clusters_no_veg : NB_CLUSTERS - params["nb_clusters_veg"]
-                ]
-            ):
-                map_centroid.append(UNDEFINED_VEG)  # 10
-            else:
-                map_centroid.append(VEG_CODE)  # 20
+    kmeans_rad_indices, list_clusters, pred_veg = cluster_on_radiometry(nb_polys, params, stats)
+    map_centroid, nb_clusters_no_veg, nb_clusters_veg = classify_veg_indices(kmeans_rad_indices, list_clusters, params)
 
     clustering = apply_map(pred_veg, map_centroid)
 
@@ -335,25 +270,7 @@ def apply_clustering(
             logger.debug("threshold_texture_max", threshold_max)
 
         # Save histograms
-        if params["texture_mode"] == "debug" or params["save_mode"] == "debug":
-            values, bins, _ = plt.hist(texture_values, bins=75)
-            plt.clf()
-            bins_center = (bins[:-1] + bins[1:]) / 2
-            plt.plot(bins_center, values, color="blue")
-            plt.savefig(
-                path.splitext(params["vegetationmask"])[0]
-                + "_histogram_texture.png"
-            )
-            plt.close()
-            index_max = np.argmax(bins_center > threshold_max) + 1
-            plt.plot(bins_center[:index_max], values[:index_max], color="blue")
-            plt.savefig(
-                path.splitext(params["vegetationmask"])[0]
-                + "_histogram_texture_cut"
-                + str(params["filter_texture"])
-                + ".png"
-            )
-            plt.close()
+        save_histograms(params, texture_values, threshold_max)
 
         # Clustering
         data_textures = np.transpose(texture_values)
@@ -453,6 +370,109 @@ def apply_clustering(
         clustering = clustering + textures
 
     return clustering
+
+
+def save_histograms(params, texture_values, threshold_max):
+    '''
+    Save histograms of texture values if in debug mode
+    '''
+    if params["texture_mode"] == "debug" or params["save_mode"] == "debug":
+        values, bins, _ = plt.hist(texture_values, bins=75)
+        plt.clf()
+        bins_center = (bins[:-1] + bins[1:]) / 2
+        plt.plot(bins_center, values, color="blue")
+        plt.savefig(
+            path.splitext(params["vegetationmask"])[0]
+            + "_histogram_texture.png"
+        )
+        plt.close()
+        index_max = np.argmax(bins_center > threshold_max) + 1
+        plt.plot(bins_center[:index_max], values[:index_max], color="blue")
+        plt.savefig(
+            path.splitext(params["vegetationmask"])[0]
+            + "_histogram_texture_cut"
+            + str(params["filter_texture"])
+            + ".png"
+        )
+        plt.close()
+
+
+def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
+    '''
+    Assign vegetation class codes to each cluster based on NDVI thresholds or proportions.
+    '''
+    list_clusters_by_ndvi = list_clusters.sort_values(
+        by="ndvi", ascending=True
+    ).index
+    map_centroid = []
+    nb_clusters_no_veg = 0
+    nb_clusters_veg = 0
+    if params["min_ndvi_veg"]:
+        # Attribute veg class by threshold
+        for t in range(kmeans_rad_indices.n_clusters):
+            if list_clusters.iloc[t]["ndvi"] > float(params["min_ndvi_veg"]):
+                map_centroid.append(VEG_CODE)
+                nb_clusters_veg += 1
+            elif list_clusters.iloc[t]["ndvi"] < float(
+                    params["max_ndvi_noveg"]
+            ):
+                if params["non_veg_clusters"]:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v)
+                else:
+                    map_centroid.append(NO_VEG_CODE)  # 0
+                nb_clusters_no_veg += 1
+            else:
+                map_centroid.append(UNDEFINED_VEG)
+
+    else:
+        # Attribute class by thirds
+        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
+        if params["nb_clusters_veg"] >= 7:
+            nb_clusters_no_veg = NB_CLUSTERS - params["nb_clusters_veg"]
+            nb_clusters_veg = params["nb_clusters_veg"]
+
+        for t in range(kmeans_rad_indices.n_clusters):
+            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
+                if params["non_veg_clusters"]:
+                    l_ndvi = list(list_clusters_by_ndvi)
+                    v = l_ndvi.index(t)
+                    map_centroid.append(v)
+                else:
+                    map_centroid.append(NO_VEG_CODE)  # 0
+            elif (
+                    t
+                    in list_clusters_by_ndvi[
+                       nb_clusters_no_veg: NB_CLUSTERS - params["nb_clusters_veg"]
+                       ]
+            ):
+                map_centroid.append(UNDEFINED_VEG)  # 10
+            else:
+                map_centroid.append(VEG_CODE)  # 20
+    return map_centroid, nb_clusters_no_veg, nb_clusters_veg
+
+
+def cluster_on_radiometry(nb_polys, params, stats):
+    '''
+    K-means clustering on NDVI and NDWI indices
+    '''
+    kmeans_rad_indices = KMeans(
+        n_clusters=NB_CLUSTERS,
+        init="k-means++",
+        n_init=5,
+        verbose=0,
+        random_state=712,
+    )
+    pred_veg = kmeans_rad_indices.fit_predict(
+        np.stack((stats[0:nb_polys], stats[nb_polys: 2 * nb_polys]), axis=1)
+    )
+    if params["debug"]:
+        logger.debug(f"{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)=}")
+    list_clusters = pd.DataFrame.from_records(
+        kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"]
+    )
+    return kmeans_rad_indices, list_clusters, pred_veg
 
 
 # Finalize #
