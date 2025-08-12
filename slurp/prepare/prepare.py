@@ -549,28 +549,14 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
     """
     # Read the JSON files
     keys = ["input", "prepare", "aux_layers", "resources"]
-    argsdict = io_utils.read_json(
-        main_config, keys, user_config)
-
-    # Read the list back from the JSON file
-    with open("args_list.json", 'r') as f:
-        cli_params = json.load(f)
-    remove("args_list.json")
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    if logs_to_file:
-        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
-        if not path.exists("logs"):
-            makedirs("logs")
-    else:
-        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
-    utils.setup_logging(config_file)
-
-    logger.info("--"*50)
+    logger.info("--" * 50)
     logger.info("SLURP_PREPARE")
     logger.info("JSON data loaded:")
     logger.info(argsdict)
