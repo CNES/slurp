@@ -21,14 +21,17 @@
 """Brings together some useful functions"""
 
 import os
-import json
 import time
+import pathlib
+import json
+from os import makedirs, path, remove
 
-
+import argparse
 import logging.config
 import numpy as np
 import psutil
 
+from slurp.tools import io_utils
 from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
@@ -38,6 +41,30 @@ def setup_logging(config_file : str):
         config = json.load(f_in)
 
     logging.config.dictConfig(config)
+
+
+def parse_args(keys, logs_to_file, main_config, user_config):
+    '''
+    Parse command line arguments.
+    Setup logging with a configuration file based on logs_to_file option value.
+    '''
+    argsdict = io_utils.read_json(
+        main_config, keys, user_config)
+
+    # Read the list back from the JSON file
+    with open("args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("args_list.json")
+
+    if logs_to_file:
+        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+        if not path.exists("logs"):
+            makedirs("logs")
+    else:
+        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
+
+    setup_logging(config_file)
+    return argsdict, cli_params
 
 
 def convert_time(seconds):
