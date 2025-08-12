@@ -1,144 +1,123 @@
 {
-  "input":
-    {
-	"file_vhr": "absolute_path_to_image.tif",
-	"sensor_mode": false
-    },
-
-  "aux_layers":
-    {
-      "valid_stack": null,
-      "file_ndvi": null,
-      "file_ndwi": null,
-      "extracted_pekel": null,
-      "extracted_hand":null,
-      "extracted_wsf":null,
-      "file_texture": null,
-      "mnh": null
-    },
-
-  "masks":
-    {
-      "watermask": null,
-      "urbanmask": null,
-      "vegetationmask": null,
-      "shadowmask": null,
-      "stackmask": null
-    },
-
-  "resources":
-    {
-	"n_workers": 8,
-	"tile_max_size": 0,
-	"multiproc_context": "fork",
-	"save_mode": "none",
-	"n_jobs": 1
-    },
-
-  "prepare":
-    {
-      "red": 1,
-      "green": 2,
-      "nir": 4,
-      "cloud_mask": null,
-      "pekel_method": "all",
-      "pekel" : null,
-      "pekel_obs": null,
-      "hand" : null,
-      "wsf": null,
-	"texture_rad": 5,
-	"dtm":null,
-	"geoid_file":"/softs/projets/3d/geoids/egm96.grd",
-      "analyse_glcm": false,
-      "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt", 
-      "cropped_land_cover_map": false,
-      "effective_used_config": "out/effective_used_config.json"
-    },
-
-  "post_process":
-    {
-      "binary_opening": 2,
-      "binary_closing": 3,
-      "binary_dilation": 3,
-      "remove_small_objects": 50,
-      "remove_small_holes": 50,
-      "area_closing": null
-    },
-
-  "shadows":
-    {
-      "th_rgb": 0.2,
-      "th_nir": 0.2,
-      "percentile": 2,
-      "absolute_threshold": false
-    },
-
-  "urban":
-    {
-      "vegmask_max_value": 21,
-      "nb_samples_other": 5000,
-      "nb_samples_urban": 1000,
-      "files_layers": [],
-      "value_classif": 255,
-      "max_depth": 8,
-      "nb_estimators": 100,
-      "gt_binary_erosion": 3,
-      "veg_binary_dilation": 5
-   },
-
-  "vegetation":
-    {
-      "slic_seg_size": 100,
-      "slic_compactness": 0.1,
-      "nb_clusters_veg": 3,
-      "min_ndvi_veg": 350,
-      "max_ndvi_noveg": 0,
-      "non_veg_clusters": null,
-      "nb_clusters_low_veg": 3,
-      "max_texture_th": null,
-      "texture_mode": "yes",
-      "filter_texture": 90,
-      "debug": false
-    },
-
-  "water":
-    {
-      "files_layers": [],
-      "thresh_pekel": 50,
-      "thresh_hand": 25,
-      "strict_thresh": 50,
-      "hand_strict": false,
-      "simple_ndwi_threshold": false,
-      "ndwi_threshold": 0.1,
-      "samples_method": "grid",
-      "nb_samples_water": 2000,
-      "nb_samples_other": 10000,
-      "nb_samples_auto": false,
-      "auto_pct": 0.0002,
-      "smart_area_pct": 50,
-      "smart_minimum": 10,
-      "grid_spacing": 40,
-      "max_depth": 8,
-      "nb_estimators": 100,
-      "no_pekel_filter": false,
-      "hand_filter": false,
-      "value_classif": 1
-    },
-
-  "stack":
-    {
-      "building_threshold": 70,
-      "building_erosion": 2,
-      "bonus_gt": 10,
-      "malus_shadow": 10,
-      "remove_small_objects": 300,
-      "remove_small_holes": 300,
-      "value_classif_low_veg": 1,
-      "value_classif_high_veg": 2,
-      "value_classif_water": 3,
-      "value_classif_buildings": 4,
-      "value_classif_bare_ground": 6,
-      "value_classif_false_positive_buildings": 10,
-      "value_classif_background": 11
-   }
+  "input": {
+    "file_vhr": "absolute_path_to_image.tif",
+    "sensor_mode": false
+  },
+  "aux_layers": {
+    "valid_stack": null,
+    "file_ndvi": null,
+    "file_ndwi": null,
+    "extracted_pekel": null,
+    "extracted_hand": null,
+    "extracted_wsf": null,
+    "file_texture": null,
+    "mnh": null
+  },
+  "masks": {
+    "watermask": null,
+    "urbanmask": null,
+    "vegetationmask": null,
+    "shadowmask": null,
+    "stackmask": null
+  },
+  "resources": {
+    "n_workers": 8,
+    "tile_max_size": 0,
+    "multiproc_context": "fork",
+    "save_mode": "none",
+    "n_jobs": 1
+  },
+  "prepare": {
+    "red": 1,
+    "green": 2,
+    "nir": 4,
+    "cloud_mask": null,
+    "pekel_method": "all",
+    "pekel": null,
+    "pekel_obs": null,
+    "hand": null,
+    "wsf": null,
+    "texture_rad": 5,
+    "dtm": null,
+    "geoid_file": "/softs/projets/3d/geoids/egm96.grd",
+    "analyse_glcm": false,
+    "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt",
+    "cropped_land_cover_map": false,
+    "effective_used_config": "out/effective_used_config.json"
+  },
+  "post_process": {
+    "binary_opening": 2,
+    "binary_closing": 3,
+    "binary_dilation": 3,
+    "remove_small_objects": 50,
+    "remove_small_holes": 50,
+    "area_closing": null
+  },
+  "shadows": {
+    "th_rgb": 0.2,
+    "th_nir": 0.2,
+    "percentile": 2,
+    "absolute_threshold": false
+  },
+  "urban": {
+    "vegmask_max_value": 21,
+    "nb_samples_other": 5000,
+    "nb_samples_urban": 1000,
+    "files_layers": [],
+    "value_classif": 255,
+    "max_depth": 8,
+    "nb_estimators": 100,
+    "gt_binary_erosion": 3,
+    "veg_binary_dilation": 5
+  },
+  "vegetation": {
+    "slic_seg_size": 100,
+    "slic_compactness": 0.1,
+    "nb_clusters_veg": 3,
+    "min_ndvi_veg": 350,
+    "max_ndvi_noveg": 0,
+    "non_veg_clusters": null,
+    "nb_clusters_low_veg": 3,
+    "max_texture_th": null,
+    "texture_mode": "yes",
+    "filter_texture": 90,
+    "debug": false
+  },
+  "water": {
+    "files_layers": [],
+    "thresh_pekel": 50,
+    "thresh_hand": 25,
+    "strict_thresh": 50,
+    "hand_strict": false,
+    "simple_ndwi_threshold": false,
+    "ndwi_threshold": 0.1,
+    "samples_method": "grid",
+    "nb_samples_water": 2000,
+    "nb_samples_other": 10000,
+    "nb_samples_auto": false,
+    "auto_pct": 0.0002,
+    "smart_area_pct": 50,
+    "smart_minimum": 10,
+    "grid_spacing": 40,
+    "max_depth": 8,
+    "nb_estimators": 100,
+    "no_pekel_filter": false,
+    "hand_filter": false,
+    "value_classif": 1
+  },
+  "stack": {
+    "building_threshold": 70,
+    "building_erosion": 2,
+    "bonus_gt": 10,
+    "malus_shadow": 10,
+    "remove_small_objects": 300,
+    "remove_small_holes": 300,
+    "value_classif_low_veg": 1,
+    "value_classif_high_veg": 2,
+    "value_classif_water": 3,
+    "value_classif_buildings": 4,
+    "value_classif_bare_ground": 6,
+    "value_classif_false_positive_buildings": 10,
+    "value_classif_background": 11
+  }
 }
