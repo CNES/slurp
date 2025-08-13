@@ -28,6 +28,9 @@ import time
 import bindings_cpp
 import numpy as np
 import rasterio as rio
+import rasterio
+from rasterio.warp import transform_bounds
+from rasterio.windows import from_bounds
 from shareloc.dtm_reader import dtm_reader
 from shareloc.geofunctions.localization import Localization
 from shareloc.geomodels import GeoModel
@@ -45,16 +48,37 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     except ModuleNotFoundError as e:
         raise ImportError("OTB is not installed") from e
     start_time = time.time()
-    app_roi = otb.Registry.CreateApplication("ExtractROI")
-    app_roi.SetParameterString("in", file_in)
-    app_roi.SetParameterString("mode", "fit")
-    app_roi.SetParameterString("mode.fit.im", file_ref)
-    app_roi.SetParameterString("out", "fake.tif")
-    app_roi.Execute()
 
+    # Open the reference image to get its bounds in its CRS
+    with rasterio.open(file_ref) as ref_src:
+        ref_bounds = ref_src.bounds
+        ref_crs = ref_src.crs
+
+    # Open the input image (to be cropped)
+    with rasterio.open(file_in) as in_src:
+        in_crs = in_src.crs
+
+        # Transform reference bounds to input CRS if necessary
+        if ref_crs != in_crs:
+            ref_bounds = transform_bounds(ref_crs, in_crs, *ref_bounds)
+
+        # Create a window in the input image matching the transformed reference bounds
+        window = from_bounds(*ref_bounds, transform=in_src.transform)
+        window = window.round_offsets().round_lengths()
+
+        # Read the window as a numpy array
+        roi = in_src.read(window=window)
+
+    # app_roi = otb.Registry.CreateApplication("ExtractROI")
+    # app_roi.SetParameterString("in", file_in)
+    # app_roi.SetParameterString("mode", "fit")
+    # app_roi.SetParameterString("mode.fit.im", file_ref)
+    # app_roi.SetParameterString("out", "fake.tif")
+    # app_roi.Execute()
+
+    # roi = app_roi.GetVectorImageAsNumpyArray("out")
     print("Extract ROI in", time.time() - start_time, "seconds.")
-
-    return app_roi.GetVectorImageAsNumpyArray("out")
+    return roi
 
 
 def compute_dtm_footprint(geom_model, sensor_image, data_img):

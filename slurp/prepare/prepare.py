@@ -577,7 +577,7 @@ def main():
             profile = eoscale_manager.get_profile(key_vhr)
 
             # Global land cover map (used for vegetation mask, not water mask)
-            if args.analyse_glcm and args.mode != "water": 
+            if args.analyse_glcm and args.mode != "water":
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
