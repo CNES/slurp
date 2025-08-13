@@ -1,6 +1,7 @@
 {
     "features_test_img": "test_low_resolution/inputs/test_slurp.tif",
     "output_dir": "out/",
+    "ref_dir": "out/",
     "pekel": "test_low_resolution/inputs/occurrence_70W_20Nv1_4_2021.tif",
     "hand": "test_low_resolution/inputs/Copernicus_DSM_COG_10_N18_00_W067_00_HAND.tif",
     "wsf": "test_low_resolution/inputs/WSF2019_v1_-68_18.tif"

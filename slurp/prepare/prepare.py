@@ -541,6 +541,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
 
     with open(args.main_config, "r", encoding="utf8") as json_file:
         final_used_config = json.load(json_file)
+        args_dict = vars(args_dict)
         for key in final_used_config:
             for sub_key in final_used_config[key]:
                 if sub_key in args_dict:

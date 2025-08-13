@@ -31,6 +31,5 @@ def write_command_compute_prepare(nb_workers):
 @pytest.mark.features
 def test_absolute_analyse_glcm():
     command = (write_command_compute_prepare(1) + f"--analyse_glcm").split()
-    breakpoint()
     sys.argv = command
     slurp.prepare.prepare.main()
