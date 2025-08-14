@@ -21,74 +21,134 @@
 
 """Module to rasterize image with OTB"""
 import argparse
+import traceback
 import os
 import time
-import traceback
+import numpy as np
+import rasterio
+from rasterio import features
+import fiona
+from shapely.geometry import shape
+from shapely.ops import transform
+from pyproj import CRS, Transformer
+from scipy.ndimage import binary_dilation
 
 import otbApplication as otb
 
 from slurp.tools.constant import COMPRESSION
 
 
+# def rasterize(args):
+#     """Create a rasterized copy of the image passed in arguments"""
+#     start_time = time.time()
+#
+#     app_reproj = otb.Registry.CreateApplication("VectorDataExtractROI")
+#     app_reproj.SetParameterString("io.vd", args.osm)
+#     app_reproj.SetParameterString("io.in", args.im)
+#     app_reproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
+#     app_reproj.ExecuteAndWriteOutput()
+#
+#     app_raster = otb.Registry.CreateApplication("Rasterization")
+#     app_raster.SetParameterString("in", "tmp_OSM_data.sqlite")
+#     app_raster.SetParameterString("im", args.im)
+#     app_raster.SetParameterString("out", "raster")
+#     app_raster.SetParameterString("mode", "binary")
+#     app_raster.SetParameterFloat("mode.binary.foreground", 1)
+#     app_raster.Execute()
+#
+#     app_si = otb.Registry.CreateApplication("Superimpose")
+#     app_si.SetParameterString("inr", args.im)
+#     app_si.SetParameterInputImage(
+#         "inm", app_raster.GetParameterOutputImage("out")
+#     )
+#     if args.dilate > 0:
+#         app_si.SetParameterString("out", "superimpose")
+#         app_si.Execute()
+#         print("Dilatation of vector data / write final result")
+#         app_morpho = otb.Registry.CreateApplication(
+#             "BinaryMorphologicalOperation"
+#         )
+#         app_morpho.SetParameterInputImage(
+#             "in", app_si.GetParameterOutputImage("out")
+#         )
+#         app_morpho.SetParameterInt("xradius", args.dilate)
+#         app_morpho.SetParameterInt("yradius", args.dilate)
+#         app_morpho.SetParameterString(
+#             "out",
+#             str(
+#                 args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+#             ),
+#         )
+#         app_morpho.SetParameterOutputImagePixelType(
+#             "out", otb.ImagePixelType_uint8
+#         )
+#         app_morpho.ExecuteAndWriteOutput()
+#     else:
+#         print("Write final result")
+#         app_si.SetParameterString(
+#             "out",
+#             str(
+#                 args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
+#             ),
+#         )
+#         app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
+#         app_si.ExecuteAndWriteOutput()
+#
+#     os.system("rm tmp_OSM_data.sqlite")
+#
+#     print("Execution time : " + str(time.time() - start_time))
+
 def rasterize(args):
-    """Create a rasterized copy of the image passed in arguments"""
+    """Rasterize OSM vector data onto a reference image, with optional dilation."""
     start_time = time.time()
 
-    app_reproj = otb.Registry.CreateApplication("VectorDataExtractROI")
-    app_reproj.SetParameterString("io.vd", args.osm)
-    app_reproj.SetParameterString("io.in", args.im)
-    app_reproj.SetParameterString("io.out", "tmp_OSM_data.sqlite")
-    app_reproj.ExecuteAndWriteOutput()
+    # Load reference image
+    with rasterio.open(args.im) as src:
+        meta = src.meta.copy()
+        transform_affine = src.transform
+        width = src.width
+        height = src.height
+        crs = src.crs
 
-    app_raster = otb.Registry.CreateApplication("Rasterization")
-    app_raster.SetParameterString("in", "tmp_OSM_data.sqlite")
-    app_raster.SetParameterString("im", args.im)
-    app_raster.SetParameterString("out", "raster")
-    app_raster.SetParameterString("mode", "binary")
-    app_raster.SetParameterFloat("mode.binary.foreground", 1)
-    app_raster.Execute()
+    # Load vector features
+    with fiona.open(args.osm, 'r') as src_v:
+        # Reproject geometries to match image CRS if needed
+        if src_v.crs and src_v.crs != crs:
+            # Create a transformer from source to target CRS
+            transformer = Transformer.from_crs(CRS(src_v.crs), CRS(crs), always_xy=True)
+            geometries = [transform(transformer.transform, shape(feat["geometry"])) for feat in src_v]
+        else:
+            geometries = [shape(feat["geometry"]) for feat in src_v]
 
-    app_si = otb.Registry.CreateApplication("Superimpose")
-    app_si.SetParameterString("inr", args.im)
-    app_si.SetParameterInputImage(
-        "inm", app_raster.GetParameterOutputImage("out")
+    print("Rasterizing vector data...")
+    # Rasterize geometries
+    rasterized = features.rasterize(
+        ((geom, 1) for geom in geometries),
+        out_shape=(height, width),
+        transform=transform_affine,
+        fill=0,
+        dtype="uint8"
     )
+
     if args.dilate > 0:
-        app_si.SetParameterString("out", "superimpose")
-        app_si.Execute()
-        print("Dilatation of vector data / write final result")
-        app_morpho = otb.Registry.CreateApplication(
-            "BinaryMorphologicalOperation"
-        )
-        app_morpho.SetParameterInputImage(
-            "in", app_si.GetParameterOutputImage("out")
-        )
-        app_morpho.SetParameterInt("xradius", args.dilate)
-        app_morpho.SetParameterInt("yradius", args.dilate)
-        app_morpho.SetParameterString(
-            "out",
-            str(
-                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
-            ),
-        )
-        app_morpho.SetParameterOutputImagePixelType(
-            "out", otb.ImagePixelType_uint8
-        )
-        app_morpho.ExecuteAndWriteOutput()
-    else:
-        print("Write final result")
-        app_si.SetParameterString(
-            "out",
-            str(
-                args.out + f"?&gdal:co:TILED=YES&gdal:co:COMPRESS={COMPRESSION}"
-            ),
-        )
-        app_si.SetParameterOutputImagePixelType("out", otb.ImagePixelType_uint8)
-        app_si.ExecuteAndWriteOutput()
+        print(f"Applying dilation (radius: {args.dilate})...")
+        # Dilation kernel size is 2*radius + 1
+        structure = np.ones((2 * args.dilate + 1, 2 * args.dilate + 1))
+        rasterized = binary_dilation(rasterized, structure=structure).astype(np.uint8)
 
-    os.system("rm tmp_OSM_data.sqlite")
+    print("Saving output raster...")
+    meta.update({
+        "driver": "GTiff",
+        "count": 1,
+        "dtype": "uint8",
+        "compress": "DEFLATE",
+        "tiled": True
+    })
 
-    print("Execution time : " + str(time.time() - start_time))
+    with rasterio.open(args.out, 'w', **meta) as dst:
+        dst.write(rasterized, 1)
+
+    print("Execution time:", round(time.time() - start_time, 2), "seconds")
 
 
 def getarguments():
