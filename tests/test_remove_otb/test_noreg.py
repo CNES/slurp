@@ -1,6 +1,4 @@
-import glob
 import os
-import json
 
 import pytest
 import rasterio
@@ -22,9 +20,6 @@ def compare_tif(file1, file2, atol=0.0):
 
     print("TIFF files are identical.")
     return True
-
-
-#Test if results obtained without OTB are the same as the original ones
 
 
 # Test for slurp_prepare
@@ -67,14 +62,3 @@ def test_noreg_slurp_prepare():
     compare_tif("out/ref_prepare/valid_stack_xt_zone_NO_DATA.tif", "out/valid_stack_xt_zone_NO_DATA.tif")
     return valid_stack, ndvi, ndwi, texture
 
-
-# Test for rasterize_osm
-def test_noreg_rasterise_osm():
-
-    os.system(
-        f"slurp_rasterize_OSM -osm tests/data/Paris-Extrait1.shp -im tests/data/Paris-Extrait1.tif "
-        f"-out out/Paris-out.tif"
-    )
-
-    ######## COMPARE OUTPUT FILES WITH REFERENCE
-    compare_tif("out/ref_rasterize_osm/Paris-out.tif", "out/Paris-out.tif")

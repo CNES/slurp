@@ -43,10 +43,6 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     :param str file_in: path to the image to crop
     :param str file_ref: path to the input reference image
     """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
     start_time = time.time()
 
     # Open the reference image to get its bounds in its CRS
@@ -69,14 +65,6 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
         # Read the window as a numpy array
         roi = in_src.read(window=window)
 
-    # app_roi = otb.Registry.CreateApplication("ExtractROI")
-    # app_roi.SetParameterString("in", file_in)
-    # app_roi.SetParameterString("mode", "fit")
-    # app_roi.SetParameterString("mode.fit.im", file_ref)
-    # app_roi.SetParameterString("out", "fake.tif")
-    # app_roi.Execute()
-
-    # roi = app_roi.GetVectorImageAsNumpyArray("out")
     print("Extract ROI in", time.time() - start_time, "seconds.")
     return roi
 
@@ -312,6 +300,7 @@ def sensor_projection(
 
     import scipy
 
+    print(grid_geo)
     # construct all pixels positions
     interp_lon = scipy.interpolate.interpn(
         grid_sensor,
