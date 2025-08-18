@@ -39,9 +39,9 @@
     "wsf": null,
     "texture_rad": 5,
     "dtm": null,
-    "geoid_file": "test_low_resolution/inputs/geoid_EGM96.grd",
+    "geoid_file": "test/fast_tests/inputs/geoid_EGM96.grd",
     "analyse_glcm": false,
-    "land_cover_map": "test_low_resolution/inputs/ESA_WorldCover_10m_2021_v200_N18W069_Map.tif",
+    "land_cover_map": "test/fast_tests/inputs/ESA_WorldCover_10m_2021_v200_N18W069_Map.tif",
     "cropped_land_cover_map": false,
     "effective_used_config": "out/effective_used_config.json"
   },
