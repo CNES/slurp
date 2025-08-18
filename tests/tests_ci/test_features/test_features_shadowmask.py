@@ -32,7 +32,7 @@ def write_command_compute_shadowmask(nb_workers, valid_stack=None):
     )
 
 
-@pytest.mark.features
+@pytest.mark.fast
 def test_absolute_threshold():
     command = (
         write_command_compute_shadowmask(1) + " -absolute_threshold 10.0"
@@ -41,7 +41,7 @@ def test_absolute_threshold():
     slurp.masks.shadowmask.main()
 
 
-@pytest.mark.features
+@pytest.mark.fast
 @pytest.mark.parametrize("percentile", [0, 2, 100])
 def test_percentile(percentile):
     command = (
@@ -51,7 +51,7 @@ def test_percentile(percentile):
     slurp.masks.shadowmask.main()
 
 
-@pytest.mark.features
+@pytest.mark.fast
 @pytest.mark.parametrize("th_rgb,th_nir", [(0, 0), (0.2, 0.2)])
 def test_percentile_nir_rgb(th_rgb, th_nir):
     command = (
