@@ -28,7 +28,7 @@ import pytest
 
 import slurp.masks.stack_masks
 from tests.utils import get_aux_path, get_output_path
-from tests.validation import validate_mask
+from tests.full_tests.validation import validate_mask
 
 # Input images
 input_files = glob.glob(os.path.join(pytest.data_dir, "all") + "/*.tif")
