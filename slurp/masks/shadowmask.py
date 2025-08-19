@@ -287,7 +287,7 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
 
             end_time = time.time()
             logger.info(
-                f"**** Shadow mask for {file_vhr} (saved as {shadowmask}) ****"
+                f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
             )
             logger.info(
                 "Total time (user)       :\t"
