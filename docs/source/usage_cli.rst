@@ -292,29 +292,6 @@ Type ``slurp_stackmasks -h`` for complete list of options :
     - classif value of each element of the final mask
     - etc.
 
-Quantify the quality of a mask
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The predicted mask is compared to a given raster ground truth and some
-metrics such as the recall and the precision scores are calculated. The
-resulting mask shows the overlay of the prediction and the ground truth.
-An optional mode, useful for the urban mask, extracts the polygons of
-each raster and compare them, giving the number of expected buildings
-identified and the IoU score. The analysis can be performed on a window
-of the input files.
-
-.. code-block:: console
-
-   slurp_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
-
-Type ``slurp_scores -h`` for complete list of options :
-
-    -  selection of a window (-startx, -starty, -sizex, -sizey),
-    -  detection of the buildings (-polygonize) and iou score
-       (-polygonize.union) with some parameters (-polygonize.area,
-       -polygonize.unit, etc.),
-    -  saving of intermediate files (-save)
-
 Tests
 -----
 
