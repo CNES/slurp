@@ -498,7 +498,7 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
 
             if (
                 args.nb_valid_built_pixels > args.nb_samples_urban
-                and args.nb_valid_other_pixels > 0
+                and args.nb_valid_other_pixels > args.nb_samples_other
             ):
                 # Nominal case : Ground Truth contains some pixels marked as building.
                 input_for_samples = [
@@ -529,7 +529,7 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
 
                 # Check if we have found "building" AND "non building" samples
                 # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
-                building_areas = len(np.where(y_samples == 255)[0]) > 0
+                building_areas = len(np.where(y_samples == args.value_classif)[0]) > 0
                 non_building_areas = len(np.where(y_samples == 0)[0]) > 0
 
                 time_samples = time.time()
@@ -607,8 +607,28 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
                         + utils.convert_time(time_random_forest - time_samples)
                     )
                     logger.info("***")
+                else:
+                    # Weird corner case : learning/prediction had not enough samples
+                    logger.info(
+                        f"**** Corner case with too few urban samples for {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                    )
 
-            if args.nb_valid_built_pixels == nb_valid_pixels:
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_original_valid_stack],
+                        image_filter=add_nodata,
+                        filter_parameters={"fill_value": 0},
+                        generate_output_profiles=eo_utils.single_uint8_profile,
+                        context_manager=eoscale_manager,
+                        multiproc_context=args.multiproc_context,
+                        filter_desc="Add nodata...",
+                    )
+
+                    # Save proba mask
+                    eoscale_manager.write(
+                        key=key_predict[0], img_path=args.urbanmask
+                    )
+                    
+            elif args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 logger.info(
                     f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
@@ -628,7 +648,6 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
                 eoscale_manager.write(
                     key=key_predict[0], img_path=args.urbanmask
                 )
-
             else:
                 # Corner case : no "building pixels" --> void mask (0)
                 logger.info(
