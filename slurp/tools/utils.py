@@ -25,8 +25,8 @@ import time
 import pathlib
 import json
 from os import makedirs, path, remove
+from importlib.resources import files
 
-import argparse
 import logging.config
 import numpy as np
 import psutil
@@ -57,12 +57,11 @@ def parse_args(keys, logs_to_file, main_config, user_config):
     remove("args_list.json")
 
     if logs_to_file:
-        config_file = pathlib.Path("slurp/tools/logs/out2json.json")
+        config_file = files("slurp.tools.logs").joinpath("out2json.json")
         if not path.exists("logs"):
             makedirs("logs")
     else:
-        config_file = pathlib.Path("slurp/tools/logs/out2stdout.json")
-
+        config_file = files("slurp.tools.logs").joinpath("out2stdout.json")
     setup_logging(config_file)
     return argsdict, cli_params
 
