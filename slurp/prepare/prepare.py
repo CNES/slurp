@@ -96,80 +96,48 @@ def getarguments():
     group2.add_argument("-green", type=int, help="Green band index")
 
     group3 = parser.add_argument_group(
-        description="*** AUX FILES FOR WATER MASK ***"
-    )
-    group3.add_argument(
-        "-pekel_method",
-        help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery",
-    )
-    group3.add_argument("-pekel", help="Path of the global Pekel file")
-    group3.add_argument(
-        "-pekel_obs",
-        help="Month of the desired Pekel file (pekel_method = month)",
-    )
-    group3.add_argument(
-        "-pekel_monthly_occurrence",
-        help="Path of the root of monthly occurrence Pekel files",
-    )
-    group3.add_argument(
-        "-extracted_pekel", help="Path to store the extracted Pekel file"
-    )
-    group3.add_argument("-hand", help="Path of the global HAND file")
-    group3.add_argument(
-        "-extracted_hand", help="Path to store the extracted HAND file"
-    )
-
-    group4 = parser.add_argument_group(
-        description="*** AUX FILES FOR URBAN MASK ***"
-    )
-    group4.add_argument("-wsf", help="Path of the global WSF file")
-    group4.add_argument(
-        "-extracted_wsf", help="Path to store the extracted WSF file"
-    )
-
-    group5 = parser.add_argument_group(
         description="*** AUX FILES FOR VEGETATION MASK ***"
     )
-    group5.add_argument("-file_texture", help="Path to store the texture file")
-    group5.add_argument(
+    group3.add_argument("-file_texture", help="Path to store the texture file")
+    group3.add_argument(
         "-texture_rad",
         type=int,
         help="Radius for texture (std convolution) computation",
     )
 
     # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
-    group5.add_argument(
+    group3.add_argument(
         "--analyse_glcm",
         dest="analyse_glcm",
         action="store_true",
         help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation",
     )
-    group5.add_argument(
+    group3.add_argument(
         "--no_analyse_glcm",
         dest="analyse_glcm",
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group5.set_defaults(analyse_glcm=False)
+    group3.set_defaults(analyse_glcm=False)
 
-    group5.add_argument(
+    group3.add_argument(
         "-land_cover_map",
         help="Input land cover map, only used if 'analyse_glcm' is True",
     )
-    group5.add_argument(
+    group3.add_argument(
         "-cropped_land_cover_map",
         type=bool,
         help="If the land_cover_map image is cropped to the input VHR file or not",
     )
 
-    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
-    group6.add_argument("-n_workers", type=int, help="Number of CPU")
-    group6.add_argument(
+    group4 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group4.add_argument("-n_workers", type=int, help="Number of CPU")
+    group4.add_argument(
         "-tile_max_size",
         type=int,
         help="Max tile size to be processed (0 : default)",
     )
-    group6.add_argument(
+    group4.add_argument(
         "-multiproc_context",
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
