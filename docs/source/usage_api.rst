@@ -208,24 +208,6 @@ gradient image, thus regularizing buildings shapes.
 Please check complete arguments description available `here <TODO>`_.
 Beware that API arguments override the JSON arguments.
 
-Quantify the quality of a mask
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The predicted mask is compared to a given raster ground truth and some
-metrics such as the recall and the precision scores are calculated. The
-resulting mask shows the overlay of the prediction and the ground truth.
-An optional mode, useful for the urban mask, extracts the polygons of
-each raster and compare them, giving the number of expected buildings
-identified and the IoU score. The analysis can be performed on a window
-of the input files.
-
-.. code-block:: python
-
-   slurp_scores(gt, im, out, value_classif_ref, value_classif, startx,
-                starty, sizex, sizey, polygonize, union, area, unit,
-                thresh_iou, thresh_overlay, save)
-
-
 
 Contribution
 ------------
