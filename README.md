@@ -58,55 +58,18 @@ Data preparation can be achieved with Orfeo ToolBox or other tools, in order to 
 </table>
 
 ## Install
-You need to clone the repository and pip install SLURP.
+SLURP can be installed with pip : 
 ```
-git clone git@gitlab.cnes.fr:pluto/slurp.git
+pip install slurp
 ```
-To install SLURP, you need OTB, [EOScale](https://gitlab.cnes.fr/pluto/eoscale) and some libraries already installed on VRE OT.
 
-Otherwise, if you are are connected to TREX, or working on your personal computer (Linux), 
-you may set the environment as mentioned below.
-### Create a virtual env with all libraries (if you don't use VRE OT)
-On TREX, connect to a computing node to create & compile the virtual environment (needed to compile rasterio at install time)
-```
-sinter -A cnes_level2 -N 1 -n 8 --time=02:00:00 --mem=64G --x11 --pty bash
-```
-Load OTB and create a virtual env with some Python libraries. 
-Compile and install EOScale and then SLURP
-```
-module load otb/9.0.0-python3.8
-# Creates a virtual env base on Python 3.8.13
-python -m venv slurp_env
-. slurp_env/bin/activate
-# upgrade pip and install several libraries
-pip install pip --upgrade
-cd <EOScale source folder>
-pip install .
-cd <SLURP source folder>
-pip install .
-# for validation tests
-pip install pytest
-```
-Your environment is ready, you can compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
+Your environment is ready, you can prepare data with slurp_prepare and then compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
 
 ## Getting Started
 
 Once your environment has been set up, you can run SLURP.
 
-A tutorial (with and without OTB) is available : [Tutorial.md](Tutorial.md).
-
-## Use SLURP on TREX
-On TREX, you can directly use SLURP by sourcing the following environment.
-```
-source /work/CAMPUS/users/tanguyy/PLUTO/slurp_demo/init_slurp.sh
-```
-This will load OTB 9.0 and all Python dependencies
-
-You can also use a shell script with SLURM to launch different masks algorithms on your images.
-```
-sbatch --export="PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2" /softs/projets/pluto/demo_slurp/compute_all_masks.pbs
-```
-Two scripts (to calculate all the masks and the scores) are available in conf/ directory.
+A tutorial is available : [Tutorial.md](Tutorial.md).
 
 ## Data preparation
 
@@ -120,7 +83,6 @@ The prepare script enables :
 - Extraction of WSF file
 - Computation of texture file with a convolution
 
-It requires an OTB installation.
 
 **To run the script**
 
@@ -250,20 +212,6 @@ Type `slurp_stackmasks -h` for complete list of options :
 - classif value of each element of the final mask
 - etc.
 
-### Quantify the quality of a mask
-
-The predicted mask is compared to a given raster ground truth and some metrics such as the recall and the precision scores are calculated. The resulting mask shows the overlay of the prediction and the ground truth. An optional mode, useful for the urban mask, extracts the polygons of each raster and compare them, giving the number of expected buildings identified and the IoU score.
-The analysis can be performed on a window of the input files.
-
-```
-slurp_scores -im <predicted mask> -gt <raster ground truth - OSM, ..> -out <your overlay mask>
-```
-
-Type `slurp_scores -h` for complete list of options :
-
-- selection of a window (-startx, -starty, -sizex, -sizey),
-- detection of the buildings (-polygonize) and iou score (-polygonize.union) with some parameters (-polygonize.area, -polygonize.unit, etc.),
-- saving of intermediate files (-save)
 
 ## Tests
 
@@ -278,7 +226,7 @@ You can change the default configuration for the tests by modifying the JSON fil
 
 ## Documentation
 
-Go in docs/ directory
+Documentation can be found on [read the docs](https://slurp-masks.readthedocs.io/en/latest/index.html)
 
 ## Contribution
 
