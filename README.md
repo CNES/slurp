@@ -3,7 +3,7 @@
 
 <h4>slurp</h4>
 
-[![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)](https://www.python.org/downloads/release/python-380/)
+[![Python](https://img.shields.io/badge/python-v3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 
 
 <p>
@@ -25,7 +25,7 @@ SLURP is your companion to compute a simple land-use/land-cover mask from Very H
 
 SLURP uses some global data, such as Global Surface Water (Pekel) for water detection or World Settlement Footprint (WSF) for building detection. 
 
-Data preparation can be achieved with Orfeo ToolBox or other tools, in order to bring all necessary data in the same projection. You can either build your mask step by step, or use a batch script to launch and build the final mask automatically.
+Data preparation can be achieved with [Orfeo ToolBox](https://www.orfeo-toolbox.org/) or other tools, in order to bring all necessary data in the same projection. You can either build your mask step by step, or use a batch script to launch and build the final mask automatically.
 <table border="0">
 <tr>
 <td>
@@ -49,7 +49,7 @@ Data preparation can be achieved with Orfeo ToolBox or other tools, in order to 
 </tr>
 <tr>
 <td>Bring your own VHR 4 bands (R/G/B/NIR) image (Pleiades, WorldView, PNEO, CO3D,...)</td>
-<td>Learn 'Pekel' water occurrence and predict water mask</td>
+<td>Learn water occurrence (from 'Pekel') and predict water mask</td>
 <td>Use an unsupervised clustering algorithm to detect low/high vegetation and bare ground</td>
 <td>Detect large shadows (but avoid water confusion)</td>
 <td>Learn 'WSF" urban mask and compute building probability</td>
@@ -57,19 +57,29 @@ Data preparation can be achieved with Orfeo ToolBox or other tools, in order to 
 </tr>
 </table>
 
-## Install
+## First steps
 SLURP can be installed with pip : 
 ```
 pip install slurp
 ```
-
-Your environment is ready, you can prepare data with slurp_prepare and then compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
-
-## Getting Started
-
-Once your environment has been set up, you can run SLURP.
+Once your environment is ready, you can prepare data with slurp_prepare and then compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
 
 A tutorial is available : [Tutorial.md](Tutorial.md).
+
+## Compute a land cover map
+
+### Input data
+SLURP is designed to compute a simple land cover map (water, low/high vegetation, bare groud, buildings) from a VHR (Very High Resolution) image with
+4 bands (Red, Green, Blue, Near-Infrared). It had been validated with Pleiades and tested with WordView, CO3D, Pleiades NEO images. It shall also work with images with lower resolution (ex : SPOT 6/7).
+
+SLURP is based on few or unsupervised algorithms (random forest, clustering, segmentation) that need some auxiliary data for training step. 
+
+| Data | Step / usage | Comments | 
+| ------ | ------ | ------ |
+| [Pekel](https://global-surface-water.appspot.com/download) (Global Surface Water) | **Water mask prediction** : Water occurrence [0-100] during the last 30 years, used to learn a water prediction model (*MANDATORY*) | The global map is mandatory but you can also use some data by month | 
+| [Hand MERIT](http://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/) |  **Water mask prediction** : Map of height above nearest drainage used to optimize choice of "non water" samples in the training step (*OPTIONAL*)  |  Free after registration (other kind of HAND maps exist) |
+| [WSF 2019](https://download.geoservice.dlr.de/WSF2019/) (World Settlement Footprint) |   **Urban mask prediction** : global buildings map used to learn a building prediction model (*MANDATORY*)| Could be replaced by a better resolution map if available (ex : OSM buildings) |
+| [ESA WorldCover](https://viewer.esa-worldcover.org/worldcover) | **Vegetation mask configuration** Global land cover map (10m resolution) used to customize vegetation clustering (*OPTIONAL*) | Very helpful to parameteriez balance between non-vegetation / low and high vegetation |
 
 ## Data preparation
 
