@@ -96,48 +96,80 @@ def getarguments():
     group2.add_argument("-green", type=int, help="Green band index")
 
     group3 = parser.add_argument_group(
+        description="*** AUX FILES FOR WATER MASK ***"
+    )
+    group3.add_argument(
+        "-pekel_method",
+        help="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery",
+    )
+    group3.add_argument("-pekel", help="Path of the global Pekel file")
+    group3.add_argument(
+        "-pekel_obs",
+        help="Month of the desired Pekel file (pekel_method = month)",
+    )
+    group3.add_argument(
+        "-pekel_monthly_occurrence",
+        help="Path of the root of monthly occurrence Pekel files",
+    )
+    group3.add_argument(
+        "-extracted_pekel", help="Path to store the extracted Pekel file"
+    )
+    group3.add_argument("-hand", help="Path of the global HAND file")
+    group3.add_argument(
+        "-extracted_hand", help="Path to store the extracted HAND file"
+    )
+
+    group4 = parser.add_argument_group(
+        description="*** AUX FILES FOR URBAN MASK ***"
+    )
+    group4.add_argument("-wsf", help="Path of the global WSF file")
+    group4.add_argument(
+        "-extracted_wsf", help="Path to store the extracted WSF file"
+    )
+
+    group5 = parser.add_argument_group(
         description="*** AUX FILES FOR VEGETATION MASK ***"
     )
-    group3.add_argument("-file_texture", help="Path to store the texture file")
-    group3.add_argument(
+    group5.add_argument("-file_texture", help="Path to store the texture file")
+    group5.add_argument(
         "-texture_rad",
         type=int,
         help="Radius for texture (std convolution) computation",
     )
 
     # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
-    group3.add_argument(
+    group5.add_argument(
         "--analyse_glcm",
         dest="analyse_glcm",
         action="store_true",
         help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation",
     )
-    group3.add_argument(
+    group5.add_argument(
         "--no_analyse_glcm",
         dest="analyse_glcm",
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group3.set_defaults(analyse_glcm=False)
+    group5.set_defaults(analyse_glcm=True)
 
-    group3.add_argument(
+    group5.add_argument(
         "-land_cover_map",
         help="Input land cover map, only used if 'analyse_glcm' is True",
     )
-    group3.add_argument(
+    group5.add_argument(
         "-cropped_land_cover_map",
         type=bool,
         help="If the land_cover_map image is cropped to the input VHR file or not",
     )
 
-    group4 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
-    group4.add_argument("-n_workers", type=int, help="Number of CPU")
-    group4.add_argument(
+    group6 = parser.add_argument_group(description="*** PARALLEL COMPUTING ***")
+    group6.add_argument("-n_workers", type=int, help="Number of CPU")
+    group6.add_argument(
         "-tile_max_size",
         type=int,
         help="Max tile size to be processed (0 : default)",
     )
-    group4.add_argument(
+    group6.add_argument(
         "-multiproc_context",
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
@@ -331,6 +363,131 @@ def compute_ndwi(
     return key_ndwi
 
 
+def pekel_extraction(
+    args: argparse.Namespace, grid_sensor, grid_geo, all_coords, roi
+) -> None:
+    """
+    Extract Global Surface Water (Pekel) and superimpose it on
+    the VHR image.
+
+    Args:
+        args (argparse.Namespace): Namespace object of arguments.
+    """
+    if args.pekel and args.extracted_pekel:
+        if args.extracted_pekel is not None and (args.overwrite or not path.isfile(args.extracted_pekel)):
+            makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
+            if args.pekel_method == "month":
+                file_pekel = path.join(
+                    args.pekel_monthly_occurrence,
+                    "has_observations" + str(args.pekel_obs),
+                    "has_observations" + str(args.pekel_obs) + ".vrt",
+                )
+                aux.aux_file_recovery(
+                    args.file_vhr,
+                    file_pekel,
+                    args.extracted_pekel,
+                    args.sensor_mode,
+                    args.dtm,
+                    args.geoid_file,
+                    grid_sensor,
+                    grid_geo,
+                    all_coords,
+                    roi,
+                )
+            elif args.pekel_method == "all":
+                aux.aux_file_recovery(
+                    args.file_vhr,
+                    args.pekel,
+                    args.extracted_pekel,
+                    args.sensor_mode,
+                    args.dtm,
+                    args.geoid_file,
+                    grid_sensor,
+                    grid_geo,
+                    all_coords,
+                    roi,
+                )
+            else:
+                raise Exception(
+                    "Method for Pekel extraction not accepted. Use 'month' or 'all'"
+                )
+        else:
+            print("Not extracting Pekel : the file already exists.")
+    else:
+        print("Pass Pekel extraction")
+
+
+def hand_extraction(
+    args: argparse.Namespace,
+    grid_sensor,
+    grid_geo,
+    all_coords,
+    roi,
+) -> None:
+    """
+    Extract HAND map (Height Above Nearest Drainage) and superimpose it on
+    the VHR image.
+
+    Args:
+        args (argparse.Namespace): Namespace object of arguments.
+    """
+    if args.hand and args.extracted_hand:
+        if args.extracted_hand is not None and (args.overwrite or not path.isfile(args.extracted_hand)):
+            makedirs(path.dirname(args.extracted_hand), exist_ok=True)
+            aux.aux_file_recovery(
+                args.file_vhr,
+                args.hand,
+                args.extracted_hand,
+                args.sensor_mode,
+                args.dtm,
+                args.geoid_file,
+                grid_sensor,
+                grid_geo,
+                all_coords,
+                roi,
+            )
+        else:
+            print("Not extracting Hand : the file already exists.")
+    else:
+        print("Pass Hand extraction")
+
+
+def wsf_extraction(
+    args: argparse.Namespace,
+    grid_sensor,
+    grid_geo,
+    all_coords,
+    roi,
+) -> None:
+    """
+    Extract World Settlement Footprint (WSF) and superimpose it on
+    the VHR image.
+
+    Args:
+        args (argparse.Namespace): Namespace object of arguments.
+    """
+
+    if args.wsf and args.extracted_wsf:
+        if args.extracted_wsf is not None and (args.overwrite or not path.isfile(args.extracted_wsf)):
+            makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
+            aux.aux_file_recovery(
+                args.file_vhr,
+                args.wsf,
+                args.extracted_wsf,
+                args.sensor_mode,
+                args.dtm,
+                args.geoid_file,
+                grid_sensor,
+                grid_geo,
+                all_coords,
+                roi,
+            )
+        else:
+            print("Not extracting WSF : the file already exists.")
+    else:
+        print("Pass WSF extraction")
+
+
 def compute_texture(
     args: argparse.Namespace,
     eoscale_manager: eom.EOContextManager,
@@ -469,6 +626,24 @@ def main():
             else:
                 print("Not computing NDWI : the file already exists.")
 
+            if args.sensor_mode:
+                grid_sensor, grid_geo, all_coords, roi = (
+                    geometry.compute_interpolation_grid(
+                        args.file_vhr, args.dtm, args.geoid_file
+                    )
+                )
+                if args.mode != "vegetation":
+                    # vegetation mask doest not need external data
+                    # Pekel
+                    pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+                    # Hand
+                    hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+                if args.mode == "all":
+                    # Only urban mask ('all' masks mode) need WSF
+                    # WSF
+                    wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
             if args.mode != "water":
                 # Only vegetation mask need to compute texture

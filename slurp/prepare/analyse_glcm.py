@@ -89,6 +89,8 @@ def compute_stats(
     :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
     :returns: number of clusters for vegetation and low vegetation
     """
+    print('/' * 50)
+    print(map_lc)
     if not cropped:
         # get ROI before computing stats
         if sensor_mode:
