@@ -93,9 +93,6 @@ def compute_vegetationmask(
 @pytest.mark.prepare
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_vegetationmask(file):
-    print('TEST PREPARE VEGETATIONMASK')
-    print("-" * 50)
-    print(file)
     valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")

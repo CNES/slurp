@@ -52,7 +52,6 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
 
     # Open the input image (to be cropped)
     with rasterio.open(file_in) as in_src:
-        print(in_src)
         in_crs = in_src.crs
 
         # Transform reference bounds to input CRS if necessary
