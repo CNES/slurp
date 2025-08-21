@@ -51,6 +51,13 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-mode",
+        choices= ["all", "water", "vegetation" ],
+        dest="mode",
+        default="all",
+        help="Prepare for all maks, water only or vegetation only",
+    )
+    parser.add_argument(
         "-w",
         "--overwrite",
         action="store_true",
@@ -367,7 +374,7 @@ def pekel_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.pekel and args.extracted_pekel:
-        if args.overwrite or not path.isfile(args.extracted_pekel):
+        if args.extracted_pekel is not None and (args.overwrite or not path.isfile(args.extracted_pekel)):
             makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
             if args.pekel_method == "month":
                 file_pekel = path.join(
@@ -379,9 +386,6 @@ def pekel_extraction(
                     args.file_vhr,
                     file_pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -392,9 +396,6 @@ def pekel_extraction(
                     args.file_vhr,
                     args.pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -425,15 +426,12 @@ def hand_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.hand and args.extracted_hand:
-        if args.overwrite or not path.isfile(args.extracted_hand):
+        if args.extracted_hand is not None and (args.overwrite or not path.isfile(args.extracted_hand)):
             makedirs(path.dirname(args.extracted_hand), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
                 args.hand,
                 args.extracted_hand,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
@@ -461,15 +459,12 @@ def wsf_extraction(
     """
 
     if args.wsf and args.extracted_wsf:
-        if args.overwrite or not path.isfile(args.extracted_wsf):
+        if args.extracted_wsf is not None and (args.overwrite or not path.isfile(args.extracted_wsf)):
             makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
                 args.wsf,
                 args.extracted_wsf,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
@@ -498,7 +493,7 @@ def compute_texture(
     valid stack image.
     """
     if args.texture_rad:
-        if args.overwrite or not path.isfile(args.file_texture):
+        if args.file_texture is not None and (args.overwrite or not path.isfile(args.file_texture)):
             makedirs(path.dirname(args.file_texture), exist_ok=True)
             # take percentiles to avoid outliers that could affect texture computation
             # compute texture on NIR band
@@ -581,12 +576,12 @@ def main():
             key_vhr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_vhr)
 
-            # Global land cover map
-            if args.analyse_glcm:  # Outside of the with ?
+            # Global land cover map (used for vegetation mask, not water mask)
+            if args.analyse_glcm and args.mode != "water":
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            if args.overwrite or not path.isfile(args.valid_stack):
+            if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
                 valid_stack_key = create_valid_stack(
                     args, eoscale_manager, key_vhr, profile
                 )
@@ -602,7 +597,7 @@ def main():
                 ]
 
             # NDVI
-            if args.overwrite or not path.isfile(args.file_ndvi):
+            if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
                 ndvi_key = compute_ndvi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
@@ -611,7 +606,7 @@ def main():
                 print("Not computing NDVI : the file already exists.")
 
             # NDWI
-            if args.overwrite or not path.isfile(args.file_ndwi):
+            if args.file_ndwi is not None and (args.overwrite or not path.isfile(args.file_ndwi)):
                 ndwi_key = compute_ndwi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
@@ -625,23 +620,23 @@ def main():
                         args.file_vhr, args.dtm, args.geoid_file
                     )
                 )
-            else:
-                grid_sensor = None
-                grid_geo = None
-                all_coords = None
-                roi = None
+                if args.mode != "vegetation":
+                    # vegetation mask doest not need external data
+                    # Pekel
+                    pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # Pekel
-            pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                    # Hand
+                    hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # Hand
-            hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                if args.mode == "all":
+                    # Only urban mask ('all' masks mode) need WSF
+                    # WSF
+                    wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # WSF
-            wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # Texture
-            compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
+            if args.mode != "water":
+                # Only vegetation mask need to compute texture
+                # Texture
+                compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
 
             # Write effective used config
             update_and_save_used_config(argsdict, args)

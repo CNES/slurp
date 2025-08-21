@@ -32,9 +32,6 @@ def aux_file_recovery(
     file_ref: str,
     global_data: str,
     reprojected_data: str,
-    sensor_mode: bool,
-    dtm_file: str = "",
-    geoid_file: str = "",
     grid_sensor: tuple = (),
     grid_geo: tuple = (),
     all_coords: np.ndarray = None,
@@ -52,20 +49,15 @@ def aux_file_recovery(
     print(
         f"Recover file {global_data=} to {reprojected_data=} onto {file_ref=} geometry"
     )
-    if sensor_mode:
-        geometry.sensor_projection(
-            global_data,
-            file_ref,
-            dtm_file,
-            geoid_file,
-            reprojected_data,
-            grid_sensor,
-            grid_geo,
-            all_coords,
-            roi,
-        )
-    else:
-        geometry.superimpose(global_data, file_ref, reprojected_data)
+    geometry.sensor_projection(
+        global_data,
+        file_ref,
+        reprojected_data,
+        grid_sensor,
+        grid_geo,
+        all_coords,
+        roi,
+    )
 
 
 def std_convoluted(

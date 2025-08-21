@@ -26,7 +26,7 @@ This script computes a shadow mask
 import argparse
 import time
 import traceback
-from os import makedirs, path
+from os import path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -182,9 +182,6 @@ def main():
     print("JSON data loaded:")
     print(argsdict)
     args = argparse.Namespace(**argsdict)
-
-    # Create output folder
-    makedirs(path.dirname(args.shadowmask), exist_ok=True)
 
     # Mask calculation
     with eom.EOContextManager(

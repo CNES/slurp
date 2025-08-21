@@ -24,7 +24,7 @@ import argparse
 import gc
 import time
 import traceback
-from os import makedirs, path
+from os import path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -379,9 +379,6 @@ def main():
     print(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.urbanmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,
@@ -397,7 +394,6 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
-            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
             key_original_valid_stack = eoscale_manager.open_raster(
@@ -518,11 +514,9 @@ def main():
                         n_jobs=args.n_jobs,
                     )
                     print(
-                        "RandomForest parameters:\n",
-                        classifier.get_params(),
-                        "\n",
+                        "RandomForest parameters: \n%s\n",
+                        str(classifier.get_params())
                     )
-
                     random_forest_utils.train_classifier(classifier, x_samples, y_samples)
                     random_forest_utils.print_feature_importance(
                         classifier, args.files_layers
