@@ -54,6 +54,13 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-mode",
+        choices= ["all", "water", "vegetation" ],
+        dest="mode",
+        default="all",
+        help="Prepare for all maks, water only or vegetation only",
+    )
+    parser.add_argument(
         "-w",
         "--overwrite",
         action="store_true",
@@ -359,9 +366,6 @@ def pekel_extraction(
                     args.file_vhr,
                     file_pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -372,9 +376,6 @@ def pekel_extraction(
                     args.file_vhr,
                     args.pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -411,9 +412,6 @@ def hand_extraction(
                 args.file_vhr,
                 args.hand,
                 args.extracted_hand,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
@@ -447,9 +445,6 @@ def wsf_extraction(
                 args.file_vhr,
                 args.wsf,
                 args.extracted_wsf,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
@@ -531,7 +526,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         json.dump(final_used_config, file_to_save, indent=4)
 
 
-def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
+def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
                   file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
                   file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
                   pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
@@ -575,8 +570,8 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
             key_vhr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_vhr)
 
-            # Global land cover map
-            if args.analyse_glcm:  # Outside of the with ?
+            # Global land cover map (used for vegetation mask, not water mask)
+            if args.analyse_glcm and args.mode != "water":
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
@@ -619,23 +614,23 @@ def slurp_prepare(main_config: str, overwrite: bool, effective_used_config: str,
                         args.file_vhr, args.dtm, args.geoid_file
                     )
                 )
-            else:
-                grid_sensor = None
-                grid_geo = None
-                all_coords = None
-                roi = None
+                if args.mode != "vegetation":
+                    # vegetation mask doest not need external data
+                    # Pekel
+                    pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # Pekel
-            pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                    # Hand
+                    hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # Hand
-            hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                if args.mode == "all":
+                    # Only urban mask ('all' masks mode) need WSF
+                    # WSF
+                    wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
-            # WSF
-            wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # Texture
-            compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
+            if args.mode != "water":
+                # Only vegetation mask need to compute texture
+                # Texture
+                compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
 
             # Write effective used config
             update_and_save_used_config(argsdict, args)

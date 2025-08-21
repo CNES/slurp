@@ -651,9 +651,6 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
     logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.watermask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,

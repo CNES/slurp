@@ -360,9 +360,6 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
     logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.stackmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,

@@ -199,9 +199,6 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.shadowmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
             nb_workers=args.n_workers,

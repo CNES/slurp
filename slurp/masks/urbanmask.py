@@ -407,9 +407,6 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
     logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.urbanmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,

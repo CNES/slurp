@@ -39,16 +39,6 @@ def prepare_watermask(file, nb_workers):
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
-    pekel = get_output_path(file, "pekel", remove=True)
-    hand = get_output_path(file, "hand", remove=True)
-    if not pytest.pekel:
-        raise Exception(
-            "Please add a global pekel file in 'config_tests.json' to run this test"
-        )
-    if not pytest.hand:
-        raise Exception(
-            "Please add a global hand file in 'config_tests.json' to run this test"
-        )
 
     os.system(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
@@ -65,13 +55,7 @@ def prepare_watermask(file, nb_workers):
     assert os.path.exists(
         ndwi
     ), f"The file {ndwi} has not been created. Error during NDWI computation ?"
-    assert os.path.exists(
-        pekel
-    ), f"The file {pekel} has not been created. Error during Pekel extraction ?"
-    assert os.path.exists(
-        hand
-    ), f"The file {hand} has not been created. Error during HAND extraction ?"
-    return valid_stack, ndvi, ndwi, pekel, hand
+    return valid_stack, ndvi, ndwi
 
 
 def compute_watermask(
@@ -110,12 +94,10 @@ def compute_watermask(
 @pytest.mark.prepare
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_watermask(file):
-    valid_stack, ndvi, ndwi, pekel, hand = prepare_watermask(file, 1)
+    valid_stack, ndvi, ndwi = prepare_watermask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
-    validate_mask(pekel, "Prepare")
-    validate_mask(hand, "Prepare")
 
 
 @pytest.mark.computation
@@ -140,13 +122,10 @@ def test_computation_and_validation_watermask(file):
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_watermask(file):
-    valid_stack, ndvi, ndwi, pekel, hand = prepare_watermask(file, 1)
+    valid_stack, ndvi, ndwi = prepare_watermask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
-    validate_mask(pekel, "Prepare")
-    validate_mask(hand, "Prepare")
     output_image = compute_watermask(
-        file, 1, valid_stack, ndvi, ndwi, pekel, hand
-    )
+        file, 1, valid_stack, ndvi, ndwi)
     validate_mask(output_image, "Water")

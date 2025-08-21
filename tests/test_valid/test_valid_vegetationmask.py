@@ -43,6 +43,9 @@ def prepare_vegetationmask(file, nb_workers):
     ndwi = get_output_path(file, "ndwi", remove=True)
     texture = get_output_path(file, "texture", remove=True)
 
+    print(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
+
     os.system(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"

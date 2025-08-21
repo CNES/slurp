@@ -58,8 +58,15 @@ main_config="/softs/projets/pluto/slurp/main_config.json"
 # Start
 echo "Launch SLURP from `pwd`"
 
+# Superimpose Pekel, Hand and WSF with OTB
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt -out "out/pekel.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8
+
 # Prepare
 slurp_prepare ${main_config} -file_vhr ${TMPDIR}/${filename} ${OPT_PREPARE}
+
+exit
 # Watermask
 slurp_watermask out/effective_used_config.json ${OPT_WATER}
 

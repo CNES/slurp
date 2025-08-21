@@ -713,9 +713,6 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.vegetationmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,
