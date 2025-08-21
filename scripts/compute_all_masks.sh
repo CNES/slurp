@@ -5,7 +5,7 @@ if [ $# -ne $nb_args ]; then
     echo "Launch SLURP on a 4 bands (R G B NIR) image and get simple land use mask"
     echo ""
     echo "Usage : "
-    echo "compute_slurp_masks.sh <MAIN_CONFIG> <PATH_TO_VHR_IMAGE> <OUTPUT_DIR>"
+    echo "compute_slurp_masks.sh <MAIN_CONFIG> <PATH_TO_VHR_IMAGE> <LAND_USE_MASK>"
     echo "--"
     echo "Options : "
     echo "export OPT_PREPARE='sensor_mode=true'"
@@ -17,12 +17,11 @@ fi
 
 CONF=$1
 VHR_IM=$2
-OUTPUT_DIR=$3
+LAND_USE_MASK=$3
 
 echo ${VHR_IM}
 
-mkdir -p $OUTPUT_DIR/out
-cd $OUTPUT_DIR
+mkdir out
 
 # Start
 echo "Launch SLURP from `pwd`"
@@ -48,4 +47,4 @@ slurp_shadowmask out/effective_used_config.json ${OPT_SHADOW}
 slurp_urbanmask out/effective_used_config.json ${OPT_URBAN}
 
 # Stack
-slurp_stackmasks out/effective_used_config.json ${OPT_STACK}
+slurp_stackmasks out/effective_used_config.json ${OPT_STACK} -stackmask ${LAND_USE_MASK}
