@@ -66,7 +66,6 @@ otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/WSF/WSF
 # Prepare
 slurp_prepare ${main_config} -file_vhr ${TMPDIR}/${filename} ${OPT_PREPARE}
 
-exit
 # Watermask
 slurp_watermask out/effective_used_config.json ${OPT_WATER}
 
