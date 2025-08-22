@@ -30,7 +30,10 @@ Final mask values
 import argparse
 import time
 import traceback
-from os import path
+import logging
+import pathlib
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -43,6 +46,7 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
+logger = logging.getLogger("slurp")
 
 def watershed_regul_buildings(
     input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
@@ -210,6 +214,11 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -308,15 +317,29 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
-    """Main function that stacks the masks compute before"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+                    valid_stack: bool, vegetationmask: str, watermask: str, urbanmask: str, shadowmask: str,
+                    extracted_wsf: str, building_threshold: int, building_erosion: int, bonus_gt: int,
+                    malus_shadow: int, stackmask: str, value_classif_low_veg: int, value_classif_high_veg: int,
+                    value_classif_water: int, value_classif_buildings: int, value_classif_bare_ground: int,
+                    value_classif_false_positive_buildings: int, value_classif_background: int, n_workers: int, tile_max_size: int,
+                    multiproc_context: str):
+    """
+    Main API to compute urban mask.
+    """
     # Read the JSON files
     keys = [
         "input",
@@ -326,17 +349,15 @@ def main():
         "post_process",
         "stack",
     ]
-    argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Mask calculation
@@ -392,27 +413,34 @@ def main():
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
 
             t1 = time.time()
-            print(
+            logger.info(
                 f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
             )
-            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the stack mask computation.
+    It parses the command line arguments and calls the slurp_stackmask function.
+    """
+    args = getarguments()
+    slurp_stackmask(**args)
 
 if __name__ == "__main__":
     main()

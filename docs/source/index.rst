@@ -1,21 +1,31 @@
 Welcome to slurp's documentation!
 =============================================================================
 
-.. toctree::
-   :maxdepth: 2
-
-   installation
-   usage
-   developer_guide
+SLURP is your companion to compute a simple land-use/land-cover mask from Very High Resolution (VHR) optical
+images. It proposes different few or unsupervised learning algorithms that produce one-versus-all masks
+(water, vegetation, shadow, urban). Then a final algorithm stacks them all together and regularize them to
+obtain into a single multiclass mask.
 
 .. toctree::
-  :maxdepth: 2
-  :caption: APIDoc
+   :caption: Installation
+   :maxdepth: 1
 
-  apidoc/modules
+   Installation procedure <installation>
 
-Indices and tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. toctree::
+   :caption: Documentation
+   :maxdepth: 1
+
+   SLURP configuration <slurp_config>
+   CLI Usage <usage_cli>
+   API Usage <usage_api>
+   API Documentation <apidoc/modules>
+   Slurp tutorial <tutorial>
+
+.. toctree::
+   :caption: Contributing
+   :maxdepth: 1
+
+   Guide for developers <developer_guide>
+   Contribute to slurp ! <contributing>
+

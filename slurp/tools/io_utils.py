@@ -23,10 +23,13 @@ import json
 
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
 import rasterio as rio
+from slurp.tools.pydantic_class import load_config, MainConfig, UserConfig
 
 from slurp.tools.constant import COMPRESSION, DRIVER
 
+logger = logging.getLogger("slurp")
 
 def read_json(
     main_config_file: str, keys: list, user_config_file: str = None
@@ -41,31 +44,31 @@ def read_json(
     """
     # Read the JSON data from the main config
     try:
-        with open(main_config_file, "r", encoding="utf-8") as json_file1:
-            full_args = json.load(json_file1)
-            argsdict = full_args[keys[0]]
-            for key in keys[1:]:
-                argsdict.update(full_args[key])
+        config = load_config(main_config_file, MainConfig)
+        full_args = config.dict()
+        argsdict = full_args[keys[0]]
+        for key in keys[1:]:
+            argsdict.update(full_args[key])
 
     except FileNotFoundError:
-        print(f"File {main_config_file} not found.")
+        logger.error(f"File {main_config_file} not found.")
     except json.JSONDecodeError:
-        print(
+        logger.error(
             f"Error decoding JSON data from {main_config_file}. Please check the file format."
         )
 
     if user_config_file:
         # Read the JSON data from the input file
         try:
-            with open(user_config_file, "r", encoding="utf-8") as json_file2:
-                full_args = json.load(json_file2)
-                for k in full_args.keys():
-                    argsdict.update(full_args[k])
+            config = load_config(user_config_file, UserConfig)
+            full_args = config.dict()
+            for k in full_args.keys():
+                argsdict.update(full_args[k])
 
         except FileNotFoundError:
-            print(f"File {user_config_file} not found.")
+            logger.error(f"File {user_config_file} not found.")
         except json.JSONDecodeError:
-            print(
+            logger.error(
                 f"Error decoding JSON data from {user_config_file}. Please check the file format."
             )
 
