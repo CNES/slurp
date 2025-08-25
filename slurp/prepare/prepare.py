@@ -200,7 +200,7 @@ def read_and_overload_arguments(args: dict) -> dict:
     Returns:
         dict: The final dict of arguments.
     """
-    keys_to_keep = ["input", "prepare", "aux_layers", "resources"]
+    keys_to_keep = ["input", "prepare", "aux_layers", "resources", "stack"]
 
     # Read the JSON files
     argsdict = io_utils.read_json(

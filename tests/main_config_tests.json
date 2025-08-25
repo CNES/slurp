@@ -139,6 +139,8 @@
       "value_classif_buildings": 4,
       "value_classif_bare_ground": 6,
       "value_classif_false_positive_buildings": 10,
-      "value_classif_background": 11
+	"value_classif_background": 11,
+	"minimal_size_water_area": 10000,
+	"categorized_watermask": false
    }
 }
