@@ -23,10 +23,12 @@
 
 import numpy as np
 import scipy
+import logging
 
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_INT16
 
+logger = logging.getLogger("slurp")
 
 def aux_file_recovery(
     file_ref: str,
@@ -46,7 +48,7 @@ def aux_file_recovery(
     :param bool sensor_mode: true if file_ref is in sensor mode (not georeferenced)
     :returns: global data cropped onto target image geometry
     """
-    print(
+    logger.info(
         f"Recover file {global_data=} to {reprojected_data=} onto {file_ref=} geometry"
     )
     geometry.sensor_projection(

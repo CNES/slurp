@@ -42,7 +42,7 @@ def test_prepare_update_config():
     is correctly updated.
     """
     possible_size = [128, 256, 512, 1024, 2048, 4096, 8192]
-    i = random.randint(0, len(possible_size))
+    i = random.randint(0, len(possible_size)-1)
     command = (
         write_command_compute_prepare(1) + "-tile_max_size " + str(possible_size[i])
     )

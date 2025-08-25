@@ -27,6 +27,7 @@ import time
 
 import bindings_cpp
 import numpy as np
+import logging
 import rasterio as rio
 import rasterio
 from rasterio.warp import transform_bounds
@@ -36,9 +37,13 @@ from shareloc.geofunctions.localization import Localization
 from shareloc.geomodels import GeoModel
 from shareloc.image import Image
 
+
+logger = logging.getLogger("slurp")
+
+
 def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     """
-    Extract ROI using OTB
+    Extract ROI 
 
     :param str file_in: path to the image to crop
     :param str file_ref: path to the input reference image
@@ -65,7 +70,8 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
         # Read the window as a numpy array
         roi = in_src.read(window=window)
 
-    print("Extract ROI in", time.time() - start_time, "seconds.")
+    logger.info("Extract ROI in %.2f seconds.", time.time() - start_time)
+
     return roi
 
 

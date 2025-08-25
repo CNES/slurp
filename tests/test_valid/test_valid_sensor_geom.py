@@ -29,7 +29,7 @@ from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
 # Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_goem_dir + "/*.tif")
+input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
 DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
 # Create correct object for parametrize loop

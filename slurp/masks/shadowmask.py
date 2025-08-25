@@ -26,7 +26,10 @@ This script computes a shadow mask
 import argparse
 import time
 import traceback
-from os import path
+import logging
+import pathlib
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -37,6 +40,7 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
 
 def compute_shadowmask(
     input_buffers: list, input_profiles: list, params: dict
@@ -85,7 +89,7 @@ def compute_shadowmask(
     return final_shadow_mask
 
 
-def getarguments():
+def getarguments() -> dict:
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
@@ -93,6 +97,11 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -149,16 +158,25 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-
     args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
-    """Main function that compute Shadowmask"""
-
-    argparse_dict = vars(getarguments())
+def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
+                    th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
+                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
+    """
+    Main API to compute shadow mask.
+    """
     t0 = time.time()
 
     # Read the JSON files
@@ -170,24 +188,22 @@ def main():
         "post_process",
         "shadows",
     ]
-    argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Mask calculation
     with eom.EOContextManager(
-        nb_workers=args.n_workers,
-        tile_mode=True,
-        tile_max_size=args.tile_max_size,
+            nb_workers=args.n_workers,
+            tile_mode=True,
+            tile_max_size=args.tile_max_size,
     ) as eoscale_manager:
         try:
 
@@ -214,7 +230,7 @@ def main():
                         100 - args.percentile,
                     )
                     th_bands[cpt] = min_band + args.th_rgb * (
-                        max_percentile - min_band
+                            max_percentile - min_band
                     )
 
                 cpt = 3
@@ -227,7 +243,7 @@ def main():
                     100 - args.percentile,
                 )
                 th_bands[cpt] = min_band + args.th_nir * (
-                    max_percentile - min_band
+                        max_percentile - min_band
                 )
             else:
                 # Use an absolute threshold instead of relative threshold
@@ -267,30 +283,37 @@ def main():
             eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
 
             end_time = time.time()
-            print(
+            logger.info(
                 f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
             )
-            print(
+            logger.info(
                 "Total time (user)       :\t"
                 + utils.convert_time(end_time - t0)
             )
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the shadow mask computation.
+    It parses the command line arguments and calls the slurp_shadowmask function.
+    """
+    args = getarguments()
+    slurp_shadowmask(**args)
 
 if __name__ == "__main__":
     main()

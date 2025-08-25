@@ -23,11 +23,13 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
-import json
 import time
 import traceback
-from os import makedirs, path
+import pathlib
+import json
+from os import makedirs, path, remove
 from typing import List
+import logging
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -39,6 +41,7 @@ from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 
+logger = logging.getLogger("slurp")
 
 def getarguments():
     """Parse command line arguments."""
@@ -64,6 +67,11 @@ def getarguments():
         help="Recompute files even if exists",
     )
     parser.add_argument("-effective_used_config", type=str, help="")
+    parser.add_argument("-log_f",
+        "--logs_to_file",
+        action="store_true",
+        help="Store all logs to a file, instead of stdout",
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -175,44 +183,17 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-
     args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
 
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
 
-def read_and_overload_arguments(args: dict) -> dict:
-    """
-    This function aims to read and overload arguments.
-    To run the prepare pipeline, the user has to give at least 1 JSON file
-    called main_config. It contains all the common parameters that the user might
-    not want to modify on each run of prepare pipeline (e.g 'resources' arg).
-
-    If the user want to overload this first JSON file or add new keys, he can do it by giving
-    a second file called user_config. The user can also overload the first JSON file
-    by giving other arguments that matches the keys in the main_config JSON file (e.g
-    -file_vhr, etc ...).
-
-    Args:
-        arguments (dict): list of all arguments including main_config and user_config
-        + all others arguments to overload.
-
-    Returns:
-        dict: The final dict of arguments.
-    """
-    keys_to_keep = ["input", "prepare", "aux_layers", "resources", "stack"]
-
-    # Read the JSON files
-    argsdict = io_utils.read_json(
-        args["main_config"], keys_to_keep, args.get("user_config")
-    )
-
-    # Overload with manually passed arguments if not None
-    for key in args.keys():
-        if args[key] is not None:
-            argsdict[key] = args[key]
-
-    return argsdict
+    return vars(args)
 
 
 def add_cluster_vegetation_info(
@@ -407,9 +388,9 @@ def pekel_extraction(
                     "Method for Pekel extraction not accepted. Use 'month' or 'all'"
                 )
         else:
-            print("Not extracting Pekel : the file already exists.")
+            logger.info("Not extracting Pekel : the file already exists.")
     else:
-        print("Pass Pekel extraction")
+        logger.info("Pass Pekel extraction")
 
 
 def hand_extraction(
@@ -439,9 +420,9 @@ def hand_extraction(
                 roi,
             )
         else:
-            print("Not extracting Hand : the file already exists.")
+            logger.info("Not extracting Hand : the file already exists.")
     else:
-        print("Pass Hand extraction")
+        logger.info("Pass Hand extraction")
 
 
 def wsf_extraction(
@@ -472,9 +453,9 @@ def wsf_extraction(
                 roi,
             )
         else:
-            print("Not extracting WSF : the file already exists.")
+            logger.info("Not extracting WSF : the file already exists.")
     else:
-        print("Pass WSF extraction")
+        logger.info("Pass WSF extraction")
 
         
 def wbm_extraction(
@@ -553,9 +534,9 @@ def compute_texture(
                 key=key_texture[0], img_path=args.file_texture
             )
         else:
-            print("Not computing texture file : the file already exists.")
+            logger.info("Not computing texture file : the file already exists.")
     else:
-        print("Pass texture computation")
+        logger.info("Pass texture computation")
 
 
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
@@ -579,7 +560,12 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         json.dump(final_used_config, file_to_save, indent=4)
 
 
-def main():
+def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
+                  file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
+                  file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
+                  pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
+                  wsf: str, extracted_wsf: str, wbm: str, extracted_wbm: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
+                  land_cover_map: str, cropped_land_cover_map: bool, n_workers: int, tile_max_size: int, multiproc_context: str):
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
@@ -590,10 +576,19 @@ def main():
     sensor geometry, geoid and DTM.
 
     """
+    # Read the JSON files
+    keys = ["input", "prepare", "aux_layers", "resources"]
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
-    argsdict = read_and_overload_arguments(vars(getarguments()))
-    print("JSON data loaded:")
-    print(argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
+
+    logger.info("--" * 50)
+    logger.info("SLURP_PREPARE")
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
@@ -622,7 +617,7 @@ def main():
                     key=valid_stack_key[0], img_path=args.valid_stack
                 )
             else:
-                print(
+                logger.info(
                     "Not computing valid stack mask : the file already exists."
                 )
                 valid_stack_key = [
@@ -636,7 +631,7 @@ def main():
                 )
                 eoscale_manager.write(key=ndvi_key[0], img_path=args.file_ndvi)
             else:
-                print("Not computing NDVI : the file already exists.")
+                logger.info("Not computing NDVI : the file already exists.")
 
             # NDWI
             if args.file_ndwi is not None and (args.overwrite or not path.isfile(args.file_ndwi)):
@@ -645,7 +640,7 @@ def main():
                 )
                 eoscale_manager.write(key=ndwi_key[0], img_path=args.file_ndwi)
             else:
-                print("Not computing NDWI : the file already exists.")
+                logger.info("Not computing NDWI : the file already exists.")
 
             if args.sensor_mode:
                 grid_sensor, grid_geo, all_coords, roi = (
@@ -681,26 +676,33 @@ def main():
             eoscale_manager._release_all()
 
             t1 = time.time()
-            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
-    print("End of prepare step")
+    logger.info("End of prepare step")
 
+def main():
+    """
+    Main function to run the preparation step of SLURP.
+    It parses the command line arguments and calls the slurp_prepare function.
+    """
+    args = getarguments()
+    slurp_prepare(**args)
 
 if __name__ == "__main__":
     main()

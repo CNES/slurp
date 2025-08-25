@@ -1,7 +1,7 @@
 {
     "data_dir": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data",
-    "sensor_goem_dir":"/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/sensormode" ,
-    "features_test_img" : "/work/CAMPUS/etudes/Masques_CO3D/Data/Images/Demo/xt_PHR.tif",
+    "sensor_geom_dir":"/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/sensormode" ,
+    "features_test_img" : "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/all/demo.tif",
     "output_dir": "out/",
     "ref_dir": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline",
     "pekel": "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
