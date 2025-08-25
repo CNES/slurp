@@ -244,12 +244,12 @@ def post_process(
     # Layer 2: watermask categorized
     if params["categorized_watermask"]:
         wbm = input_buffer[7]
-        stack[2] = watershed_categorized_water(wbm, watermask, params)
-        stack[2][np.logical_not(valid_stack[0])] = NODATA_int8
-    else:
-        # Markers
-        stack[2] = markers
-        stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
+        categorized_watermask = watershed_categorized_water(wbm, watermask, params)
+        stack[0] = np.where(categorized_watermask !=0, categorized_watermask, stack[0])
+
+    # Markers
+    stack[2] = markers
+    stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     return stack
 
@@ -300,6 +300,11 @@ def getarguments():
         help="Value of the malus for pixels in shadow, in the watershed regularization step",
     )
 
+    group2.add_argument("-categorized_watermask",
+                        type=bool,
+                        help="If true, compute a categorized watermask based on the WBM file"
+                        )
+    
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument(

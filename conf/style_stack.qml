@@ -140,6 +140,9 @@
         <paletteEntry color="#ff0184" label="Bati" value="4" alpha="255"/>
         <paletteEntry color="#ddc823" label="Sol nu" value="6" alpha="255"/>
         <paletteEntry color="#6508ef" label="NODATA" value="255" alpha="255"/>
+	<paletteEntry color="#185880" label="Mer/Océan" value="7" alpha="255"/>
+	<paletteEntry color="#64ebe0" label="Lac" value="8" alpha="255"/>
+	<paletteEntry color="#149ceb" label="Rivière" value="9" alpha="255"/>
       </colorPalette>
       <colorramp type="randomcolors" name="[source]">
         <Option/>

@@ -118,7 +118,7 @@ def getarguments():
     group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
     group3.add_argument("-wbm", help="Path of the Water Body Mask (WBM) file")
     group3.add_argument("-extracted_wbm", help="Path to store the extracted WBM file")
-    group3.add_argument("-categorized_watermask", type=bool, help="If true, compute a categorized watermask based on the WBM file")
+    
 
     group4 = parser.add_argument_group(
         description="*** AUX FILES FOR URBAN MASK ***"
