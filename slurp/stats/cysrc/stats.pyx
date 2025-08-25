@@ -19,6 +19,7 @@
 # limitations under the License.
 
 import numpy as np
+
 #cimport numpy as np
 
 def npAsContiguousArray(arr : np.array) -> np.array:

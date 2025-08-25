@@ -40,7 +40,9 @@ def print_feature_importance(classifier, layers):
 
     print("Feature ranking:")
     for idx in indices:
-        print(f" {feature_names[idx]:4s} ({importances[idx]:f}) (std={std[idx]:f})")
+        print(
+            f" {feature_names[idx]:4s} ({importances[idx]:f}) (std={std[idx]:f})"
+        )
 
 
 def train_classifier(classifier, x_samples, y_samples):
@@ -56,5 +58,7 @@ def train_classifier(classifier, x_samples, y_samples):
     x_train_prediction = classifier.predict(x_train)
     x_test_prediction = classifier.predict(x_test)
 
-    print("Accuracy on train set :", accuracy_score(y_train, x_train_prediction))
+    print(
+        "Accuracy on train set :", accuracy_score(y_train, x_train_prediction)
+    )
     print("Accuracy on test set :", accuracy_score(y_test, x_test_prediction))
