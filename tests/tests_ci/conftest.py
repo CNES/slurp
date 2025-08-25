@@ -26,7 +26,6 @@ import os
 import pytest
 
 pytest.register_assert_rewrite("tests.utils")
-pytest.register_assert_rewrite("tests.validation")
 
 
 def pytest_collection_modifyitems(items, config):
@@ -44,6 +43,7 @@ def pytest_collection_modifyitems(items, config):
 
 def pytest_configure(config):
     current_dir = os.path.dirname(__file__)
+    print(current_dir)
     with open(os.path.join(current_dir, "config_tests.json")) as f:
         conf = json.load(f)
         pytest.features_test_img = conf["features_test_img"]
@@ -51,7 +51,7 @@ def pytest_configure(config):
         pytest.pekel = conf["pekel"]
         pytest.hand = conf["hand"]
         pytest.wsf = conf["wsf"]
-        pytest.ref_dir = conf["ref_dir"]
-    pytest.main_config = os.path.join(current_dir, "main_config_tests.json")
+        pytest.valid_stack = conf["valid_stack"]
+        pytest.main_config = conf["main_config"]
     if not os.path.exists(pytest.output_dir):
         os.makedirs(pytest.output_dir)

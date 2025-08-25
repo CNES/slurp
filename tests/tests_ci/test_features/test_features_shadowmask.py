@@ -20,15 +20,13 @@ def write_command_compute_shadowmask(nb_workers, valid_stack=None):
     output_image = get_output_path(
         pytest.features_test_img, "shadowmask", remove=True
     )
-    if valid_stack is None:
-        valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
     return (
         f"shadowmask.py {pytest.main_config} "
         f"-file_vhr {pytest.features_test_img} "
         f"-n_workers {nb_workers} "
         f"-shadowmask {output_image} "
-        f"-valid {valid_stack}"
+        f"-valid {pytest.valid_stack}"
     )
 
 

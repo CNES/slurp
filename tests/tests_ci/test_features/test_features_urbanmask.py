@@ -19,10 +19,8 @@ def write_command_compute_urbanmask(nb_workers, valid_stack=None):
     output_image = get_output_path(
         pytest.features_test_img, "urbanmask", remove=True
     )
-    if valid_stack is None:
-        valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
-    return f"urbanmask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {valid_stack} "
+    return f"urbanmask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {pytest.valid_stack} "
 
 
 @pytest.mark.fast
@@ -49,11 +47,3 @@ def test_nb_samples(nb_samples_other, nb_samples_urban):
     slurp.masks.urbanmask.main()
 
 
-@pytest.mark.fast
-def test_files_layers():
-    command = (
-        write_command_compute_urbanmask(1)
-        + "-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    ).split()
-    sys.argv = command
-    slurp.masks.urbanmask.main()

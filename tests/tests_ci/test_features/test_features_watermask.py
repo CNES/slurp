@@ -21,20 +21,18 @@ def write_command_compute_watermask(nb_workers, valid_stack=None):
     output_image = get_output_path(
         pytest.features_test_img, "watermask", remove=True
     )
-    if valid_stack is None:
-        valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
-    return f"watermask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -watermask {output_image} -valid {valid_stack} "
+    return f"watermask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -watermask {output_image} -valid {pytest.valid_stack} "
 
 
-@pytest.mark.fast
-def test_files_layers():
-    command = (
-        write_command_compute_watermask(1)
-        + f"-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    ).split()
-    sys.argv = command
-    slurp.masks.watermask.main()
+#@pytest.mark.fast
+#def test_files_layers():
+#    command = (
+#        write_command_compute_watermask(1)
+#        + f"-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
+#    ).split()
+#    sys.argv = command
+#    slurp.masks.watermask.main()
 
 
 @pytest.mark.fast

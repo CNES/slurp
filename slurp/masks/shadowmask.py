@@ -185,7 +185,6 @@ def main():
 
     # Create output folder
     makedirs(path.dirname(args.shadowmask), exist_ok=True)
-
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,

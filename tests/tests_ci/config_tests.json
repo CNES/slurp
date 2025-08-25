@@ -1,8 +1,9 @@
 {
-    "features_test_img": "test_low_resolution/inputs/test_slurp.tif",
+    "features_test_img": "inputs/xt_low_res_Toulouse.tif",
+    "valid_stack": "inputs/out/valid_stack.tif",
     "output_dir": "out/",
-    "ref_dir": "out/",
-    "pekel": "test_low_resolution/inputs/occurrence_70W_20Nv1_4_2021.tif",
-    "hand": "test_low_resolution/inputs/Copernicus_DSM_COG_10_N18_00_W067_00_HAND.tif",
-    "wsf": "test_low_resolution/inputs/WSF2019_v1_-68_18.tif"
+    "pekel": "inputs/out/pekel.tif",
+    "hand": "inputs/hand.tif",
+    "wsf": "inputs/wsf.tif",
+    "main_config": "main_config_tests.json"
 }
