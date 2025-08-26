@@ -58,13 +58,47 @@ Data preparation can be achieved with [Orfeo ToolBox](https://www.orfeo-toolbox.
 </table>
 
 ## First steps
+
+### Installation
 SLURP can be installed with pip : 
 ```
-pip install slurp
+pip install slurp-masks
 ```
 Once your environment is ready, you can prepare data with slurp_prepare and then compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
 
-A tutorial is available : [Tutorial.md](Tutorial.md).
+A tutorial is available : [Tutorial.md](https://github.com/CNES/slurp/blob/improve_doc/docs/source/Tutorial.md).
+
+### Compute a land cover map
+SLURP computes several single-class masks (one versus all) and then stacks (and regularize) them into a multi-class map.
+
+SLURP needs to superimpose some external data so it fits your target VHR image. It can be done through OTB Superimpose application
+```
+mkdir out
+# Superimpose Pekel, Hand and WSF with OTB
+# 
+# /!\ Adapt path depending on where your global Pekel database (resp. HAND, WSF) is located
+otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Global Surface Water Pekel occurrence file> -out "out/pekel.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Heigh Above Nearest Drainage map>  -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
+otbcli_Superimpose -inr <your VHR image.tif> -inm <path to World Settlement Footprint map> -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+
+# Prepare
+slurp_prepare your_slurp_conf.json -file_vhr <your VHR image.tif>
+
+# Watermask
+slurp_watermask out/effective_used_config.json
+
+# Vegetationmask
+slurp_vegetationmask out/effective_used_config.json
+
+# Shadowmask
+slurp_shadowmask out/effective_used_config.json
+
+# Urbanmask (without post-processing)
+slurp_urbanmask out/effective_used_config.json 
+
+# Stack
+slurp_stackmasks out/effective_used_config.json 
+```
 
 ## Compute a land cover map
 
@@ -97,7 +131,7 @@ The prepare script enables :
 **To run the script**
 
 1. Configure the JSON file. A template is available at conf/main_config.json with default values.
-2. Update input, aux_layers, resources and prepare blocs inside the JSON file.
+2. Update input, aux_layers, resources and prepare blocks inside the JSON file.
 3. Run the command :
 ```
 slurp_prepare <JSON file>
