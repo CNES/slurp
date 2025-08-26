@@ -17,10 +17,11 @@ import slurp.prepare.prepare
 from tests.utils import get_output_path
 
 
-def write_command_compute_prepare(nb_workers):
-    valid_stack = get_output_path(
-        pytest.features_test_img, "valid_stack", remove=True
-    )
+def write_command_compute_prepare(nb_workers, valid_stack=None):
+    if not valid_stack:
+        valid_stack = get_output_path(
+            pytest.features_test_img, "valid_stack", remove=True
+        )
     ndvi = get_output_path(pytest.features_test_img, "ndvi", remove=True)
     ndwi = get_output_path(pytest.features_test_img, "ndwi", remove=True)
     texture = get_output_path(pytest.features_test_img, "texture", remove=True)
@@ -31,5 +32,15 @@ def write_command_compute_prepare(nb_workers):
 @pytest.mark.features
 def test_absolute_analyse_glcm():
     command = (write_command_compute_prepare(1) + f"--analyse_glcm").split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
+
+
+@pytest.mark.ci
+def test_absolute_analyse_glcm_ci():
+    command = (
+        write_command_compute_prepare(1, pytest.valid_stack)
+        + "--no_analyse_glcm"
+    ).split()
     sys.argv = command
     slurp.prepare.prepare.main()

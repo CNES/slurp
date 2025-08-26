@@ -26,6 +26,7 @@ import os
 import pytest
 
 pytest.register_assert_rewrite("tests.utils")
+pytest.register_assert_rewrite("tests.validation")
 
 
 def pytest_collection_modifyitems(items, config):
@@ -41,17 +42,28 @@ def pytest_collection_modifyitems(items, config):
         config.option.markexpr = "default or computation_and_validation"
 
 
+def pytest_configs(parser):
+    parser.addoption("--config", action="store", default="config_tests.json")
+    parser.addoption(
+        "--main-config", action="store", default="main_config_tests.json"
+    )
+
+
 def pytest_configure(config):
+    config = config.getoption("--config")
+    main_config = config.getoption("--main-config")
     current_dir = os.path.dirname(__file__)
-    print(current_dir)
-    with open(os.path.join(current_dir, "config_tests.json")) as f:
+    with open(os.path.join(current_dir, config)) as f:
         conf = json.load(f)
+        pytest.data_dir = conf["data_dir"]
+        pytest.sensor_goem_dir = conf["sensor_goem_dir"]
         pytest.features_test_img = conf["features_test_img"]
         pytest.output_dir = conf["output_dir"]
+        pytest.ref_dir = conf["ref_dir"]
         pytest.pekel = conf["pekel"]
         pytest.hand = conf["hand"]
         pytest.wsf = conf["wsf"]
         pytest.valid_stack = conf["valid_stack"]
-        pytest.main_config = conf["main_config"]
+    pytest.main_config = os.path.join(current_dir, main_config)
     if not os.path.exists(pytest.output_dir):
         os.makedirs(pytest.output_dir)

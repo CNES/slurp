@@ -7,8 +7,6 @@
 #
 """Test vegetation mask with differents features and different arguments values"""
 
-import os
-import subprocess
 import sys
 
 import pytest
@@ -25,6 +23,15 @@ def write_command_compute_vegetationmask(nb_workers, valid_stack=None):
         valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
     return f"vegetationmask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -vegetationmask {output_image} -valid {valid_stack} "
+
+
+@pytest.mark.ci
+def test_vegetation_mask_ci():
+    command = write_command_compute_vegetationmask(
+        1, pytest.valid_stack
+    ).split()
+    sys.argv = command
+    slurp.masks.vegetationmask.main()
 
 
 @pytest.mark.features

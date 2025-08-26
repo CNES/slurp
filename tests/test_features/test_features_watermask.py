@@ -7,8 +7,6 @@
 #
 """Test water mask with differents features and different arguments values"""
 
-import os
-import subprocess
 import sys
 
 import pytest
@@ -44,8 +42,26 @@ def test_hand_strict():
     slurp.masks.watermask.main()
 
 
+@pytest.mark.ci
+def test_hand_strict_ci():
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack) + f"-hand_strict"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
 @pytest.mark.features
 def test_simple_ndwi_threshold():
+    command = (
+        write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.ci
+def test_simple_ndwi_threshold_ci():
     command = (
         write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
     ).split()
@@ -58,6 +74,17 @@ def test_simple_ndwi_threshold():
 def test_samples_method(samples_method):
     command = (
         write_command_compute_watermask(1) + f"-samples_method {samples_method}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.ci
+@pytest.mark.parametrize("samples_method", ["random", "smart", "grid"])
+def test_samples_method_ci(samples_method):
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack)
+        + f"-samples_method {samples_method}"
     ).split()
     sys.argv = command
     slurp.masks.watermask.main()
@@ -76,9 +103,32 @@ def test_nb_samples(nb_samples_water, nb_samples_other):
     slurp.masks.watermask.main()
 
 
+@pytest.mark.ci
+@pytest.mark.parametrize(
+    "nb_samples_water,nb_samples_other", [(10000, 1000), (0, 0)]
+)
+def test_nb_samples_ci(nb_samples_water, nb_samples_other):
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack)
+        + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
 @pytest.mark.features
 def test_nb_samples_auto():
     command = (write_command_compute_watermask(1) + f"-nb_samples_auto").split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.ci
+def test_nb_samples_auto_ci():
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack)
+        + f"-nb_samples_auto"
+    ).split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -90,8 +140,27 @@ def test_pekel_filter():
     slurp.masks.watermask.main()
 
 
+@pytest.mark.ci
+def test_pekel_filter_ci():
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack)
+        + f"-no_pekel_filter"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
 @pytest.mark.features
 def test_hand_filter():
     command = (write_command_compute_watermask(1) + f"-hand_filter").split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.ci
+def test_hand_filter_ci():
+    command = (
+        write_command_compute_watermask(1, pytest.valid_stack) + f"-hand_filter"
+    ).split()
     sys.argv = command
     slurp.masks.watermask.main()

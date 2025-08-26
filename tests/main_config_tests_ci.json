@@ -5,12 +5,12 @@
   },
   "aux_layers": {
     "valid_stack": null,
-    "file_ndvi": "inputs/out/ndvi.tif",
-    "file_ndwi": "inputs/out/ndwi.tif",
-    "extracted_pekel": "inputs/out/pekel.tif",
-    "extracted_hand": "inputs/out/hand.tif",
-    "extracted_wsf": "inputs/out/wsf.tif",
-    "file_texture": "inputs/out/texture.tif",
+    "file_ndvi": "inputs/ndvi.tif",
+    "file_ndwi": "inputs/ndwi.tif",
+    "extracted_pekel": "inputs/pekel.tif",
+    "extracted_hand": "inputs/hand.tif",
+    "extracted_wsf": "inputs/wsf.tif",
+    "file_texture": "inputs/texture.tif",
     "mnh": null
   },
   "masks": {
@@ -43,7 +43,7 @@
     "geoid_file": "",
     "land_cover_map": "",
     "cropped_land_cover_map": false,
-    "effective_used_config": "out/effective_used_config.json"
+    "effective_used_config": "effective_used_config.json"
   },
   "post_process": {
     "binary_opening": 2,
