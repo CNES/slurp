@@ -91,7 +91,6 @@ def compute_stats(
     :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
     :returns: number of clusters for vegetation and low vegetation
     """
-    logger.info(f"Compute_stats {cropped=}")
     if not cropped:
         # get ROI before computing stats
         if sensor_mode:
@@ -117,8 +116,9 @@ def compute_stats(
     vegetation_classes = [10, 20, 30, 40, 90, 95, 100]
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
+    logger.debug("Count nb of pixels per class")
     for v, c in zip(unique, counts):
-        logger.info(f"{v} : {c}")
+        logger.debug(f"{v} : {c}")
         if v in vegetation_classes:
             veg += c
             
@@ -136,7 +136,7 @@ def compute_stats(
     logger.info(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
     logger.info(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
 
-    logger.info(f"export VEG_CLUSTERS={nb_clusters_veg}")
-    logger.info(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
+    logger.info(f"VEG_CLUSTERS : {nb_clusters_veg}")
+    logger.info(f"LOW_VEG_CLUSTERS : {nb_clusters_low_veg}")
 
     return nb_clusters_veg, nb_clusters_low_veg

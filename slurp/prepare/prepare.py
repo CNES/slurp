@@ -486,9 +486,9 @@ def wbm_extraction(
                 roi,
             )
         else:
-            print("Not extracting WBM : the file already exists.")
+            logger.info("Not extracting WBM : the file already exists.")
     else:
-        print("Pass WBM extraction")
+        logger.info("Pass WBM extraction")
 
 def compute_texture(
     args: argparse.Namespace,
@@ -586,9 +586,9 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             argsdict[param] = locals()[param]
 
     logger.info("--" * 50)
-    logger.info("SLURP_PREPARE")
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("SLURP - Prepare step\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
@@ -694,7 +694,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             logger.error("oups...", exception)
             traceback.print_exc()
 
-    logger.info("End of prepare step")
+    logger.info("End of prepare step\n")
 
 def main():
     """

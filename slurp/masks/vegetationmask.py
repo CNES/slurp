@@ -709,9 +709,12 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("--" * 50)
+    logger.info("SLURP - Vegetation mask\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+    
 
     # Mask calculation
     with eom.EOContextManager(
@@ -772,10 +775,8 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Recover number total of segments
             nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
-            if args.debug:
-                logger.debug(
-                    "Number of different segments detected : " + str(nb_polys)
-                )
+            logger.debug(f"Number of different segments detected : {nb_polys}")
+            
 
             # Stats calculation
             params_stats = {"nb_lab": nb_polys}
