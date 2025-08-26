@@ -29,7 +29,7 @@ import pytest
 import slurp.masks.vegetationmask
 import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
-from tests.full_tests.validation import validate_mask
+from tests.validation import validate_mask
 
 # Input images
 input_files = get_files_to_process("vegetation")

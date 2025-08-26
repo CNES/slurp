@@ -1,11 +1,11 @@
 {
-    "data_dir": null,
-    "sensor_goem_dir": null,
-    "features_test_img": "inputs/xt_low_res_Toulouse.tif",
+    "data_dir": "",
+    "sensor_goem_dir": "",
+    "features_test_img": "tests/inputs/xt_low_res_Toulouse.tif",
     "output_dir": "out/",
-    "ref_dir": null,
-    "pekel": "inputs/out/pekel.tif",
-    "hand": "inputs/hand.tif",
-    "wsf": "inputs/wsf.tif",
-    "valid_stack": "inputs/out/valid_stack.tif"
+    "ref_dir": "",
+    "pekel": "tests/inputs/out/pekel.tif",
+    "hand": "tests/inputs/hand.tif",
+    "wsf": "tests/inputs/wsf.tif",
+    "valid_stack": "tests/inputs/out/valid_stack.tif"
 }

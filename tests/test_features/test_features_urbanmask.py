@@ -61,10 +61,10 @@ def test_nb_samples(nb_samples_other, nb_samples_urban):
 
 
 @pytest.mark.ci
-@pytest.mark.parametrize_ci(
+@pytest.mark.parametrize(
     "nb_samples_other,nb_samples_urban", [(0, 0), (5000, 1000)]
 )
-def test_nb_samples(nb_samples_other, nb_samples_urban):
+def test_nb_samples_ci(nb_samples_other, nb_samples_urban):
     command = (
         write_command_compute_urbanmask(1, pytest.valid_stack)
         + f"-nb_samples_other {nb_samples_other} -nb_samples_other {nb_samples_other}"

@@ -26,7 +26,7 @@ import os
 import pytest
 
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
-from tests.full_tests.validation import validate_mask
+from tests.validation import validate_mask
 
 # Input images in sensor geometry
 input_images = glob.glob(pytest.sensor_goem_dir + "/*.tif")

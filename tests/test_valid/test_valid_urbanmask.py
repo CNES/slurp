@@ -34,7 +34,7 @@ from tests.utils import (
     get_output_path,
     remove_file,
 )
-from tests.full_tests.validation import validate_mask
+from tests.validation import validate_mask
 
 # Input images
 input_files = get_files_to_process("urban")

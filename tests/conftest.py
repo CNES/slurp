@@ -42,18 +42,18 @@ def pytest_collection_modifyitems(items, config):
         config.option.markexpr = "default or computation_and_validation"
 
 
-def pytest_configs(parser):
+def pytest_addoption(parser):
     parser.addoption("--config", action="store", default="config_tests.json")
     parser.addoption(
-        "--main-config", action="store", default="main_config_tests.json"
+        "--main_config", action="store", default="main_config_tests.json"
     )
 
 
 def pytest_configure(config):
-    config = config.getoption("--config")
-    main_config = config.getoption("--main-config")
+    config_file = config.getoption("config")
+    main_config = config.getoption("main_config")
     current_dir = os.path.dirname(__file__)
-    with open(os.path.join(current_dir, config)) as f:
+    with open(os.path.join(current_dir, config_file)) as f:
         conf = json.load(f)
         pytest.data_dir = conf["data_dir"]
         pytest.sensor_goem_dir = conf["sensor_goem_dir"]
