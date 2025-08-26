@@ -67,6 +67,8 @@ pip install slurp-masks
 ```
 Once your environment is ready, you can prepare data with slurp_prepare and then compute SLURP masks with slurp_watermask, slurp_urbanmask, etc.
 
+Documentation is available on [Read the docs](https://slurp-masks.readthedocs.io/en/latest/)
+
 A tutorial is available : [Tutorial.md](https://github.com/CNES/slurp/blob/improve_doc/docs/source/Tutorial.md).
 
 ### Compute a land cover map
@@ -82,22 +84,22 @@ otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Global Surface Water 
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Heigh Above Nearest Drainage map>  -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to World Settlement Footprint map> -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 
-# Prepare
+# Prepare : computes primitives (NDVI / NDWI / textures)
 slurp_prepare <your_slurp_conf.json> -file_vhr <your VHR image.tif>
 
-# Watermask
+# Watermask : learn from Pekel database and predict water occurrence
 slurp_watermask out/effective_used_config.json
 
-# Vegetationmask
+# Vegetationmask : segment image and apply clustering method to detect low/high vegetation
 slurp_vegetationmask out/effective_used_config.json
 
-# Shadowmask
+# Shadowmask : threshold RGB and NIR to detect shadows
 slurp_shadowmask out/effective_used_config.json
 
-# Urbanmask (without post-processing)
+# Urbanmask : learn from WSF and compute urban probability
 slurp_urbanmask out/effective_used_config.json 
 
-# Stack
+# Stack : regularize all the previous masks together
 slurp_stackmasks out/effective_used_config.json 
 ```
 
@@ -150,111 +152,33 @@ Vegetation mask are computed with an unsupervised clustering algorithm. First so
 Then a segmentation is processed (SLIC) and segments are dispatched in several clusters depending on their features.
 A final labellisation affects a class to each segment (ie : high NDVI and low texture denotes for low vegetation).
 
-**To compute the mask**
-
-1. Configure the JSON file : a template is available at conf/main_config.json with default values.
-2. Update input, aux_layers and masks blocs inside the JSON file. To go further you can modify resources and vegetation blocs.
-3. Run the command :
-```
-slurp_vegetationmask <JSON file>
-```
-
-You can override the JSON with CLI arguments. For example : `slurp_vegetationmask <JSON file> -file_vhr <VHR input image> -vegetationmask <your vegetation mask.tif>`
-
-Type `slurp_vegetationmask -h` for complete list of options : 
-- segmentation mode and parameter for SLIC algorithms
-- number of workers (parallel processing for primitives and segmentation tasks)
-- number of clusters affected to vegetation (3 by default - 33%)
-- etc.
-
-
 ### Urban (building) mask
 An urban model (building) is learned from WSF reference map. The algorithm can take into account water and vegetation masks in order to improve samples selection (non building pixels will be chosen outside WSF and outside water/vegetation masks). 
-The output is a "building probability" layer ([0..100]) that can be used by the stack algorithm.
-
-**To compute the mask**
-
-1. Configure the JSON file : a template is available at conf/main_config.json with default values.
-2. Update input, aux_layers and masks blocs inside the JSON file. To go further you can modify resources and urban blocs.
-3. Run the command :
-```
-slurp_urbanmask <JSON file>
-```
-
-You can override the JSON with CLI arguments. For example : `slurp_urbanmask <JSON file> -file_vhr <VHR input image> -urbanmask <your urban mask.tif>`
-
-Type `slurp_urbanmask -h` for complete list of options :
-- samples parameters), 
-- add other raster features (-layers layer1 [layer 2 ..])
-- elimination of pixels identified as water or vegetation (-watermask <your watermask.tif>, -vegetationmask <your vegetationmask.tif>),
-- etc.
+The output is a "building probability" layer ([0..100]) that is used by the stack algorithm.
 
 ### Shadow mask
 Shadow mask detects dark areas (supposed shadows), based on two thresholds (RGB, NIR). 
 A post-processing step removes small shadows, holes, etc. The resulting mask is a three-classes mask (no shadow, small shadow, big shadows). 
-The big shadows can be used in the stack algorithm in the regularization step.
-
-**To compute the mask**
-
-1. Configure the JSON file : a template is available at conf/main_config.json with default values.
-2. Update input, aux_layers and masks blocs inside the JSON file. To go further you can modify resources, post_process and shadow blocs.
-3. Run the command :
-```
-slurp_shadowmask <JSON file>
-```
-
-You can override the JSON with CLI arguments. For example : `slurp_shadowmask <JSON file> -file_vhr <VHR input image> -shadowmask <your shadow mask.tif>`
-
-Type `slurp_shadowmask -h` for complete list of options :
-- relative thresholds (-th_rgb, -th_nir, etc.),
-- post-process mask (-remove_small_objects, -binary_opening, etc.),
-- etc.
+The big shadows are used in the stack algorithm in the regularization step.
 
 ### Stack and regularize buildings
-The stack algorithm take into account all previous masks to produce a 6 classes mask (water, low vegetation, high vegetation, building, bare soil, other) and an auxilliary height layer (low / high / unknown). 
-The algorithm can regularize urban mask with a watershed algorithm based on building probability and context of surrounding areas. This algorithm first computes a gradient on the image and fills a marker layer with known classes. Then a watershed step helps to adjust contours along gradient image, thus regularizing buildings shapes.
+The stack algorithm takes into account all previous masks to produce a 6 classes mask (water, low vegetation, high vegetation, building, bare soil, other) and an auxiliary height layer (low / high / unknown). 
 
-**To compute the mask**
+The algorithm regularizes urban mask with a watershed algorithm based on building probability and context of surrounding areas. 
 
-1. Configure the JSON file : a template is available at conf/main_config.json with default values.
-2. Update input, aux_layers and masks element inside the JSON file. To go further you can modify resources, post_process and stack blocs.
-3. Run the command :
-```
-slurp_stackmasks <JSON file>
-```
+This algorithm first computes a gradient on the image and fills a marker layer with known classes. Then a watershed step helps to adjust contours along gradient image, thus regularizing buildings shapes.
+
+The stack algorithm can also categorize water bodies (lake, river, sea) if you provide a general water body mask as an input.
 
 You can override the JSON with CLI arguments. For example : `slurp_stackmasks <JSON file> -file_vhr <VHR input image> -remove_small_objects 500 -binary_closing 3`
 
-Type `slurp_stackmasks -h` for complete list of options :
-- watershed parameters,
-- post-process parameters (-remove_small_objects, -binary_opening, etc.),
-- classif value of each element of the final mask
-- etc.
-
-
-## Tests
-
-The project comes with a suite of unit and functional tests. All the tests are available in tests/ directory.
-
-To run them, launch the command `pytest` in the root of the slurp project. To run tests on a specific mask, execute `pytest tests/<file_name>"`.
-
-By default, the tests generate the masks and then validate them by comparing them with a reference. You can choose to only compute the masks with `pytest -m computation` or validate them with `pytest -m validation`. To validate data preparation, you can use `pytest -m prepare` or `pytest -m all` for the complete test : these two last modes require OTB installation.
-
-You can change the default configuration for the tests by modifying the JSON file "tests/config\_tests". 
-
-
-## Documentation
-
-Documentation can be found on [read the docs](https://slurp-masks.readthedocs.io/en/latest/index.html)
-
-## Contribution
-
-See [Contribution](./CONTRIBUTING.md) manual
+<div id="references"></div>
 
 ## References
 
-This package was created with PLUTO-cookiecutter project template.
+SLURP vegetation algorithm had been described in the following paper : [Smart Land Use Masks : A Simple and Robust Approach to Produce Low/High Vegetation Masks from a Single High Resolution Satellite Image](https://doi.org/10.1109/IGARSS53475.2024.10641347)
 
+This package was created with PLUTO-cookiecutter project template.
 
 Inspired by [main cookiecutter template](https://github.com/audreyfeldroy/cookiecutter-pypackage) and 
 [CARS cookiecutter template](https://gitlab.cnes.fr/cars/cars-cookiecutter)
