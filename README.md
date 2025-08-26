@@ -7,10 +7,10 @@
 
 
 <p>
-  <a href="overview">Overview</a> •
-  <a href="first-steps">First steps</a> •
-  <a href="algorithm-description">Algorithm description</a> •
-  <a href="references">References</a>
+  <a href="#overview">Overview</a> •
+  <a href="#first-steps">First steps</a> •
+  <a href="#algorithm-description">Algorithm description</a> •
+  <a href="#references">References</a>
 </p>
 </div>
 
