@@ -7,15 +7,14 @@
 
 
 <p>
-  <a href="#overview">Overview</a> •
-  <a href="#features">Features</a> •
-  <a href="#install">Install</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#documentation">Documentation</a> •
-  <a href="#contribution">Contribution</a> •
-  <a href="#references">References</a>
+  <a href="overview">Overview</a> •
+  <a href="first-steps">First steps</a> •
+  <a href="algorithm-description">Algorithm description</a> •
+  <a href="references">References</a>
 </p>
 </div>
+
+<div id="overview"></div>
 
 ## Overview
 
@@ -57,6 +56,8 @@ Data preparation can be achieved with [Orfeo ToolBox](https://www.orfeo-toolbox.
 </tr>
 </table>
 
+<div id="first-steps"></div>
+
 ## First steps
 
 ### Installation
@@ -82,7 +83,7 @@ otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Heigh Above Nearest D
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to World Settlement Footprint map> -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 
 # Prepare
-slurp_prepare your_slurp_conf.json -file_vhr <your VHR image.tif>
+slurp_prepare <your_slurp_conf.json> -file_vhr <your VHR image.tif>
 
 # Watermask
 slurp_watermask out/effective_used_config.json
@@ -100,7 +101,9 @@ slurp_urbanmask out/effective_used_config.json
 slurp_stackmasks out/effective_used_config.json 
 ```
 
-## Compute a land cover map
+<div id="algorithm-description"></div>
+
+## Algorithm description
 
 ### Input data
 SLURP is designed to compute a simple land cover map (water, low/high vegetation, bare groud, buildings) from a VHR (Very High Resolution) image with
@@ -115,60 +118,32 @@ SLURP is based on few or unsupervised algorithms (random forest, clustering, seg
 | [WSF 2019](https://download.geoservice.dlr.de/WSF2019/) (World Settlement Footprint) |   **Urban mask prediction** : global buildings map used to learn a building prediction model (*MANDATORY*)| Could be replaced by a better resolution map if available (ex : OSM buildings) |
 | [ESA WorldCover](https://viewer.esa-worldcover.org/worldcover) | **Vegetation mask configuration** Global land cover map (10m resolution) used to customize vegetation clustering (*OPTIONAL*) | Very helpful to parameteriez balance between non-vegetation / low and high vegetation |
 
-## Data preparation
+### Data preparation
 
-Each mask needs some auxiliary files. They must be on the same projection, resolution and bounding box of the VHR input image to enable mask computation. You can generate this data yourself or use the prepare script available in SLURP.
+Each mask needs some auxiliary files and some primitives computed from your VHR image. 
+
+They must be on the same projection, resolution and bounding box of the VHR input image to enable mask computation. 
+
+You can generate this data yourself or use the prepare script available in SLURP.
 
 The prepare script enables :
 - Computation of stack validity (with or without a cloud mask)
 - Computation of NDVI and NDWI
-- Extraction of largest Pekel file
-- Extraction of largest HAND file
-- Extraction of WSF file
-- Computation of texture file with a convolution
-
-
-**To run the script**
-
-1. Configure the JSON file. A template is available at conf/main_config.json with default values.
-2. Update input, aux_layers, resources and prepare blocks inside the JSON file.
-3. Run the command :
-```
-slurp_prepare <JSON file>
-```
-
-You can override the JSON with CLI arguments. For example : `slurp_prepare <JSON file> -file_vhr <VHR input image> -file_ndvi <path to store NDVI>`
-
-Type `slurp_prepare -h` for complete list options :
-- overwriting of output files (-w)
-- bands identification (-red <1/3>, etc.), 
-- files to extract and reproject (-pekel, -hand, -wsf, etc.), 
-- output paths (-extracted_pekel, etc.),
-- etc.
- 
-## Features
+- Extraction of largest Pekel file (in sensor mode only)
+- Extraction of largest HAND file (in sensor mode only)
+- Extraction of WSF file (in sensor mode only)
+- Extraction of Water Body Mask (if needed, in sensor mode only)
+- Computation of texture file (convolution on NIR band)
 
 ### Water mask
-Water model is learned from Pekel (Global Surface Water) reference data and is based on NDVI/NDWI2 indices. 
-Then the predicted mask is cleaned with Pekel, possibly with HAND (Height Above Nearest Drainage) maps and post-processed to clean artefacts.
+Water model is learned from Pekel (Global Surface Water) reference data and is based on NDVI/NDWI2 indices.
 
-**To compute the mask**
+First the algorithm will pick-up water (and non-water) samples from your image, by using Pekel as *a prior*.
 
-1. Configure the JSON file : a template is available at conf/main_config.json with default values.
-2. Update input, aux_layers and masks blocs inside the JSON file. To go further you can modify resources, post_process and water blocs.
-3. Run the command :
-```
-slurp_watermask <JSON file>
-```
+Then, a random forest learns how to predict water and predicts a raw mask on the whole image. 
+The predicted mask is cleaned with Pekel, possibly with HAND (Height Above Nearest Drainage) maps and post-processed to clean artefacts.
 
-You can override the JSON with CLI arguments. For example : `slurp_watermask <JSON file> -file_vhr <VHR input image> -watermask <your watermask.tif>`
-
-Type `slurp_watermask -h` for complete list of options :
-- samples method (-samples_method, -nb_samples_water, etc.), 
-- add other raster features (-layers layer1 [layer 2 ..]),
-- post-process mask (-remove_small_holes, -binary_closing, etc.),
-- saving of intermediate files (-save),
-- etc.
+It is possible to adapt a lot of parameters (see `slurp_watermask -h`) to adapt learning parameters, add other features (`-layers <features in an other raster>`), etc.
 
 ### Vegetation mask
 Vegetation mask are computed with an unsupervised clustering algorithm. First some primitives are computed from VHR image (NDVI, NDWI2, textures).
