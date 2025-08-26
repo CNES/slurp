@@ -91,6 +91,7 @@ def compute_stats(
     :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
     :returns: number of clusters for vegetation and low vegetation
     """
+    logger.info(f"Compute_stats {cropped=}")
     if not cropped:
         # get ROI before computing stats
         if sensor_mode:
@@ -102,14 +103,12 @@ def compute_stats(
     else:
         # get all data from map_lc
         ds = rio.open(map_lc)
-        data_map = ds.read(1)
+        data_map = ds.read()
         ds.close()
         del ds
 
-    logger.info(f"{data_map.shape}")
-
-    width = data_map.shape[0]
-    height = data_map.shape[1]
+    width = data_map.shape[1]
+    height = data_map.shape[2]
 
     nb_total = width * height
     unique, counts = np.unique(data_map, return_counts=True)
@@ -122,7 +121,7 @@ def compute_stats(
         logger.info(f"{v} : {c}")
         if v in vegetation_classes:
             veg += c
-
+            
         if v in low_vegetation_classes:
             low_veg += c
 
