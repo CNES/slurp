@@ -27,118 +27,52 @@ import time
 
 import bindings_cpp
 import numpy as np
+import logging
 import rasterio as rio
+import rasterio
+from rasterio.warp import transform_bounds
+from rasterio.windows import from_bounds
 from shareloc.dtm_reader import dtm_reader
 from shareloc.geofunctions.localization import Localization
 from shareloc.geomodels import GeoModel
 from shareloc.image import Image
 
-from slurp.tools.constant import COMPRESSION
 
-
-def superimpose(file_in: str, file_ref: str, file_out: str):
-    """
-    Superimpose using OTB
-
-    :param str file_in: path to the image to reproject into the geometry of the reference input
-    :param str file_ref: path to the input reference image
-    :param str file_out: path for the output reprojected image
-    """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
-
-    ds = rio.open(file_in)
-    # default value
-    output_dtype = otb.ImagePixelType_float
-    if ds.profile["dtype"] == "uint8":
-        output_dtype = otb.ImagePixelType_uint8
-    elif ds.profile["dtype"] == "int16":
-        output_dtype = otb.ImagePixelType_int16
-    elif ds.profile["dtype"] == "uint16":
-        output_dtype = otb.ImagePixelType_uint16
-    ds.close()
-    ds = None
-
-    start_time = time.time()
-    app = otb.Registry.CreateApplication("Superimpose")
-    app.SetParameterString("inm", file_in)
-    app.SetParameterString("inr", file_ref)
-    app.SetParameterString("interpolator", "nn")
-    app.SetParameterString(
-        "out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}"
-    )
-    app.SetParameterOutputImagePixelType("out", output_dtype)
-    app.ExecuteAndWriteOutput()
-
-    print("Superimpose in", time.time() - start_time, "seconds.")
-
-
-def rasterization(file_in: str, file_ref: str, file_out: str):
-    """
-    Rasterization using OTB
-
-    :param str file_in: path to the image to rasterize
-    :param str file_ref: path to the input reference image
-    :param str file_out: path for the output reprojected image
-    """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
-
-    ds = rio.open(file_in)
-    # default value
-    output_dtype = otb.ImagePixelType_float
-    if ds.profile["dtype"] == "uint8":
-        output_dtype = otb.ImagePixelType_uint8
-    elif ds.profile["dtype"] == "int16":
-        output_dtype = otb.ImagePixelType_int16
-    elif ds.profile["dtype"] == "uint16":
-        output_dtype = otb.ImagePixelType_uint16
-    ds.close()
-    ds = None
-
-    start_time = time.time()
-    app = otb.Registry.CreateApplication("Rasterization")
-    app.SetParameterString("in", file_in)
-    app.SetParameterString("im", file_ref)
-    app.SetParameterFloat("background", 0)
-    app.SetParameterString("mode", "binary")
-    app.SetParameterFloat("mode.binary.foreground", 1)
-    app.SetParameterString(
-        "out", file_out + f"?&writerpctags=true&gdal:co:COMPRESS={COMPRESSION}"
-    )
-    app.SetParameterOutputImagePixelType("out", output_dtype)
-
-    app.ExecuteAndWriteOutput()
-
-    print("Rasterize in", time.time() - start_time, "seconds.")
+logger = logging.getLogger("slurp")
 
 
 def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     """
-    Extract ROI using OTB
+    Extract ROI 
 
     :param str file_in: path to the image to crop
     :param str file_ref: path to the input reference image
     """
-    try:
-        import otbApplication as otb
-    except ModuleNotFoundError as e:
-        raise ImportError("OTB is not installed") from e
     start_time = time.time()
-    app_roi = otb.Registry.CreateApplication("ExtractROI")
-    app_roi.SetParameterString("in", file_in)
-    app_roi.SetParameterString("mode", "fit")
-    app_roi.SetParameterString("mode.fit.im", file_ref)
-    app_roi.SetParameterString("out", "fake.tif")
-    app_roi.Execute()
 
-    print("Extract ROI in", time.time() - start_time, "seconds.")
+    # Open the reference image to get its bounds in its CRS
+    with rasterio.open(file_ref) as ref_src:
+        ref_bounds = ref_src.bounds
+        ref_crs = ref_src.crs
 
-    return app_roi.GetVectorImageAsNumpyArray("out")
+    # Open the input image (to be cropped)
+    with rasterio.open(file_in) as in_src:
+        in_crs = in_src.crs
+
+        # Transform reference bounds to input CRS if necessary
+        if ref_crs != in_crs:
+            ref_bounds = transform_bounds(ref_crs, in_crs, *ref_bounds)
+
+        # Create a window in the input image matching the transformed reference bounds
+        window = from_bounds(*ref_bounds, transform=in_src.transform)
+        window = window.round_offsets().round_lengths()
+
+        # Read the window as a numpy array
+        roi = in_src.read(window=window)
+
+    logger.info("Extract ROI in %.2f seconds.", time.time() - start_time)
+
+    return roi
 
 
 def compute_dtm_footprint(geom_model, sensor_image, data_img):
@@ -349,8 +283,6 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
 def sensor_projection(
     input_data,
     sensor_image,
-    dtm_file,
-    geoid_file,
     projected_data,
     grid_sensor,
     grid_geo,
@@ -374,6 +306,7 @@ def sensor_projection(
 
     import scipy
 
+    print(grid_geo)
     # construct all pixels positions
     interp_lon = scipy.interpolate.interpn(
         grid_sensor,

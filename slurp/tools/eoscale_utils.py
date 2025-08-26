@@ -22,32 +22,17 @@
 import copy
 
 import numpy as np
+import logging
 
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 
-
-def print_dataset_infos(name, profile, prefix=""):
-    """Print information about rasterio dataset."""
-
-    print()
-    print(prefix, "Image name :", name)
-    print(prefix, "Image size :", profile["width"], "x", profile["height"])
-    print(prefix, "Image bands :", profile["count"])
-    print(prefix, "Image types :", profile["dtype"])
-    print(prefix, "Image nodata :", profile["nodata"])
-    print(prefix, "Image crs :", profile["crs"])
-    print(prefix, "Image transform :", profile["transform"])
-    print(prefix, "Image driver :", profile["driver"])
-    print()
+logger = logging.getLogger("slurp")
 
 
 def concatenate_samples(output_scalars, chunk_output_scalars, tile):
     output_scalars.append(chunk_output_scalars[0])
 
-
 # Profiles
-
-
 def single_float_profile(input_profiles: list, map_params):
     """Define profile for eoscale"""
     profile = input_profiles[0]

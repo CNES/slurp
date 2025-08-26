@@ -24,13 +24,17 @@ from pkg_resources import get_distribution
 
 sys.path.insert(0, os.path.abspath("../.."))
 sys.setrecursionlimit(1500)
+import docs.source.json_to_md as generate_md
+
+# Generate the markdown table for MainConfig and UserConfig schemas
+generate_md.main()
 
 # -- Project information -----------------------------------------------------
 
 # General information about the project.
 project = "slurp"
-copyright = "2022, Y T[3~[D"
-author = "Y T[3~[D"
+copyright = "2022, CNES (Centre National d'Etudes Spatiales)"
+author = "Y. TANGUY et al - CNES"
 
 
 try:
@@ -59,6 +63,7 @@ source_suffix = ".rst"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "myst_parser",
     "sphinx.ext.ifconfig",  # add if config possibility in rst files
     "sphinx.ext.intersphinx",  # other projects automatic links to doc
     "sphinx.ext.mathjax",  # Add rst math capabilities with :math:
@@ -89,7 +94,7 @@ html_title = "slurp Documentation"
 html_short_title = "slurp Documentation"
 
 # Logo
-# html_logo = "images/picto_transparent_mini.png"
+html_logo = "images/logo_SLURP_256_padded.png"
 
 # Favicon
 # html_favicon = "images/favicon_noname.ico"

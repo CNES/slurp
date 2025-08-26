@@ -46,9 +46,12 @@ def prepare_vegetationmask(file, nb_workers):
     ndwi = get_output_path(file, "ndwi", remove=True)
     texture = get_output_path(file, "texture", remove=True)
 
+    print(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
@@ -83,7 +86,7 @@ def compute_vegetationmask(
 
     command = (
         f"vegetationmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture}"
+        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.vegetationmask.main()

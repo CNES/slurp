@@ -53,7 +53,7 @@ def compute_stackmask(file, nb_workers):
     command = (
         f"slurp_stackmasks {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -stackmask {output_image} "
         f"-vegetationmask {vegetationmask} -watermask {watermask} "
-        f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} "
+        f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.stack_masks.main()

@@ -24,7 +24,10 @@ import argparse
 import gc
 import time
 import traceback
-from os import makedirs, path
+import logging
+import pathlib
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -37,12 +40,15 @@ from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
 
+logger = logging.getLogger("slurp")
+
 try:
     from sklearnex import patch_sklearn
 
     patch_sklearn()
 except ModuleNotFoundError:
-    print("Intel(R) Extension/Optimization for scikit-learn not found.")
+    logger.error("Intel(R) Extension/Optimization for scikit-learn not found.")
+
 
 
 def apply_vegetationmask(
@@ -250,6 +256,11 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -355,32 +366,46 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
-    """Main function that compute Urbanmask"""
-
-    argparse_dict = vars(getarguments())
-
+def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+                    valid_stack: bool, file_ndvi: str, file_ndwi: str, extracted_wsf: str, files_layers: list, watermask: str,
+                    vegetationmask: str, shadowmask: str, vegmask_min_value: int, veg_binary_dilation: int, value_classif: int,
+                    gt_binary_erosion: int, save_mode: str, nb_samples_urban: int, nb_samples_other: int, max_depth: int,
+                    nb_estimators: int, n_jobs: int, urbanmask: str, n_workers: int, tile_max_size: int, multiproc_context: str):
+    """
+    Main API to compute urban mask.
+    """
     # Read the JSON files
-    keys = ["input", "aux_layers", "masks", "resources", "urban"]
-    argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+    keys = [
+        "input",
+        "aux_layers",
+        "masks",
+        "resources",
+        "post_process",
+        "urban",
+    ]
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("JSON data loaded:")
+    logger.info(argsdict)
     args = argparse.Namespace(**argsdict)
-
-    # Create output folder
-    makedirs(path.dirname(args.urbanmask), exist_ok=True)
 
     # Mask calculation
     with eom.EOContextManager(
@@ -397,7 +422,6 @@ def main():
             # Image PHR (numpy array, 4 bands, band number is first dimension),
             key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile_phr = eoscale_manager.get_profile(key_phr)
-            eo_utils.print_dataset_infos(args.file_vhr, profile_phr, "PHR")
 
             # Valid stack
             key_original_valid_stack = eoscale_manager.open_raster(
@@ -471,7 +495,7 @@ def main():
 
             if (
                 args.nb_valid_built_pixels > args.nb_samples_urban
-                and args.nb_valid_other_pixels > 0
+                and args.nb_valid_other_pixels > args.nb_samples_other
             ):
                 # Nominal case : Ground Truth contains some pixels marked as building.
                 input_for_samples = [
@@ -502,7 +526,7 @@ def main():
 
                 # Check if we have found "building" AND "non building" samples
                 # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
-                building_areas = len(np.where(y_samples == 255)[0]) > 0
+                building_areas = len(np.where(y_samples == args.value_classif)[0]) > 0
                 non_building_areas = len(np.where(y_samples == 0)[0]) > 0
 
                 time_samples = time.time()
@@ -517,12 +541,10 @@ def main():
                         random_state=0,
                         n_jobs=args.n_jobs,
                     )
-                    print(
-                        "RandomForest parameters:\n",
-                        classifier.get_params(),
-                        "\n",
+                    logger.info(
+                        "RandomForest parameters: \n%s\n",
+                        str(classifier.get_params())
                     )
-
                     random_forest_utils.train_classifier(classifier, x_samples, y_samples)
                     random_forest_utils.print_feature_importance(
                         classifier, args.files_layers
@@ -562,30 +584,50 @@ def main():
 
                     end_time = time.time()
 
-                    print(
+                    logger.info(
                         f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
                     )
-                    print(
+                    logger.info(
                         "Total time (user)       :\t"
                         + utils.convert_time(end_time - t0)
                     )
-                    print(
+                    logger.info(
                         "- Build_stack           :\t"
                         + utils.convert_time(time_stack - t0)
                     )
-                    print(
+                    logger.info(
                         "- Build_samples         :\t"
                         + utils.convert_time(time_samples - time_stack)
                     )
-                    print(
+                    logger.info(
                         "- Random forest (total) :\t"
                         + utils.convert_time(time_random_forest - time_samples)
                     )
-                    print("***")
+                    logger.info("***")
+                else:
+                    # Weird corner case : learning/prediction had not enough samples
+                    logger.info(
+                        f"**** Corner case with too few urban samples for {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+                    )
 
-            if args.nb_valid_built_pixels == nb_valid_pixels:
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_original_valid_stack],
+                        image_filter=add_nodata,
+                        filter_parameters={"fill_value": 0},
+                        generate_output_profiles=eo_utils.single_uint8_profile,
+                        context_manager=eoscale_manager,
+                        multiproc_context=args.multiproc_context,
+                        filter_desc="Add nodata...",
+                    )
+
+                    # Save proba mask
+                    eoscale_manager.write(
+                        key=key_predict[0], img_path=args.urbanmask
+                    )
+                    
+            elif args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
-                print(
+                logger.info(
                     f"**** Only urban areas in {args.file_vhr} -> mask saved as {args.urbanmask} ****"
                 )
 
@@ -603,10 +645,9 @@ def main():
                 eoscale_manager.write(
                     key=key_predict[0], img_path=args.urbanmask
                 )
-
             else:
                 # Corner case : no "building pixels" --> void mask (0)
-                print(
+                logger.info(
                     f"**** No urban areas in {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
                 )
 
@@ -626,21 +667,28 @@ def main():
                 )
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
+def main():
+    """
+    Main function to run the urban mask computation.
+    It parses the command line arguments and calls the slurp_urbanmask function.
+    """
+    args = getarguments()
+    slurp_urbanmask(**args)
 
 if __name__ == "__main__":
     main()

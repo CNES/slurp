@@ -47,15 +47,10 @@ def prepare_urbanmask(file, nb_workers):
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
-    wsf = get_output_path(file, "wsf", remove=True)
-    if not pytest.wsf:
-        raise Exception(
-            "Please add a global wsf file in 'config_tests.json' to run this test"
-        )
 
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf}"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf} -log_f"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
@@ -69,11 +64,7 @@ def prepare_urbanmask(file, nb_workers):
     assert os.path.exists(
         ndwi
     ), f"The file {ndwi} has not been created. Error during NDWI computation ?"
-    assert os.path.exists(
-        wsf
-    ), f"The file {wsf} has not been created. Error during WSF extraction ?"
-
-    return valid_stack, ndvi, ndwi, wsf
+    return valid_stack, ndvi, ndwi
 
 
 def compute_urbanmask(
@@ -90,9 +81,14 @@ def compute_urbanmask(
     if wsf is None:
         wsf = get_aux_path(file, "wsf")
 
+    if not(os.path.exists(wsf)):
+        raise Exception(
     command = (
         f"urbanmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
-        f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf}"
+            f"Please compute the a global wsf file and add it to {wsf}"
+        )
+
+        f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.urbanmask.main()
@@ -107,11 +103,10 @@ def compute_urbanmask(
 @pytest.mark.prepare
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_urbanmask(file):
-    valid_stack, ndvi, ndwi, wsf = prepare_urbanmask(file, 1)
+    valid_stack, ndvi, ndwi = prepare_urbanmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
-    validate_mask(wsf, "Prepare")
 
 
 @pytest.mark.computation
@@ -136,10 +131,9 @@ def test_computation_and_validation_urbanmask(file):
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_urbanmask(file):
-    valid_stack, ndvi, ndwi, wsf = prepare_urbanmask(file, 1)
+    valid_stack, ndvi, ndwi = prepare_urbanmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
-    validate_mask(wsf, "Prepare")
-    output_image = compute_urbanmask(file, 1, valid_stack, ndvi, ndwi, wsf)
+    output_image = compute_urbanmask(file, 1, valid_stack, ndvi, ndwi)
     validate_mask(output_image, "Urban", valid_pixels=False)

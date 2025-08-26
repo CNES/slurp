@@ -29,12 +29,12 @@ from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
 # Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_goem_dir + "/*.tif")
+input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
 DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
 # Create correct object for parametrize loop
 input_files = []
-for i in range(len(input_files)):
+for i in range(len(input_images)):
     input_files.append((input_images[i], DTMs[i]))
 
 # Images to validate
@@ -82,7 +82,9 @@ def prepare_sensor_geom(file, dtm, nb_workers):
 @pytest.mark.prepare
 @pytest.mark.parametrize("file, dtm", input_files)
 def test_prepare_sensor_geom(file, dtm):
-    valid_stack, ndvi, ndwi, wsf, pekel = prepare_sensor_geom(file, 1)
+    valid_stack, ndvi, ndwi, wsf, pekel = prepare_sensor_geom(file, dtm,1)
+    validate_mask(pekel, "Sensor", valid_pixels=False)
+    validate_mask(wsf, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation

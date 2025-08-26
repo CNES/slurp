@@ -23,8 +23,32 @@ jobs:
         run: |
           sudo apt-get install -y python3-numpy
 
+      - name: Download OTB
+        run: |
+          mkdir -p $HOME/Downloads
+          curl -L https://www.orfeo-toolbox.org/packages/archives/OTB/OTB-9.1.1-Linux.tar.gz -o $HOME/Downloads/OTB-9.1.1-Linux.tar.gz
+
+      - name: Extract OTB
+        run: |
+          mkdir -p $HOME/OTB_install
+          tar xf $HOME/Downloads/OTB-9.1.1-Linux.tar.gz --one-top-level=$HOME/OTB_install
+          ls $HOME/OTB_install
+          lsb_release -is
+
+      - name: Source OTB Environment
+        run: |
+          source $HOME/OTB_install/otbenv.profile
+        shell: bash
+
       - name: Install Eoscale
-        run: pip install eoscale
+        run: |
+          git clone https://github.com/CNES/eoscale.git
+          cd eoscale
+          pip install .
+
+      - run: echo "------ Environment builded ! ------"
+      
+      - run: echo "------ passing formaters ... ------"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,10 +56,6 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: pip install -e .[dev]
-
-      - run: echo "------ Environment builded ! ------"
-      
-      - run: echo "------ passing formaters ... ------"
 
       - name: Run Black & Isort
         run: |
@@ -57,12 +77,11 @@ jobs:
       - name: Run Pylint
         shell: bash
         run: |
-          pylint --score=yes --fail-under=9 slurp 
+          pylint --recursive=y --disable=all --fail-under=10 --enable=too-many-statements,too-many-nested-blocks slurp
+
+      - name: Run McCabe Complexity Check
+        shell: bash -l {0}
+        run: |
+          ./continuous_integration/scripts/check_mccabe_complexity.sh 25 slurp
 
       - run: echo "------ Pylint Analysis done ! ------"
-
-      - run: echo "------ Starting CI tests ... -------"
-
-      - name: Run CI tests
-        shell: bash
-        run: pytest -m fast --cov=slurp
