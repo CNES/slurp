@@ -63,7 +63,7 @@ jobs:
       - name: CI Tests
         shell: bash
         run: |
-          pytest -m ci --cov=slurp --cov-report=xml:.ci-reports-slurp/coverage_slurp.xml --cov-report html:cov_html_slurp --cov-report=term --junitxml=pytest-results-slurp.xml --config config_tests_ci.json --main_config main_config_tests_ci.json
+          pytest -m ci --cov=slurp --cov-report=xml:.ci-reports-slurp/coverage_slurp.xml --cov-report html:cov_html_slurp --cov-report=term --junitxml=pytest-results-slurp.xml --config config_tests_ci.json --main_config main_config_tests_ci.json -s
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
