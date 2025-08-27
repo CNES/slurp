@@ -1,8 +1,11 @@
 {
-    "input":
-    {
-		"file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
-		"sensor_mode": false
+  "input":
+	{
+	    "file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
+	    "sensor_mode": false,
+		"pekel" : "/work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt",
+		"hand" : "/work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt",
+		"wsf": "/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt"
 	},
 
   "aux_layers":
@@ -15,8 +18,8 @@
 	    "extracted_wsf" : "out/wsf.tif",
 	    "extracted_wbm" : "out/wbm.tif",
 	    "file_texture": "out/texture.tif",
-	    "mnh": null
-
+	    "mnh": null,
+		"file_cloud_gml": null
 	},
 	"masks": {
 		"watermask": "out/watermask.tif",
@@ -34,8 +37,7 @@
 		"save_mode": "none"
 	},
     
-    "prepare":
-    {
+    "prepare": {
 	    "red": 1,
 	    "green": 2,
 	    "nir": 4,
@@ -56,7 +58,7 @@
 	    "wbm":"/path/to/the/wbm/wbm.tif"
 	},
 
-    "post_process":
+  "post_process":
 	{
 	    "binary_opening": 2,
 	    "binary_closing": 2,
@@ -73,7 +75,7 @@
 	    "percentile": 2,
 	    "absolute_threshold": false
 	},
-    
+
   "urban":
     {
 	"files_layers": [],
@@ -142,6 +144,9 @@
       "value_classif_river": 9,
       "value_classif_false_positive_buildings": 10,
       "value_classif_background": 11,
+      "vegmask_max_value":21,
+      "binary_closing":0,
+      "binary_opening":0,
 	"minimal_size_water_area": 10000,
 	"categorized_watermask": false
     }
