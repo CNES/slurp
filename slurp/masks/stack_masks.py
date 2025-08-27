@@ -318,6 +318,7 @@ def getarguments():
     group2.add_argument(
         "-minimal_size_water_area",
         type=int,
+        default=10000,
         help="Minimal area (in pixels) of water bodies"
     )
 
