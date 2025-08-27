@@ -83,11 +83,11 @@ def compute_urbanmask(
 
     if not(os.path.exists(wsf)):
         raise Exception(
-    command = (
-        f"urbanmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
             f"Please compute the a global wsf file and add it to {wsf}"
         )
 
+    command = (
+        f"urbanmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
         f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf} -log_f"
     ).split()
     sys.argv = command

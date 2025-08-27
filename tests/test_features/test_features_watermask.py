@@ -63,7 +63,7 @@ def test_simple_ndwi_threshold():
 @pytest.mark.ci
 def test_simple_ndwi_threshold_ci():
     command = (
-        write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
+        write_command_compute_watermask(1, pytest.valid_stack) + f"-simple_ndwi_threshold True "
     ).split()
     sys.argv = command
     slurp.masks.watermask.main()
