@@ -85,3 +85,11 @@ jobs:
           ./continuous_integration/scripts/check_mccabe_complexity.sh 25 slurp
 
       - run: echo "------ Pylint Analysis done ! ------"
+      - run: echo "------ Starting CI tests ... -------"
+
+      - name: CI Tests
+        shell: bash
+        run: |
+          pytest -m ci --cov=slurp --config config_tests_ci.json --main_config main_config_tests_ci.json
+
+      - run: echo "------ CI tests done ! -------------"
