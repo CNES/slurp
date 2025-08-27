@@ -106,12 +106,12 @@ slurp_stackmasks out/effective_used_config.json
 <div id="algorithm-description"></div>
 
 ## Algorithm description
-
-### Input data
 SLURP is designed to compute a simple land cover map (water, low/high vegetation, bare groud, buildings) from a VHR (Very High Resolution) image with
-4 bands (Red, Green, Blue, Near-Infrared). It had been validated with Pleiades and tested with WordView, CO3D, Pleiades NEO images. It shall also work with images with lower resolution (ex : SPOT 6/7).
+4 bands (Red, Green, Blue, Near-Infrared). SLURP is based on few or unsupervised algorithms (random forest, clustering, segmentation) that need some auxiliary data for training step. 
 
-SLURP is based on few or unsupervised algorithms (random forest, clustering, segmentation) that need some auxiliary data for training step. 
+It had been validated with Pleiades and tested with WordView, CO3D, Pleiades NEO images. It shall also work with images with lower resolution (ex : SPOT 6/7).
+
+### Auxiliary input data
 
 | Data | Step / usage | Comments | 
 | ------ | ------ | ------ |
@@ -119,15 +119,15 @@ SLURP is based on few or unsupervised algorithms (random forest, clustering, seg
 | [Hand MERIT](http://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/) |  **Water mask prediction** : Map of height above nearest drainage used to optimize choice of "non water" samples in the training step (*OPTIONAL*)  |  Free after registration (other kind of HAND maps exist) |
 | [WSF 2019](https://download.geoservice.dlr.de/WSF2019/) (World Settlement Footprint) |   **Urban mask prediction** : global buildings map used to learn a building prediction model (*MANDATORY*)| Could be replaced by a better resolution map if available (ex : OSM buildings) |
 | [ESA WorldCover](https://viewer.esa-worldcover.org/worldcover) | **Vegetation mask configuration** Global land cover map (10m resolution) used to customize vegetation clustering (*OPTIONAL*) | Very helpful to parameterize balance between non-vegetation / low and high vegetation clusters (see vegetation mask algorithm) |
-| [Copernicus WBM]() | |
+| [Copernicus WBM](https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM) | **Stack mask** : Water Body Mask from Copernicus, used to classify each water body from the watermasl (*OPTIONAL*) | If used, the final map will contain river, lake, sea classes |
 
 ### Data preparation
 
-Each mask needs some auxiliary files and some primitives computed from your VHR image. 
+Some masks need auxiliary files and some primitives computed from your VHR image. 
 
-They must be on the same projection, resolution and bounding box of the VHR input image to enable mask computation. 
+These data must be on the same projection, resolution and bounding box as the VHR input image to enable mask computation. 
 
-You can generate this data yourself or use the prepare script available in SLURP.
+You can generate this data yourself or use the prepare command (`slurp_prepare`) available in SLURP.
 
 The prepare script enables :
 - Computation of stack validity (with or without a cloud mask)
