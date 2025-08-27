@@ -7,11 +7,11 @@
 #
 """Test shadow mask with differents features and different arguments values"""
 
-import glob
-import os
+import sys
 
 import pytest
 
+import slurp.masks.shadowmask
 from tests.utils import get_aux_path, get_output_path
 
 
@@ -22,27 +22,72 @@ def write_command_compute_shadowmask(nb_workers, valid_stack=None):
     if valid_stack is None:
         valid_stack = get_aux_path(pytest.features_test_img, "valid_stack")
 
-    return f"slurp_shadowmask {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -shadowmask {output_image} -valid {valid_stack} "
+    return (
+        f"shadowmask.py {pytest.main_config} "
+        f"-file_vhr {pytest.features_test_img} "
+        f"-n_workers {nb_workers} "
+        f"-shadowmask {output_image} "
+        f"-valid {valid_stack}"
+    )
 
 
 @pytest.mark.features
 def test_absolute_threshold():
-    command = write_command_compute_shadowmask(1) + f"-absolute_threshold True"
-    os.system(command)
+    command = (
+        write_command_compute_shadowmask(1) + " -absolute_threshold 10.0"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
+
+
+@pytest.mark.ci
+def test_absolute_threshold_ci():
+    command = (
+        write_command_compute_shadowmask(1, pytest.valid_stack)
+        + " -absolute_threshold 10.0"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
 
 
 @pytest.mark.features
 @pytest.mark.parametrize("percentile", [0, 2, 100])
 def test_percentile(percentile):
-    command = write_command_compute_shadowmask(1) + f"-percentile {percentile}"
-    os.system(command)
+    command = (
+        write_command_compute_shadowmask(1) + f" -percentile {percentile}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
+
+
+@pytest.mark.ci
+@pytest.mark.parametrize("percentile", [0, 2, 100])
+def test_percentile_ci(percentile):
+    command = (
+        write_command_compute_shadowmask(1, pytest.valid_stack)
+        + f" -percentile {percentile}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
 
 
 @pytest.mark.features
 @pytest.mark.parametrize("th_rgb,th_nir", [(0, 0), (0.2, 0.2)])
-def test_percentile(th_rgb, th_nir):
+def test_percentile_nir_rgb(th_rgb, th_nir):
     command = (
         write_command_compute_shadowmask(1)
-        + f"-th_nir {th_nir} -th_rgb {th_rgb}"
-    )
-    os.system(command)
+        + f" -th_nir {th_nir} -th_rgb {th_rgb}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()
+
+
+@pytest.mark.ci
+@pytest.mark.parametrize("th_rgb,th_nir", [(0, 0), (0.2, 0.2)])
+def test_percentile_nir_rgb_ci(th_rgb, th_nir):
+    command = (
+        write_command_compute_shadowmask(1, pytest.valid_stack)
+        + f" -th_nir {th_nir} -th_rgb {th_rgb}"
+    ).split()
+    sys.argv = command
+    slurp.masks.shadowmask.main()

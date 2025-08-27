@@ -14,74 +14,53 @@ jobs:
     name: Run CI
     runs-on: ubuntu-latest
     steps:
-      - run: echo "------ Building environment ... ------"
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: install numpy
-        run: |
-          sudo apt-get install -y python3-numpy
-
-      - name: Download OTB
-        run: |
-          mkdir -p $HOME/Downloads
-          curl -L https://www.orfeo-toolbox.org/packages/archives/OTB/OTB-9.1.1-Linux.tar.gz -o $HOME/Downloads/OTB-9.1.1-Linux.tar.gz
-
-      - name: Extract OTB
-        run: |
-          mkdir -p $HOME/OTB_install
-          tar xf $HOME/Downloads/OTB-9.1.1-Linux.tar.gz --one-top-level=$HOME/OTB_install
-          ls $HOME/OTB_install
-          lsb_release -is
-
-      - name: Source OTB Environment
-        run: |
-          source $HOME/OTB_install/otbenv.profile
-        shell: bash
-
-      - name: Install Eoscale
-        run: |
-          git clone https://github.com/CNES/eoscale.git
-          cd eoscale
-          pip install .
-
-      - run: echo "------ Environment builded ! ------"
-      
-      - run: echo "------ passing formaters ... ------"
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Dependencies
         shell: bash
-        run: pip install -e .[dev]
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          # Debug: check slurp and pygments are installed
+          python -c "import slurp; print('slurp imported from:', slurp.__file__)"
+          python -c "import pygments; print('pygments version:', pygments.__version__)"
 
       - name: Run Black & Isort
+        shell: bash
         run: |
           black --check --diff slurp tests
           isort slurp tests --check --diff
         continue-on-error: true
-      
-      - run: echo "------ formaters done ! ------"
-
-      - run: echo "------ Starting Pylint Analysis ... ------"
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        shell: bash
-        run: pip install -e .[dev]
 
       - name: Run Pylint
         shell: bash
         run: |
-          pylint --recursive=y --disable=all --fail-under=10 --enable=too-many-statements,too-many-nested-blocks slurp
+          pylint --recursive=y --disable=all --fail-under=10 \
+                 --enable=too-many-statements,too-many-nested-blocks slurp
 
       - name: Run McCabe Complexity Check
-        shell: bash -l {0}
+        shell: bash
         run: |
           ./continuous_integration/scripts/check_mccabe_complexity.sh 25 slurp
 
-      - run: echo "------ Pylint Analysis done ! ------"
+      - name: Run CI Tests with Coverage
+        shell: bash
+        run: |
+          pytest -m ci \
+                 --cov=slurp \
+                 --cov-report=xml:.ci-reports-slurp/coverage_slurp.xml \
+                 --cov-report html:cov_html_slurp \
+                 --cov-report=term \
+                 --junitxml=pytest-results-slurp.xml \
+                 --config config_tests_ci.json \
+                 --main_config main_config_tests_ci.json -s
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-slurp
+          path: |
+            .ci-reports-slurp/
+            cov_html_slurp/
+            pytest-results-slurp.xml

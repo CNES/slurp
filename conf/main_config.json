@@ -1,8 +1,7 @@
 {
-  "input":
-	{
-	    "file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
-	    "sensor_mode": false
+    "input": {
+		"file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
+		"sensor_mode": false
 	},
 
   "aux_layers":
@@ -16,28 +15,25 @@
 	    "extracted_wbm" : "out/wbm.tif",
 	    "file_texture": "out/texture.tif",
 	    "mnh": null
+
+	},
+	"masks": {
+		"watermask": "out/watermask.tif",
+		"urbanmask": "out/urbanmask.tif",
+		"vegetationmask": "out/vegetationmask.tif",
+		"shadowmask": "out/shadowmask.tif",
+		"stackmask": "out/stackmask.tif"
 	},
 
-  "masks":
-    {
-	"watermask": "out/watermask.tif",
-	"urbanmask": "out/urbanmask.tif",
-	"vegetationmask": "out/vegetationmask.tif",
-	"shadowmask": "out/shadowmask.tif",
-	"stackmask":"out/stackmask.tif"
-    },
-
-  "resources":
-	{
-	    "n_workers": 8,
-	    "tile_max_size": 0,
-	    "multiproc_context": "fork",
-	    "n_jobs": 1,
-	    "save_mode": "none"
+	"resources": {
+		"n_workers": 8,
+		"tile_max_size": 0,
+		"multiproc_context": "fork",
+		"n_jobs": 1,
+		"save_mode": "none"
 	},
-
-  "prepare":
-	{
+    
+    "prepare": {
 	    "red": 1,
 	    "green": 2,
 	    "nir": 4,
@@ -56,24 +52,6 @@
             "cropped_land_cover_map": false,
 	    "effective_used_config": "out/effective_used_config.json",
 	    "wbm":"/path/to/the/wbm/wbm.tif"
-	},
-
-  "post_process":
-	{
-	    "binary_opening": 2,
-	    "binary_closing": 2,
-	    "binary_dilation": 2,
-	    "remove_small_objects": 100,
-	    "remove_small_holes": 100,
-	    "area_closing": null
-    },
-
-  "shadows":
-	{
-	    "th_rgb": 0.2,
-	    "th_nir": 0.2,
-	    "percentile": 2,
-	    "absolute_threshold": false
 	},
 
   "urban":
@@ -148,3 +126,4 @@
 	"categorized_watermask": false
     }
 }
+

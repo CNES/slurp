@@ -22,9 +22,12 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
+import slurp.masks.watermask
+import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
@@ -40,11 +43,13 @@ def prepare_watermask(file, nb_workers):
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
 
-    os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
         f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
@@ -79,10 +84,12 @@ def compute_watermask(
     if hand is None:
         hand = get_aux_path(file, "hand")
 
-    os.system(
-        f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"watermask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
     assert os.path.exists(
         output_image

@@ -22,9 +22,12 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
+import slurp.masks.urbanmask
+import slurp.prepare.prepare
 from tests.utils import (
     get_aux_path,
     get_files_to_process,
@@ -45,10 +48,12 @@ def prepare_urbanmask(file, nb_workers):
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
 
-    os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
@@ -81,10 +86,12 @@ def compute_urbanmask(
             f"Please compute the a global wsf file and add it to {wsf}"
         )
 
-    os.system(
-        f"slurp_urbanmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
+    command = (
+        f"urbanmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
         f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.masks.urbanmask.main()
 
     assert os.path.exists(
         output_image

@@ -22,9 +22,12 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
+import slurp.masks.vegetationmask
+import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
@@ -45,11 +48,13 @@ def prepare_vegetationmask(file, nb_workers):
 
     print(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
+    command = (
+        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
 
-    os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
@@ -79,10 +84,12 @@ def compute_vegetationmask(
     if texture is None:
         texture = get_aux_path(file, "texture")
 
-    os.system(
-        f"slurp_vegetationmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"vegetationmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
-    )
+    ).split()
+    sys.argv = command
+    slurp.masks.vegetationmask.main()
 
     assert os.path.exists(
         output_image
