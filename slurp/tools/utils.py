@@ -43,13 +43,13 @@ def setup_logging(config_file : str):
     logging.config.dictConfig(config)
 
 
-def parse_args(keys, logs_to_file, main_config, user_config):
+def parse_args(keys, logs_to_file, main_config):
     '''
     Parse command line arguments.
     Setup logging with a configuration file based on logs_to_file option value.
     '''
     argsdict = io_utils.read_json(
-        main_config, keys, user_config)
+        main_config, keys)
 
     # Read the list back from the JSON file
     with open("args_list.json", 'r') as f:

@@ -640,7 +640,7 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
         "post_process",
         "water",
     ]
-    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI

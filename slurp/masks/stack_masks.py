@@ -412,7 +412,7 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
         "post_process",
         "stack",
     ]
-    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI

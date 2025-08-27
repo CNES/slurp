@@ -71,7 +71,7 @@ class Prepare(BaseModel):
     land_cover_map: str = Field(..., description="Input land cover map, only used if 'analyse_glcm' is True")
     cropped_land_cover_map: bool = Field(..., description="If the land_cover_map image is cropped to the input VHR file or not")
     effective_used_config: str = Field(..., description="Path to the effective configuration used")
-    
+
 class PostProcess(BaseModel):
     binary_opening: int = Field(..., description="Size of disk structuring element")
     binary_closing: int = Field(..., description="Size of disk structuring element")
@@ -132,7 +132,7 @@ class Water(BaseModel):
     hand_filter: bool = Field(..., description="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict")
     value_classif: int = Field(..., description="Output classification value (default is 1)")
 
-class StackMain(BaseModel):
+class Stack(BaseModel):
     building_threshold: int = Field(..., description="Threshold for building detection in the stack")
     building_erosion: int = Field(..., description="Supposed buildings will be eroded by this size in the marker step")
     bonus_gt: int = Field(..., description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)")
@@ -147,19 +147,9 @@ class StackMain(BaseModel):
     value_classif_river: Optional[int] = Field(default=9, description="Output classification value for sea")
     value_classif_false_positive_buildings: int = Field(..., description="Output classification value for buildings false positive")
     value_classif_background: int = Field(..., description="Output classification value for background")
-    categorized_watermask: Optional[bool] = Field(default=False, description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask")
-    minimal_size_water_area: Optional[int] = Field(default=10000, description="Minimal area (in pixels) of water bodies")
-
-class StackUser(BaseModel):
-    vegmask_min_value: int = Field(..., description="Minimum value of vegetated area in the vegetation mask")
-    waterpred: str = Field(..., description="Predicted water mask file")
-    urban_proba: str = Field(..., description="Probability map for urban areas")
-    building_threshold: int = Field(..., description="Threshold for building detection in the stack")
-    building_erosion: int = Field(..., description="Supposed buildings will be eroded by this size in the marker step")
+    vegmask_max_value: int = Field(..., description="Maximum allowed value in the vegetation mask")
     binary_closing: int = Field(..., description="Size of disk structuring element")
     binary_opening: int = Field(..., description="Size of disk structuring element")
-    bonus_gt: int = Field(..., description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)")
-    malus_shadow: int = Field(..., description="Value of the malus for pixels in shadow, in the watershed regularization step")
     remove_small_objects: int = Field(..., description="The maximum area, in pixels, of a contiguous object that will be removed")
     remove_small_holes: int = Field(..., description="The maximum area, in pixels, of a contiguous hole that will be filled")
     categorized_watermask: Optional[bool] = Field(default=False, description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask")
@@ -172,7 +162,7 @@ class Masks(BaseModel):
     shadowmask: Optional[str] = Field(..., description="For shadowmask computation : Output classification filename. For stackmask: Shadow mask to stack. Otherwise, if given, big shadow areas will be marked as background")
     stackmask: Optional[str] = Field(..., description="Output classification filename")
 
-class AuxLayersMain(BaseModel):
+class AuxLayers(BaseModel):
     valid_stack: Optional[str] = Field(None, description="Path to store the valid stack file")
     file_ndvi: Optional[str] = Field(..., description="Path to the NDVI layer")
     file_ndwi: Optional[str] = Field(..., description="Path to the NDWI layer")
@@ -182,33 +172,19 @@ class AuxLayersMain(BaseModel):
     extracted_wbm: Optional[str] = Field(None, description="Path to the extracted Water Body Mask")
     file_texture: Optional[str] = Field(..., description="Path to store the texture file")
     mnh: Optional[str] = Field(None, description="Path to the Mean Height of Nearest Neighbors (MN) layer")
-
-class AuxLayersUser(BaseModel):
-    extracted_pekel: str = Field(..., description="TIFF file with extracted PEKEL values")
-    extracted_hand: str = Field(..., description="TIFF file with extracted HAND values")
-    extracted_wsf: Optional[str] = Field(..., description="Extracted World Settlement Footprint raster filename")
-    extracted_wbm: Optional[str] = Field(None, description="Path to the extracted Water Body Mask")
-    file_ndvi: Optional[str] = Field(None, description="NDVI file")
-    file_ndwi: Optional[str] = Field(None, description="NDWI file")
-    valid_stack: Optional[str] = Field(None, description="Path to store the valid stack file")
     file_cloud_gml: Optional[str] = Field(None, description="GML file containing cloud masks (optional)")
-    file_texture: Optional[str] = Field(..., description="Path to store the texture file")
-    mnh: Optional[str] = Field(None, description="Digital surface model (DSM) file (optional)")
 
-class InputMain(BaseModel):
+class Input(BaseModel):
     file_vhr: str = Field(..., description="Input 4 bands VHR (Very High Resolution) image")
     sensor_mode: bool = Field(..., description="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
-
-class InputUser(BaseModel):
-    file_vhr: str = Field(..., description="Input 4 bands VHR (Very High Resolution) image")
     pekel: str = Field(..., description="Path of the global Pekel file")
     hand: str = Field(..., description="Path of the global HAND file")
     wsf: str = Field(..., description="Path to store the extracted WSF file")
 
 
 class MainConfig(BaseModel):
-    input: InputMain = Field(..., description="Input data for the configuration")
-    aux_layers: AuxLayersMain = Field(..., description="Auxiliary layers used in processing")
+    input: Input = Field(..., description="Input data for the configuration")
+    aux_layers: AuxLayers = Field(..., description="Auxiliary layers used in processing")
     masks: Masks = Field(..., description="Masks for different types of land cover and features")
     resources: Resources = Field(..., description="Resources configuration for parallel processing")
     prepare: Prepare = Field(..., description="Preparation settings for preprocessing")
@@ -217,13 +193,7 @@ class MainConfig(BaseModel):
     urban: Urban = Field(..., description="Urban classification settings")
     vegetation: Vegetation = Field(..., description="Vegetation classification settings")
     water: Water = Field(..., description="Water detection settings")
-    stack: StackMain = Field(..., description="Stack processing settings")
-
-class UserConfig(BaseModel):
-    input: InputUser = Field(..., description="Input data for the configuration")
-    aux_layers: AuxLayersUser = Field(..., description="Auxiliary layers used in processing")
-    masks: Masks = Field(..., description="Masks for different types of land cover and features")
-    stack: StackUser = Field(..., description="Stack processing settings")
+    stack: Stack = Field(..., description="Stack processing settings")
 
 
 # Main function for loading the JSON file with Pydantic
