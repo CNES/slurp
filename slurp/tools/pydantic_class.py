@@ -6,45 +6,6 @@ import json
 # Création d'une fonction qui extrait les informations nécessaires des classes Pydantic
 import pandas as pd
 
-def extract_field_info(model_class, prefix=""):
-    table_data = []
-
-    for field_name, model_field in model_class.model_fields.items():
-        field_type = model_field.annotation
-        description = model_field.description or ""
-        full_field_name = f"{prefix}.{field_name}" if prefix else field_name
-
-        origin = get_origin(field_type)
-        args = get_args(field_type)
-
-        # Si c'est une sous-classe Pydantic directe
-        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-            table_data.append([full_field_name, str(field_type.__name__), description])
-            table_data.extend(extract_field_info(field_type, prefix=full_field_name))
-
-        # Si c'est une List[...] ou Optional[...] ou Union[...] contenant une sous-classe Pydantic
-        elif origin in [list, List, Union, Optional] and any(
-            isinstance(arg, type) and issubclass(arg, BaseModel) for arg in args
-        ):
-            table_data.append([full_field_name, str(field_type), description])
-            for arg in args:
-                if isinstance(arg, type) and issubclass(arg, BaseModel):
-                    table_data.extend(extract_field_info(arg, prefix=full_field_name))
-
-        else:
-            table_data.append([full_field_name, str(field_type), description])
-
-    return table_data
-
-def generate_markdown_table(config_class, file_path):
-    table_data = extract_field_info(config_class)
-    df = pd.DataFrame(table_data, columns=["Nom du Champ", "Type Attendu", "Description"])
-
-    markdown_table = df.to_markdown(index=False)  # Convert the dataframe to markdown format
-    with open(file_path, "w") as f:
-        f.write(markdown_table)
-
-
 class Resources(BaseModel):
     n_workers: int = Field(..., description="Number of CPU")
     tile_max_size: int = Field(..., description="Maximum size of tiles to process")
@@ -205,4 +166,3 @@ def load_config(file_path: str, config_class: BaseModel) -> BaseModel:
 
 # Generate markdown table from pydantic class
 # generate_markdown_table(MainConfig, "docs/source/main_config_descr.md")
-# generate_markdown_table(UserConfig, "docs/source/user_config_descr.md")
