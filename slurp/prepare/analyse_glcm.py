@@ -102,14 +102,12 @@ def compute_stats(
     else:
         # get all data from map_lc
         ds = rio.open(map_lc)
-        data_map = ds.read(1)
+        data_map = ds.read()
         ds.close()
         del ds
 
-    logger.info(f"{data_map.shape}")
-
-    width = data_map.shape[0]
-    height = data_map.shape[1]
+    width = data_map.shape[1]
+    height = data_map.shape[2]
 
     nb_total = width * height
     unique, counts = np.unique(data_map, return_counts=True)
@@ -118,11 +116,12 @@ def compute_stats(
     vegetation_classes = [10, 20, 30, 40, 90, 95, 100]
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
+    logger.debug("Count nb of pixels per class")
     for v, c in zip(unique, counts):
-        logger.info(f"{v} : {c}")
+        logger.debug(f"{v} : {c}")
         if v in vegetation_classes:
             veg += c
-
+            
         if v in low_vegetation_classes:
             low_veg += c
 
@@ -137,7 +136,7 @@ def compute_stats(
     logger.info(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
     logger.info(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
 
-    logger.info(f"export VEG_CLUSTERS={nb_clusters_veg}")
-    logger.info(f"export LOW_VEG_CLUSTERS={nb_clusters_low_veg}")
+    logger.info(f"VEG_CLUSTERS : {nb_clusters_veg}")
+    logger.info(f"LOW_VEG_CLUSTERS : {nb_clusters_low_veg}")
 
     return nb_clusters_veg, nb_clusters_low_veg

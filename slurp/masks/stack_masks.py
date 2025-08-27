@@ -35,16 +35,21 @@ import pathlib
 import json
 from os import makedirs, path, remove
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
+
 import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
+from skimage.util import map_array
+from skimage.measure import label, regionprops
+
+import eoscale.eo_executors as eoexe
+import eoscale.manager as eom
 
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
-from slurp.tools.constant import HIGH, LOW, NODATA_INT8
+from slurp.tools.constant import NODATA_INT8, LOW, HIGH
+
 
 logger = logging.getLogger("slurp")
 
@@ -121,16 +126,69 @@ def watershed_regul_buildings(
     markers[watermask == 1] = params["value_classif_background"]
 
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
-
+    
     return seg, markers
+
+
+def watershed_categorized_water(wbm, watermask, params):
+    """
+    Clean and apply watershed regulation for the watermask
+
+    :param np.ndarray wbm: WBM file from post_process function
+    :param np.ndarray watermask: Watermask created by the dedicated script
+    :param dict params: dictionary of arguments
+    :return: categorized mask
+    """
+    
+    SEA = 1
+    LAKE = 2
+    RIVER = 3
+    
+    # 1st step : obtain a clean watermask
+    nb_iter = 10
+    for _ in range(nb_iter):
+        clean_watermask = apply_morpho(watermask[0] == 1, "binary_opening", params["binary_opening"])
+    # remove small objects in order to reduce the segmentation
+    watermask_remove = apply_morpho(clean_watermask == 1, "remove_small_objects", params["minimal_size_water_area"])
+    
+    # 2nd step: segmentation
+    # label image regions
+    label_image = label(watermask_remove)
+    # each instance is defined by a region
+    regions = regionprops(label_image)
+
+    # create an empty binary mask for each category of water 
+    sea_mask = np.zeros(label_image.shape)
+    lake_mask = np.zeros(label_image.shape)
+    river_mask = np.zeros(label_image.shape)
+    
+    # instantiate each binary mask
+    for region in regions:
+        # take the center of each region
+        coords = np.round(region.centroid).astype(int)
+        # and apply the label of the WBM 
+        if (wbm[0, coords[0], coords[1]] == SEA):
+            sea_mask = np.where(label_image == region.label, sea_mask + 1, sea_mask)
+        elif (wbm[0, coords[0], coords[1]] == LAKE):
+            lake_mask = np.where(label_image == region.label, lake_mask + 1, lake_mask)
+        # river and regions not in the WBM are considered as river
+        else:
+            river_mask = np.where(label_image == region.label, river_mask +1 , river_mask)          
+    
+    # combined the binary masks into a stack mask
+    categorized_watermask = np.where(sea_mask, sea_mask*params["value_classif_sea"], 
+                          np.where(lake_mask, lake_mask*params["value_classif_lake"], 
+                                   np.where(river_mask, river_mask*params["value_classif_river"], watermask_remove)))  
+
+    return categorized_watermask
 
 
 def post_process(
     input_buffer: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf
-    0          1              2              3             4              5               6
+    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf [, key_wbm ]
+    0          1              2              3             4              5               6       [ 7 ]
     """
     input_image = input_buffer[0]
     valid_stack = input_buffer[1]
@@ -139,6 +197,7 @@ def post_process(
     urbanmask = input_buffer[4]
     shadowmask = input_buffer[5]
     wsf = input_buffer[6]
+    
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
     stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
@@ -187,21 +246,15 @@ def post_process(
 
     stack[1][np.logical_not(valid_stack[0])] = NODATA_INT8
 
+    # Layer 2: watermask categorized
+    if params["categorized_watermask"]:
+        wbm = input_buffer[7]
+        categorized_watermask = watershed_categorized_water(wbm, watermask, params)
+        stack[0] = np.where(categorized_watermask !=0, categorized_watermask, stack[0])
+
     # Markers
     stack[2] = markers
     stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    """
-    # Layer 3 : segmentation from watershed, before morpho/clean
-    stack[3] = seg
-    stack[3][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    # Layer 4 : compute simple urban mask with proba > threshold + morpho clean phase
-    
-    buildings = np.where(urbanmask > params["building_threshold"],1,0)
-    stack[4] = morpho_clean(buildings[0], params)
-    stack[4][np.logical_not(valid_stack[0])] = NODATA_INT8
-    """
 
     return stack
 
@@ -231,11 +284,8 @@ def getarguments():
     group1.add_argument("-watermask", help="Water mask")
     group1.add_argument("-urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
-    group1.add_argument(
-        "-wsf",
-        dest="extracted_wsf",
-        help="Extracted World Settlement Footprint raster  filename",
-    )
+    group1.add_argument("-wsf", dest="extracted_wsf", help="Extracted World Settlement Footprint raster  filename")
+    group1.add_argument("-wbm", dest="extracted_wbm", help="Extracted Water Body Mask raster filename")
 
     group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
     group2.add_argument(
@@ -258,6 +308,18 @@ def getarguments():
         "-malus_shadow",
         type=int,
         help="Value of the malus for pixels in shadow, in the watershed regularization step",
+    )
+
+    group2.add_argument("-categorized_watermask",
+                        type=bool,
+                        help="If true, compute a categorized watermask based on the WBM file"
+                        )
+
+    group2.add_argument(
+        "-minimal_size_water_area",
+        type=int,
+        default=10000,
+        help="Minimal area (in pixels) of water bodies"
     )
 
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
@@ -332,17 +394,18 @@ def getarguments():
 
 def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
                     valid_stack: bool, vegetationmask: str, watermask: str, urbanmask: str, shadowmask: str,
-                    extracted_wsf: str, building_threshold: int, building_erosion: int, bonus_gt: int,
+                    extracted_wsf: str, extracted_wbm: str, building_threshold: int, building_erosion: int, bonus_gt: int,
                     malus_shadow: int, stackmask: str, value_classif_low_veg: int, value_classif_high_veg: int,
                     value_classif_water: int, value_classif_buildings: int, value_classif_bare_ground: int,
                     value_classif_false_positive_buildings: int, value_classif_background: int, n_workers: int, tile_max_size: int,
-                    multiproc_context: str):
+                    multiproc_context: str, categorized_watermask: bool, minimal_size_water_area: int):
     """
     Main API to compute urban mask.
     """
     # Read the JSON files
     keys = [
         "input",
+        "prepare",
         "aux_layers",
         "masks",
         "resources",
@@ -356,8 +419,10 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("--" * 50)
+    logger.info("SLURP - Stack masks\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Mask calculation
@@ -369,6 +434,7 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
         try:
             t0 = time.time()
             key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
+
             key_watermask = eoscale_manager.open_raster(
                 raster_path=args.watermask
             )
@@ -387,18 +453,28 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
             key_validstack = eoscale_manager.open_raster(
                 raster_path=args.valid_stack
             )
-
+            if args.categorized_watermask:
+                key_wbm = eoscale_manager.open_raster(
+                    raster_path=args.extracted_wbm
+                )
+                inputs_final = [key_image,
+                                key_validstack,
+                                key_watermask,
+                                key_vegmask,
+                                key_urbanmask,
+                                key_shadowmask,
+                                key_wsf,
+                                key_wbm]
+            else:
+                inputs_final = [key_image,
+                                key_validstack,
+                                key_watermask,
+                                key_vegmask,
+                                key_urbanmask,
+                                key_shadowmask,
+                                key_wsf]
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
-            inputs_final = [
-                key_image,
-                key_validstack,
-                key_watermask,
-                key_vegmask,
-                key_urbanmask,
-                key_shadowmask,
-                key_wsf,
-            ]
             final_mask = eoexe.n_images_to_m_images_filter(
                 inputs=inputs_final,
                 image_filter=post_process,

@@ -647,8 +647,10 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("--" * 50)
+    logger.info("SLURP - Water mask\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Mask calculation
@@ -824,7 +826,7 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
                     random_state=712,
                     n_jobs=1,
                 )
-                logger.info(
+                logger.debug(
                     "RandomForest parameters: \n%s\n", str(classifier.get_params())
                 )
                 samples = np.concatenate(samples[:])  # A revoir si possible
