@@ -44,7 +44,7 @@ def read_json(
     # Read the JSON data from the main config
     try:
         config = load_config(main_config_file, MainConfig)
-        full_args = config.dict()
+        full_args = config.model_dump()
         argsdict = full_args[keys[0]]
         for key in keys[1:]:
             argsdict.update(full_args[key])
