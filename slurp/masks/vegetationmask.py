@@ -233,10 +233,11 @@ def apply_clustering(
             random_state=712,
         )
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
-
-        logger.debug("Clustering on texture index")
-        logger.debug("Clusters ordered by increasing texture values")
-        logger.debug(f"\n{np.sort(kmeans_texture.cluster_centers_,axis=0)}")
+        
+        if params["debug"]:
+            logger.debug("Clustering on texture index")
+            logger.debug("Clusters ordered by increasing texture values")
+            logger.debug(f"\n{np.sort(kmeans_texture.cluster_centers_,axis=0)}")
 
         list_clusters = pd.DataFrame.from_records(
             kmeans_texture.cluster_centers_, columns=["mean_texture"]
@@ -614,8 +615,9 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     logger.info("--" * 50)
     logger.info("SLURP - Vegetation mask\n")
     logger.info(f"JSON data loaded: {main_config}")
-    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+    if args.debug:
+        logger.debug(argsdict)
     
 
     # Mask calculation
@@ -677,7 +679,7 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Recover number total of segments
             nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
-            logger.debug(f"Number of different segments detected : {nb_polys}")
+            if args.debug: logger.debug(f"Number of different segments detected : {nb_polys}")
             
             # Stats calculation
             params_stats = {"nb_lab": nb_polys}
