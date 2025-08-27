@@ -103,35 +103,11 @@ def test_nb_samples(nb_samples_water, nb_samples_other):
     slurp.masks.watermask.main()
 
 
-@pytest.mark.ci
-@pytest.mark.parametrize(
-    "nb_samples_water,nb_samples_other", [(10000, 1000), (0, 0)]
-)
-def test_nb_samples_ci(nb_samples_water, nb_samples_other):
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack)
-        + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
-    ).split()
-    sys.argv = command
-    slurp.masks.watermask.main()
-
-
 @pytest.mark.features
 def test_nb_samples_auto():
     command = (write_command_compute_watermask(1) + f"-nb_samples_auto").split()
     sys.argv = command
     slurp.masks.watermask.main()
-
-
-@pytest.mark.ci
-def test_nb_samples_auto_ci():
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack)
-        + f"-nb_samples_auto"
-    ).split()
-    sys.argv = command
-    slurp.masks.watermask.main()
-
 
 @pytest.mark.features
 def test_pekel_filter():
