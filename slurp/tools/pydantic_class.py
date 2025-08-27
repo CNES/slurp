@@ -1,10 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import get_args, get_origin, Union, List, Optional
+from typing import List, Optional
 import json
-
-
-# Création d'une fonction qui extrait les informations nécessaires des classes Pydantic
-import pandas as pd
 
 class Resources(BaseModel):
     n_workers: int = Field(..., description="Number of CPU")
@@ -108,7 +104,7 @@ class Stack(BaseModel):
     value_classif_river: Optional[int] = Field(default=9, description="Output classification value for sea")
     value_classif_false_positive_buildings: int = Field(..., description="Output classification value for buildings false positive")
     value_classif_background: int = Field(..., description="Output classification value for background")
-    vegmask_max_value: int = Field(..., description="Maximum allowed value in the vegetation mask")
+    vegmask_min_value: int = Field(..., description="Maximum allowed value in the vegetation mask")
     binary_closing: int = Field(..., description="Size of disk structuring element")
     binary_opening: int = Field(..., description="Size of disk structuring element")
     remove_small_objects: int = Field(..., description="The maximum area, in pixels, of a contiguous object that will be removed")

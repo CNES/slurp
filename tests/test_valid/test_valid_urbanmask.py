@@ -50,7 +50,7 @@ def prepare_urbanmask(file, nb_workers):
 
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -extracted_wsf {wsf} -wsf {pytest.wsf} -log_f"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -wsf {pytest.wsf} -log_f"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
