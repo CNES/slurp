@@ -1,5 +1,6 @@
 {
-    "input": {
+    "input":
+    {
 		"file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
 		"sensor_mode": false
 	},
@@ -33,7 +34,8 @@
 		"save_mode": "none"
 	},
     
-    "prepare": {
+    "prepare":
+    {
 	    "red": 1,
 	    "green": 2,
 	    "nir": 4,
@@ -54,6 +56,24 @@
 	    "wbm":"/path/to/the/wbm/wbm.tif"
 	},
 
+    "post_process":
+	{
+	    "binary_opening": 2,
+	    "binary_closing": 2,
+	    "binary_dilation": 2,
+	    "remove_small_objects": 100,
+	    "remove_small_holes": 100,
+	    "area_closing": null
+    },
+
+  "shadows":
+	{
+	    "th_rgb": 0.2,
+	    "th_nir": 0.2,
+	    "percentile": 2,
+	    "absolute_threshold": false
+	},
+    
   "urban":
     {
 	"files_layers": [],
