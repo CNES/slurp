@@ -118,7 +118,8 @@ SLURP is based on few or unsupervised algorithms (random forest, clustering, seg
 | [Pekel](https://global-surface-water.appspot.com/download) (Global Surface Water) | **Water mask prediction** : Water occurrence [0-100] during the last 30 years, used to learn a water prediction model (*MANDATORY*) | The global map is mandatory but you can also use some data by month | 
 | [Hand MERIT](http://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/) |  **Water mask prediction** : Map of height above nearest drainage used to optimize choice of "non water" samples in the training step (*OPTIONAL*)  |  Free after registration (other kind of HAND maps exist) |
 | [WSF 2019](https://download.geoservice.dlr.de/WSF2019/) (World Settlement Footprint) |   **Urban mask prediction** : global buildings map used to learn a building prediction model (*MANDATORY*)| Could be replaced by a better resolution map if available (ex : OSM buildings) |
-| [ESA WorldCover](https://viewer.esa-worldcover.org/worldcover) | **Vegetation mask configuration** Global land cover map (10m resolution) used to customize vegetation clustering (*OPTIONAL*) | Very helpful to parameteriez balance between non-vegetation / low and high vegetation |
+| [ESA WorldCover](https://viewer.esa-worldcover.org/worldcover) | **Vegetation mask configuration** Global land cover map (10m resolution) used to customize vegetation clustering (*OPTIONAL*) | Very helpful to parameterize balance between non-vegetation / low and high vegetation clusters (see vegetation mask algorithm) |
+| [Copernicus WBM]() | |
 
 ### Data preparation
 
