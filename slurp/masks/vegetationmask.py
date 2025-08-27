@@ -607,6 +607,9 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     ]
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
+    if debug:
+        logger.handlers[0].setLevel(logging.DEBUG)
+
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
