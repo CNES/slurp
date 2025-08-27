@@ -123,9 +123,10 @@ def getarguments():
         "-extracted_pekel", help="Path to store the extracted Pekel file"
     )
     group3.add_argument("-hand", help="Path of the global HAND file")
-    group3.add_argument(
-        "-extracted_hand", help="Path to store the extracted HAND file"
-    )
+    group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+    group3.add_argument("-wbm", help="Path of the Water Body Mask (WBM) file")
+    group3.add_argument("-extracted_wbm", help="Path to store the extracted WBM file")
+    
 
     group4 = parser.add_argument_group(
         description="*** AUX FILES FOR URBAN MASK ***"
@@ -193,6 +194,7 @@ def getarguments():
         json.dump(arglist, f)
 
     return vars(args)
+
 
 def add_cluster_vegetation_info(
     args_dict: dict, args: argparse.Namespace
@@ -455,6 +457,38 @@ def wsf_extraction(
     else:
         logger.info("Pass WSF extraction")
 
+        
+def wbm_extraction(
+    args: argparse.Namespace,
+    grid_sensor,
+    grid_geo,
+    all_coords,
+    roi,
+) -> None:
+    """
+    Extract Water Body Mask (WBM) and superimpose it on
+    the VHR image.
+
+    Args:
+        args (argparse.Namespace): Namespace object of arguments.
+    """
+
+    if args.wbm and args.extracted_wbm and args.categorized_watermask:
+        if args.extracted_wbm is not None and (args.overwrite or not path.isfile(args.extracted_wbm)):
+            makedirs(path.dirname(args.extracted_wbm), exist_ok=True)
+            aux.aux_file_recovery(
+                args.file_vhr,
+                args.wbm,
+                args.extracted_wbm,
+                grid_sensor,
+                grid_geo,
+                all_coords,
+                roi,
+            )
+        else:
+            logger.info("Not extracting WBM : the file already exists.")
+    else:
+        logger.info("Pass WBM extraction")
 
 def compute_texture(
     args: argparse.Namespace,
@@ -530,7 +564,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                   file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
                   file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
                   pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
-                  wsf: str, extracted_wsf: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
+                  wsf: str, extracted_wsf: str, wbm: str, extracted_wbm: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
                   land_cover_map: str, cropped_land_cover_map: bool, n_workers: int, tile_max_size: int, multiproc_context: str):
     """
     Main function that prepares common layers (primitives, external data)
@@ -552,9 +586,9 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             argsdict[param] = locals()[param]
 
     logger.info("--" * 50)
-    logger.info("SLURP_PREPARE")
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("SLURP - Prepare step\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
@@ -614,6 +648,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                         args.file_vhr, args.dtm, args.geoid_file
                     )
                 )
+                
                 if args.mode != "vegetation":
                     # vegetation mask doest not need external data
                     # Pekel
@@ -621,6 +656,9 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
 
                     # Hand
                     hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+                    # Water Body Mask
+                    wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
                 if args.mode == "all":
                     # Only urban mask ('all' masks mode) need WSF
@@ -656,7 +694,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             logger.error("oups...", exception)
             traceback.print_exc()
 
-    logger.info("End of prepare step")
+    logger.info("End of prepare step\n")
 
 def main():
     """

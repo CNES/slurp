@@ -13,6 +13,7 @@
 	    "extracted_pekel": "out/pekel.tif",
 	    "extracted_hand": "out/hand.tif",
 	    "extracted_wsf" : "out/wsf.tif",
+	    "extracted_wbm" : "out/wbm.tif",
 	    "file_texture": "out/texture.tif",
 	    "mnh": null
 	},
@@ -53,7 +54,8 @@
 	    "analyse_glcm": true,
 	    "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt",
             "cropped_land_cover_map": false,
-	    "effective_used_config": "out/effective_used_config.json"
+	    "effective_used_config": "out/effective_used_config.json",
+	    "wbm":"/path/to/the/wbm/wbm.tif"
 	},
 
   "post_process":
@@ -137,7 +139,12 @@
       "value_classif_water": 3,
       "value_classif_buildings": 4,
       "value_classif_bare_ground": 6,
+      "value_classif_sea": 7,
+      "value_classif_lake": 8,
+      "value_classif_river": 9,
       "value_classif_false_positive_buildings": 10,
-      "value_classif_background": 11
+      "value_classif_background": 11,
+	"minimal_size_water_area": 10000,
+	"categorized_watermask": false
     }
 }

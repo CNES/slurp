@@ -403,8 +403,10 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("JSON data loaded:")
-    logger.info(argsdict)
+    logger.info("--" * 50)
+    logger.info("SLURP - Urban mask\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Mask calculation
@@ -541,7 +543,7 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
                         random_state=0,
                         n_jobs=args.n_jobs,
                     )
-                    logger.info(
+                    logger.debug(
                         "RandomForest parameters: \n%s\n",
                         str(classifier.get_params())
                     )
