@@ -107,8 +107,6 @@ class Stack(BaseModel):
     vegmask_min_value: int = Field(..., description="Maximum allowed value in the vegetation mask")
     binary_closing: int = Field(..., description="Size of disk structuring element")
     binary_opening: int = Field(..., description="Size of disk structuring element")
-    remove_small_objects: int = Field(..., description="The maximum area, in pixels, of a contiguous object that will be removed")
-    remove_small_holes: int = Field(..., description="The maximum area, in pixels, of a contiguous hole that will be filled")
     categorized_watermask: Optional[bool] = Field(default=False, description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask")
     minimal_size_water_area: Optional[int] = Field(default=10000, description="Minimal area (in pixels) of water bodies")
 
