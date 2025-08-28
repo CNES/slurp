@@ -647,14 +647,11 @@ def slurp_watermask(main_config : str, logs_to_file : bool, debug :bool, user_co
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("--" * 50)
-    logger.info("SLURP - Water mask\n")
-    logger.info(f"JSON data loaded: {main_config}")
+    logger.info("--" * 50 + "\nSLURP - Water mask\n"+f"JSON data loaded: {main_config}")
     args = argparse.Namespace(**argsdict)
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG) 
     logger.debug(f"{argsdict=}") 
-
     
     # Mask calculation
     with eom.EOContextManager(
