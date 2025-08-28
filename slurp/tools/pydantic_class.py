@@ -3,12 +3,15 @@ from typing import List, Optional
 import json
 
 class Resources(BaseModel):
+    debug: Optional[bool] = Field(default=False, description="Flag for debugging mode (default : False)")
     n_workers: int = Field(..., description="Number of CPU")
     tile_max_size: int = Field(..., description="Maximum size of tiles to process")
     multiproc_context: str = Field(default="spawn", description="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
     n_jobs: int = Field(..., description="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)")
     save_mode: str = Field(..., description="Save all files (debug) or only output mask (none)")
 
+
+    
 class Prepare(BaseModel):
     red: int = Field(..., description="Red band index")
     green: int = Field(..., description="Green band index")
@@ -65,8 +68,7 @@ class Vegetation(BaseModel):
     non_veg_clusters: Optional[List[int]] = Field(None, description="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     nb_clusters_low_veg: int = Field(..., description="Nb of clusters considered as low vegetation (1-NB_CLUSTERS)")
     max_texture_th: Optional[float] = Field(None, description="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
-    debug: bool = Field(..., description="Flag for debugging mode")
-
+    
 class Water(BaseModel):
     files_layers: List[str] = Field(..., description="Add layers as additional features used by learning algorithm")
     thresh_pekel: int = Field(..., description="Threshold for Pekel water occurrence detection")

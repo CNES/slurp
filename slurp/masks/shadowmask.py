@@ -102,6 +102,7 @@ def getarguments() -> dict:
                         action="store_true",
                         help="Store all logs to a file, instead of stdout",
                         )
+    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -171,7 +172,7 @@ def getarguments() -> dict:
     return vars(args)
 
 
-def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
+def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
                     th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
                     remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
     """
@@ -198,8 +199,11 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, user_config : str, 
     logger.info("--" * 50)
     logger.info("SLURP - Shadow mask\n")
     logger.info(f"JSON data loaded: {main_config}")
-    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}")   
 
     # Mask calculation
     with eom.EOContextManager(

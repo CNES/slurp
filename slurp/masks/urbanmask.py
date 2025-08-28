@@ -261,6 +261,8 @@ def getarguments():
                         action="store_true",
                         help="Store all logs to a file, instead of stdout",
                         )
+    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
+    
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -379,7 +381,7 @@ def getarguments():
     return vars(args)
 
 
-def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_config: str, file_vhr: str,
                     valid_stack: bool, file_ndvi: str, file_ndwi: str, extracted_wsf: str, files_layers: list, watermask: str,
                     vegetationmask: str, shadowmask: str, vegmask_min_value: int, veg_binary_dilation: int, value_classif: int,
                     gt_binary_erosion: int, save_mode: str, nb_samples_urban: int, nb_samples_other: int, max_depth: int,
@@ -406,8 +408,10 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, user_config: str, file
     logger.info("--" * 50)
     logger.info("SLURP - Urban mask\n")
     logger.info(f"JSON data loaded: {main_config}")
-    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}")   
 
     # Mask calculation
     with eom.EOContextManager(

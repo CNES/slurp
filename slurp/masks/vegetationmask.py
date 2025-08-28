@@ -464,7 +464,7 @@ def getarguments():
                         help="Store all logs to a file, instead of stdout",
                         )
 
-    parser.add_argument("-d", "--debug", action="store_true", help="Debug flag")
+    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -607,9 +607,6 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     ]
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
-    if debug:
-        logger.handlers[0].setLevel(logging.DEBUG)
-
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
@@ -620,8 +617,8 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     logger.info(f"JSON data loaded: {main_config}")
     args = argparse.Namespace(**argsdict)
     if args.debug:
-        logger.debug(argsdict)
-    
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}")   
 
     # Mask calculation
     with eom.EOContextManager(

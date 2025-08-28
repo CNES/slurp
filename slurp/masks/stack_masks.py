@@ -272,7 +272,8 @@ def getarguments():
                         action="store_true",
                         help="Store all logs to a file, instead of stdout",
                         )
-
+    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
+    
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
         "-user_config",
@@ -392,7 +393,7 @@ def getarguments():
     return vars(args)
 
 
-def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file_vhr: str,
+def slurp_stackmask(main_config: str, logs_to_file: bool, debug: bool, user_config: str, file_vhr: str,
                     valid_stack: bool, vegetationmask: str, watermask: str, urbanmask: str, shadowmask: str,
                     extracted_wsf: str, extracted_wbm: str, building_threshold: int, building_erosion: int, bonus_gt: int,
                     malus_shadow: int, stackmask: str, value_classif_low_veg: int, value_classif_high_veg: int,
@@ -422,9 +423,11 @@ def slurp_stackmask(main_config: str, logs_to_file: bool, user_config: str, file
     logger.info("--" * 50)
     logger.info("SLURP - Stack masks\n")
     logger.info(f"JSON data loaded: {main_config}")
-    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
-
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}")
+    
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,
