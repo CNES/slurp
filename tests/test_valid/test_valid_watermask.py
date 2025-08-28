@@ -46,7 +46,7 @@ def prepare_watermask(file, nb_workers):
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
-        f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand} -log_f"
+        f"-pekel {pytest.pekel} -hand {pytest.hand} -log_f"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()

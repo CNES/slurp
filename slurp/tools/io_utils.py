@@ -24,14 +24,14 @@ import json
 import numpy as np
 import logging
 import rasterio as rio
-from slurp.tools.pydantic_class import load_config, MainConfig, UserConfig
+from slurp.tools.pydantic_class import load_config, MainConfig
 
 from slurp.tools.constant import COMPRESSION, DRIVER
 
 logger = logging.getLogger("slurp")
 
 def read_json(
-    main_config_file: str, keys: list, user_config_file: str = None
+    main_config_file: str, keys: list
 ) -> dict:
     """
     Read JSON config files
@@ -44,7 +44,7 @@ def read_json(
     # Read the JSON data from the main config
     try:
         config = load_config(main_config_file, MainConfig)
-        full_args = config.dict()
+        full_args = config.model_dump()
         argsdict = full_args[keys[0]]
         for key in keys[1:]:
             argsdict.update(full_args[key])
@@ -55,21 +55,6 @@ def read_json(
         logger.error(
             f"Error decoding JSON data from {main_config_file}. Please check the file format."
         )
-
-    if user_config_file:
-        # Read the JSON data from the input file
-        try:
-            config = load_config(user_config_file, UserConfig)
-            full_args = config.dict()
-            for k in full_args.keys():
-                argsdict.update(full_args[k])
-
-        except FileNotFoundError:
-            logger.error(f"File {user_config_file} not found.")
-        except json.JSONDecodeError:
-            logger.error(
-                f"Error decoding JSON data from {user_config_file}. Please check the file format."
-            )
 
     return argsdict
 

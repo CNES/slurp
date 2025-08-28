@@ -430,16 +430,16 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
-
-    parser.add_argument(
-        "-d", "--debug", action="store_true", dest="debug", help="Debug flag"
-    )
+    
     parser.add_argument("-log_f",
                         "--logs_to_file",
                         action="store_true",
                         help="Store all logs to a file, instead of stdout",
                         )
-
+    parser.add_argument(
+        "-d", "--debug", default=None, action="store_true", dest="debug", help="Debug flag"
+    )
+    
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
         "-user_config",
@@ -618,7 +618,7 @@ def getarguments():
 # --Main function-- #
 
 
-def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool,
+def slurp_watermask(main_config : str, logs_to_file : bool, debug :bool, user_config : str, file_vhr : str, valid_stack : bool,
                     file_ndvi : str, file_ndwi : str, extracted_pekel : str, extracted_hand : str, files_layers : list,
                     file_filters : list, thresh_pekel : float, hand_strict : bool, thresh_hand : int, strict_thresh : float,
                     save_mode : str, simple_ndwi_threshold : bool, ndwi_threshold : float,
@@ -640,19 +640,19 @@ def slurp_watermask(main_config : str, debug :bool, logs_to_file : bool, user_co
         "post_process",
         "water",
     ]
-    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config, user_config)
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
         # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
-    logger.info("--" * 50)
-    logger.info("SLURP - Water mask\n")
-    logger.info(f"JSON data loaded: {main_config}")
-    logger.debug(argsdict)
+    logger.info("--" * 50 + "\nSLURP - Water mask\n"+f"JSON data loaded: {main_config}")
     args = argparse.Namespace(**argsdict)
-
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}") 
+    
     # Mask calculation
     with eom.EOContextManager(
         nb_workers=args.n_workers,

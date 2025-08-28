@@ -1,7 +1,7 @@
 from typing import get_args, get_origin, List, Union
 import pandas as pd
 from pydantic import BaseModel, Field
-from slurp.tools.pydantic_class import MainConfig, UserConfig
+from slurp.tools.pydantic_class import MainConfig
 
 
 def format_type(t):
@@ -63,6 +63,4 @@ def main() -> None:
     Main function that generates Markdown tables for MainConfig and UserConfig schemas.
     """
     generate_markdown_table(MainConfig, "main_config_descr.md")
-
-    generate_markdown_table(UserConfig, "user_config_descr.md")
 

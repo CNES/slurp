@@ -25,7 +25,7 @@ import os
 
 import pytest
 
-from tests.utils import get_aux_path, get_files_to_process, get_output_path
+from tests.utils import get_output_path
 from tests.validation import validate_mask
 
 # Input images in sensor geometry

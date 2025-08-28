@@ -1,7 +1,11 @@
 {
   "input": {
     "file_vhr": "absolute_path_to_image.tif",
-    "sensor_mode": false
+    "sensor_mode": false,
+    "pekel" : "",
+    "hand" : "",
+    "wsf": ""
+
   },
   "aux_layers": {
     "valid_stack": null,
@@ -9,10 +13,11 @@
     "file_ndwi": "tests/inputs/ndwi.tif",
     "extracted_pekel": "tests/inputs/pekel.tif",
     "extracted_hand": "tests/inputs/hand.tif",
-      "extracted_wsf": "tests/inputs/wsf.tif",
-      "extracted_wbm": null,
+    "extracted_wsf": "tests/inputs/wsf.tif",
+    "extracted_wbm": null,
     "file_texture": "tests/inputs/texture.tif",
-    "mnh": null
+    "mnh": null,
+    "file_cloud_gml": null
   },
   "masks": {
     "watermask": null,
@@ -26,7 +31,8 @@
     "tile_max_size": 50,
     "multiproc_context": "fork",
     "save_mode": "none",
-    "n_jobs": 1
+    "n_jobs": 1,
+    "debug":false
   },
   "prepare": {
     "red": 1,
@@ -44,8 +50,8 @@
     "geoid_file": "",
     "land_cover_map": "",
     "cropped_land_cover_map": false,
-      "effective_used_config": "tests/effective_used_config.json",
-      "wbm": null
+    "effective_used_config": "tests/effective_used_config.json",
+    "wbm": null
   },
   "post_process": {
     "binary_opening": 2,
@@ -82,8 +88,7 @@
     "nb_clusters_low_veg": 3,
     "max_texture_th": null,
     "texture_mode": "yes",
-    "filter_texture": 90,
-    "debug": false
+    "filter_texture": 90
   },
   "water": {
     "files_layers": [],
@@ -120,11 +125,14 @@
     "value_classif_buildings": 4,
     "value_classif_bare_ground": 6,
     "value_classif_sea": 7,
-      "value_classif_lake": 8,
-      "value_classif_river": 9,
-      "value_classif_false_positive_buildings": 10,
-      "value_classif_background": 11,
-      "minimal_size_water_area": 10000,
-      "categorized_watermask": false
+    "value_classif_lake": 8,
+    "value_classif_river": 9,
+    "value_classif_false_positive_buildings": 10,
+    "value_classif_background": 11,
+    "vegmask_min_value":21,
+    "binary_closing":0,
+    "binary_opening":0,
+    "minimal_size_water_area": 10000,
+    "categorized_watermask": false
   }
 }

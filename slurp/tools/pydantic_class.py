@@ -1,57 +1,17 @@
 from pydantic import BaseModel, Field
-from typing import get_args, get_origin, Union, List, Optional
+from typing import List, Optional
 import json
 
-
-# Création d'une fonction qui extrait les informations nécessaires des classes Pydantic
-import pandas as pd
-
-def extract_field_info(model_class, prefix=""):
-    table_data = []
-
-    for field_name, model_field in model_class.model_fields.items():
-        field_type = model_field.annotation
-        description = model_field.description or ""
-        full_field_name = f"{prefix}.{field_name}" if prefix else field_name
-
-        origin = get_origin(field_type)
-        args = get_args(field_type)
-
-        # Si c'est une sous-classe Pydantic directe
-        if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-            table_data.append([full_field_name, str(field_type.__name__), description])
-            table_data.extend(extract_field_info(field_type, prefix=full_field_name))
-
-        # Si c'est une List[...] ou Optional[...] ou Union[...] contenant une sous-classe Pydantic
-        elif origin in [list, List, Union, Optional] and any(
-            isinstance(arg, type) and issubclass(arg, BaseModel) for arg in args
-        ):
-            table_data.append([full_field_name, str(field_type), description])
-            for arg in args:
-                if isinstance(arg, type) and issubclass(arg, BaseModel):
-                    table_data.extend(extract_field_info(arg, prefix=full_field_name))
-
-        else:
-            table_data.append([full_field_name, str(field_type), description])
-
-    return table_data
-
-def generate_markdown_table(config_class, file_path):
-    table_data = extract_field_info(config_class)
-    df = pd.DataFrame(table_data, columns=["Nom du Champ", "Type Attendu", "Description"])
-
-    markdown_table = df.to_markdown(index=False)  # Convert the dataframe to markdown format
-    with open(file_path, "w") as f:
-        f.write(markdown_table)
-
-
 class Resources(BaseModel):
+    debug: Optional[bool] = Field(default=False, description="Flag for debugging mode (default : False)")
     n_workers: int = Field(..., description="Number of CPU")
     tile_max_size: int = Field(..., description="Maximum size of tiles to process")
     multiproc_context: str = Field(default="spawn", description="Multiprocessing strategy: 'fork' or 'spawn' for EOScale")
     n_jobs: int = Field(..., description="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)")
     save_mode: str = Field(..., description="Save all files (debug) or only output mask (none)")
 
+
+    
 class Prepare(BaseModel):
     red: int = Field(..., description="Red band index")
     green: int = Field(..., description="Green band index")
@@ -71,7 +31,7 @@ class Prepare(BaseModel):
     land_cover_map: str = Field(..., description="Input land cover map, only used if 'analyse_glcm' is True")
     cropped_land_cover_map: bool = Field(..., description="If the land_cover_map image is cropped to the input VHR file or not")
     effective_used_config: str = Field(..., description="Path to the effective configuration used")
-    
+
 class PostProcess(BaseModel):
     binary_opening: int = Field(..., description="Size of disk structuring element")
     binary_closing: int = Field(..., description="Size of disk structuring element")
@@ -108,8 +68,7 @@ class Vegetation(BaseModel):
     non_veg_clusters: Optional[List[int]] = Field(None, description="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)")
     nb_clusters_low_veg: int = Field(..., description="Nb of clusters considered as low vegetation (1-NB_CLUSTERS)")
     max_texture_th: Optional[float] = Field(None, description="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)")
-    debug: bool = Field(..., description="Flag for debugging mode")
-
+    
 class Water(BaseModel):
     files_layers: List[str] = Field(..., description="Add layers as additional features used by learning algorithm")
     thresh_pekel: int = Field(..., description="Threshold for Pekel water occurrence detection")
@@ -132,7 +91,7 @@ class Water(BaseModel):
     hand_filter: bool = Field(..., description="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict")
     value_classif: int = Field(..., description="Output classification value (default is 1)")
 
-class StackMain(BaseModel):
+class Stack(BaseModel):
     building_threshold: int = Field(..., description="Threshold for building detection in the stack")
     building_erosion: int = Field(..., description="Supposed buildings will be eroded by this size in the marker step")
     bonus_gt: int = Field(..., description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)")
@@ -147,21 +106,9 @@ class StackMain(BaseModel):
     value_classif_river: Optional[int] = Field(default=9, description="Output classification value for sea")
     value_classif_false_positive_buildings: int = Field(..., description="Output classification value for buildings false positive")
     value_classif_background: int = Field(..., description="Output classification value for background")
-    categorized_watermask: Optional[bool] = Field(default=False, description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask")
-    minimal_size_water_area: Optional[int] = Field(default=10000, description="Minimal area (in pixels) of water bodies")
-
-class StackUser(BaseModel):
-    vegmask_min_value: int = Field(..., description="Minimum value of vegetated area in the vegetation mask")
-    waterpred: str = Field(..., description="Predicted water mask file")
-    urban_proba: str = Field(..., description="Probability map for urban areas")
-    building_threshold: int = Field(..., description="Threshold for building detection in the stack")
-    building_erosion: int = Field(..., description="Supposed buildings will be eroded by this size in the marker step")
+    vegmask_min_value: int = Field(..., description="Maximum allowed value in the vegetation mask")
     binary_closing: int = Field(..., description="Size of disk structuring element")
     binary_opening: int = Field(..., description="Size of disk structuring element")
-    bonus_gt: int = Field(..., description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)")
-    malus_shadow: int = Field(..., description="Value of the malus for pixels in shadow, in the watershed regularization step")
-    remove_small_objects: int = Field(..., description="The maximum area, in pixels, of a contiguous object that will be removed")
-    remove_small_holes: int = Field(..., description="The maximum area, in pixels, of a contiguous hole that will be filled")
     categorized_watermask: Optional[bool] = Field(default=False, description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask")
     minimal_size_water_area: Optional[int] = Field(default=10000, description="Minimal area (in pixels) of water bodies")
 
@@ -172,7 +119,7 @@ class Masks(BaseModel):
     shadowmask: Optional[str] = Field(..., description="For shadowmask computation : Output classification filename. For stackmask: Shadow mask to stack. Otherwise, if given, big shadow areas will be marked as background")
     stackmask: Optional[str] = Field(..., description="Output classification filename")
 
-class AuxLayersMain(BaseModel):
+class AuxLayers(BaseModel):
     valid_stack: Optional[str] = Field(None, description="Path to store the valid stack file")
     file_ndvi: Optional[str] = Field(..., description="Path to the NDVI layer")
     file_ndwi: Optional[str] = Field(..., description="Path to the NDWI layer")
@@ -182,33 +129,19 @@ class AuxLayersMain(BaseModel):
     extracted_wbm: Optional[str] = Field(None, description="Path to the extracted Water Body Mask")
     file_texture: Optional[str] = Field(..., description="Path to store the texture file")
     mnh: Optional[str] = Field(None, description="Path to the Mean Height of Nearest Neighbors (MN) layer")
-
-class AuxLayersUser(BaseModel):
-    extracted_pekel: str = Field(..., description="TIFF file with extracted PEKEL values")
-    extracted_hand: str = Field(..., description="TIFF file with extracted HAND values")
-    extracted_wsf: Optional[str] = Field(..., description="Extracted World Settlement Footprint raster filename")
-    extracted_wbm: Optional[str] = Field(None, description="Path to the extracted Water Body Mask")
-    file_ndvi: Optional[str] = Field(None, description="NDVI file")
-    file_ndwi: Optional[str] = Field(None, description="NDWI file")
-    valid_stack: Optional[str] = Field(None, description="Path to store the valid stack file")
     file_cloud_gml: Optional[str] = Field(None, description="GML file containing cloud masks (optional)")
-    file_texture: Optional[str] = Field(..., description="Path to store the texture file")
-    mnh: Optional[str] = Field(None, description="Digital surface model (DSM) file (optional)")
 
-class InputMain(BaseModel):
+class Input(BaseModel):
     file_vhr: str = Field(..., description="Input 4 bands VHR (Very High Resolution) image")
     sensor_mode: bool = Field(..., description="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
-
-class InputUser(BaseModel):
-    file_vhr: str = Field(..., description="Input 4 bands VHR (Very High Resolution) image")
     pekel: str = Field(..., description="Path of the global Pekel file")
     hand: str = Field(..., description="Path of the global HAND file")
     wsf: str = Field(..., description="Path to store the extracted WSF file")
 
 
 class MainConfig(BaseModel):
-    input: InputMain = Field(..., description="Input data for the configuration")
-    aux_layers: AuxLayersMain = Field(..., description="Auxiliary layers used in processing")
+    input: Input = Field(..., description="Input data for the configuration")
+    aux_layers: AuxLayers = Field(..., description="Auxiliary layers used in processing")
     masks: Masks = Field(..., description="Masks for different types of land cover and features")
     resources: Resources = Field(..., description="Resources configuration for parallel processing")
     prepare: Prepare = Field(..., description="Preparation settings for preprocessing")
@@ -217,13 +150,7 @@ class MainConfig(BaseModel):
     urban: Urban = Field(..., description="Urban classification settings")
     vegetation: Vegetation = Field(..., description="Vegetation classification settings")
     water: Water = Field(..., description="Water detection settings")
-    stack: StackMain = Field(..., description="Stack processing settings")
-
-class UserConfig(BaseModel):
-    input: InputUser = Field(..., description="Input data for the configuration")
-    aux_layers: AuxLayersUser = Field(..., description="Auxiliary layers used in processing")
-    masks: Masks = Field(..., description="Masks for different types of land cover and features")
-    stack: StackUser = Field(..., description="Stack processing settings")
+    stack: Stack = Field(..., description="Stack processing settings")
 
 
 # Main function for loading the JSON file with Pydantic
@@ -235,4 +162,3 @@ def load_config(file_path: str, config_class: BaseModel) -> BaseModel:
 
 # Generate markdown table from pydantic class
 # generate_markdown_table(MainConfig, "docs/source/main_config_descr.md")
-# generate_markdown_table(UserConfig, "docs/source/user_config_descr.md")
