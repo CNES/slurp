@@ -17,10 +17,10 @@ obtain into a single multiclass mask.
    :maxdepth: 1
 
    SLURP configuration <slurp_config>
+   Tutorial <tutorial>
    CLI Usage <usage_cli>
    API Usage <usage_api>
    API Documentation <apidoc/modules>
-   Slurp tutorial <tutorial>
 
 .. toctree::
    :caption: Contributing
