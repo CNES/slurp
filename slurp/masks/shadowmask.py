@@ -223,40 +223,7 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_c
                 raster_path=args.valid_stack
             )
 
-            if args.absolute_threshold is False:
-                # Compute threshold for each band
-                th_bands = np.zeros(4)
-                for cpt in range(3):
-                    min_band = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        args.percentile,
-                    )
-                    max_percentile = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        100 - args.percentile,
-                    )
-                    th_bands[cpt] = min_band + args.th_rgb * (
-                            max_percentile - min_band
-                    )
-
-                cpt = 3
-                min_band = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    args.percentile,
-                )
-                max_percentile = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    100 - args.percentile,
-                )
-                th_bands[cpt] = min_band + args.th_nir * (
-                        max_percentile - min_band
-                )
-            else:
-                # Use an absolute threshold instead of relative threshold
-                # Useful when using calibrated images
-                th_bands = np.zeros(4)
-                for i in range(4):
-                    th_bands[i] = args.absolute_threshold
+            th_bands = compute_threshold(args.absolute_threshold, local_phr, nodata, args.percentile, args.th_rgb, args.th_nir)
 
             params = {
                 "thresholds": th_bands,
@@ -312,6 +279,45 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_c
         except Exception as exception:  # pylint: disable=broad-except
             logger.error("oups...", exception)
             traceback.print_exc()
+
+
+def compute_threshold(absolute_threshold, local_phr, nodata, percentile, th_rgb, th_nir):
+    if absolute_threshold is False:
+        # Compute threshold for each band
+        th_bands = np.zeros(4)
+        for cpt in range(3):
+            min_band = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                percentile,
+            )
+            max_percentile = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                100 - percentile,
+            )
+            th_bands[cpt] = min_band + th_rgb * (
+                    max_percentile - min_band
+            )
+
+        cpt = 3
+        min_band = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            percentile,
+        )
+        max_percentile = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            100 - percentile,
+        )
+        th_bands[cpt] = min_band + th_nir * (
+                max_percentile - min_band
+        )
+    else:
+        # Use an absolute threshold instead of relative threshold
+        # Useful when using calibrated images
+        th_bands = np.zeros(4)
+        for i in range(4):
+            th_bands[i] = absolute_threshold
+    return th_bands
+
 
 def main():
     """

@@ -185,15 +185,18 @@ def getarguments():
     )
     args = parser.parse_args()
 
+    store_arglist(parser)
+
+    return vars(args)
+
+
+def store_arglist(parser):
     arglist = []
     for arg in parser._actions:
         if arg.dest not in ["help"]:
             arglist.append(arg.dest)
-
     with open("args_list.json", 'w') as f:
         json.dump(arglist, f)
-
-    return vars(args)
 
 
 def add_cluster_vegetation_info(
@@ -611,20 +614,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
-                valid_stack_key = create_valid_stack(
-                    args, eoscale_manager, key_vhr, profile
-                )
-                eoscale_manager.write(
-                    key=valid_stack_key[0], img_path=args.valid_stack
-                )
-            else:
-                logger.info(
-                    "Not computing valid stack mask : the file already exists."
-                )
-                valid_stack_key = [
-                    eoscale_manager.open_raster(raster_path=args.valid_stack)
-                ]
+            valid_stack_key = valid_stack_process(args, eoscale_manager, key_vhr, profile)
 
             # NDVI
             if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
@@ -645,27 +635,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 logger.info("Not computing NDWI : the file already exists.")
 
             if args.sensor_mode:
-                grid_sensor, grid_geo, all_coords, roi = (
-                    geometry.compute_interpolation_grid(
-                        args.file_vhr, args.dtm, args.geoid_file
-                    )
-                )
-                
-                if args.mode != "vegetation":
-                    # vegetation mask doest not need external data
-                    # Pekel
-                    pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                    # Hand
-                    hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                    # Water Body Mask
-                    wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                if args.mode == "all":
-                    # Only urban mask ('all' masks mode) need WSF
-                    # WSF
-                    wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                sensor_mode_process(args)
 
             if args.mode != "water":
                 # Only vegetation mask need to compute texture
@@ -697,6 +667,47 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             traceback.print_exc()
 
     logger.info("End of prepare step\n")
+
+
+def valid_stack_process(args, eoscale_manager, key_vhr, profile):
+    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
+        valid_stack_key = create_valid_stack(
+            args, eoscale_manager, key_vhr, profile
+        )
+        eoscale_manager.write(
+            key=valid_stack_key[0], img_path=args.valid_stack
+        )
+    else:
+        logger.info(
+            "Not computing valid stack mask : the file already exists."
+        )
+        valid_stack_key = [
+            eoscale_manager.open_raster(raster_path=args.valid_stack)
+        ]
+    return valid_stack_key
+
+
+def sensor_mode_process(args):
+    grid_sensor, grid_geo, all_coords, roi = (
+        geometry.compute_interpolation_grid(
+            args.file_vhr, args.dtm, args.geoid_file
+        )
+    )
+    if args.mode != "vegetation":
+        # vegetation mask doest not need external data
+        # Pekel
+        pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Hand
+        hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Water Body Mask
+        wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+    if args.mode == "all":
+        # Only urban mask ('all' masks mode) need WSF
+        # WSF
+        wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
 
 def main():
     """
