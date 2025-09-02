@@ -12,6 +12,7 @@ import os
 import sys
 import shutil
 import subprocess
+import random
 
 import pytest
 
@@ -26,9 +27,9 @@ def write_command_compute_prepare(nb_workers, valid_stack=None):
         valid_stack = get_output_path(
             pytest.features_test_img, "valid_stack", remove=True
         )
-    ndvi = get_output_path(pytest.features_test_img, "ndvi", remove=True)
-    ndwi = get_output_path(pytest.features_test_img, "ndwi", remove=True)
-    texture = get_output_path(pytest.features_test_img, "texture", remove=True)
+    ndvi = get_output_path(pytest.features_test_img, "ndvi")
+    ndwi = get_output_path(pytest.features_test_img, "ndwi")
+    texture = get_output_path(pytest.features_test_img, "texture")
 
     return f"prepare.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
 
@@ -72,9 +73,9 @@ def test_prepare_update_config():
         current_dir, "out/effective_used_config.json"
     )
     command += f" -effective_used_config {effective_used_config}"
-    result = subprocess.run(command.split(), capture_output=True, text=True)
-    assert result.returncode == 0, f"Error : {result.stderr}"
-
+    command = command.split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
     with open(effective_used_config, "r", encoding="utf8") as json_file:
         config = json.load(json_file)
         for key in config:
@@ -86,3 +87,4 @@ def test_prepare_update_config():
     dir_to_remove = os.path.join(current_dir, "out")
     if os.path.exists(dir_to_remove):
         shutil.rmtree(dir_to_remove)
+

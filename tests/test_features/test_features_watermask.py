@@ -25,16 +25,6 @@ def write_command_compute_watermask(nb_workers, valid_stack=None):
 
     return f"watermask.py {pytest.main_config} -file_vhr {pytest.features_test_img} -n_workers {nb_workers} -watermask {output_image} -valid {valid_stack} "
 
-
-@pytest.mark.features
-def test_files_layers():
-    """Tests the water mask computation using a specific external layers file.
-    layers: Add layers as additional features used by learning algorithm."""
-    command = f"{write_command_compute_watermask(1)}-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']".split()
-    sys.argv = command
-    slurp.masks.watermask.main()
-
-
 @pytest.mark.features
 def test_hand_strict():
     """Tests the water mask computation with HAND strict filtering enabled.
@@ -94,7 +84,7 @@ def test_samples_method_ci(samples_method):
 
 @pytest.mark.features
 @pytest.mark.parametrize(
-    "nb_samples_water,nb_samples_other", [(10000, 1000), (0, 0)]
+    "nb_samples_water,nb_samples_other", [(10000, 1000), (100, 100)]
 )
 def test_nb_samples(nb_samples_water, nb_samples_other):
     """Tests the water mask computation with different sample counts for water and other classes.

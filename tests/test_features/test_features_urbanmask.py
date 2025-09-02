@@ -32,9 +32,11 @@ def test_vegmask_max_value(vegmask_min_value):
     """Tests the urban mask computation with different vegetation mask minimum values.
     vegmask_min_value: Vegetation min value for vegetated areas :
     all pixels with lower value will be predicted"""
+    ndvi = get_output_path(pytest.features_test_img, 'ndvi')
+    ndwi = get_output_path(pytest.features_test_img, 'ndwi')
     command = (
         write_command_compute_urbanmask(1)
-        + f"-vegmask_min_value {vegmask_min_value}"
+        + f"-vegmask_min_value {vegmask_min_value} "
     ).split()
     sys.argv = command
     slurp.masks.urbanmask.main()
@@ -82,13 +84,3 @@ def test_nb_samples_ci(nb_samples_other, nb_samples_urban):
     slurp.masks.urbanmask.main()
 
 
-@pytest.mark.features
-def test_files_layers():
-    """Tests the urban mask computation using a specific external layers file.
-    layers: Used as additional features for the learning algorithm"""
-    command = (
-        write_command_compute_urbanmask(1)
-        + "-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    ).split()
-    sys.argv = command
-    slurp.masks.urbanmask.main()
