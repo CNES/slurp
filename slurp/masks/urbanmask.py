@@ -424,56 +424,8 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
             t0 = time.time()
 
             # Build stack with all layers #
-
-            # Image PHR (numpy array, 4 bands, band number is first dimension),
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
-            profile_phr = eoscale_manager.get_profile(key_phr)
-
-            # Valid stack
-            key_original_valid_stack = eoscale_manager.open_raster(
-                raster_path=args.valid_stack
-            )
-            key_valid_stack = key_original_valid_stack
-
-            # Global validity mask construction
-            if args.vegetationmask and path.isfile(args.vegetationmask):
-                key_vegmask = eoscale_manager.open_raster(
-                    raster_path=args.vegetationmask
-                )
-                key_valid_stack = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_valid_stack, key_vegmask],
-                    image_filter=apply_vegetationmask,
-                    filter_parameters=vars(args),
-                    generate_output_profiles=eo_utils.single_bool_profile,
-                    stable_margin=0,
-                    context_manager=eoscale_manager,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Valid stack processing with vegetationmask...",
-                )
-                key_valid_stack = key_valid_stack[0]
-
-            if args.watermask and path.isfile(args.watermask):
-                key_watermask = eoscale_manager.open_raster(
-                    raster_path=args.watermask
-                )
-                key_valid_stack = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_valid_stack, key_watermask],
-                    image_filter=apply_watermask,
-                    filter_parameters={},
-                    generate_output_profiles=eo_utils.single_bool_profile,
-                    stable_margin=0,
-                    context_manager=eoscale_manager,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Valid stack processing with watermask...",
-                )
-                key_valid_stack = key_valid_stack[0]
-
-            # NDXI
-            key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
-            key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
-
-            # WSF
-            gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
+            gt_key, key_ndvi, key_ndwi, key_original_valid_stack, key_phr, key_valid_stack = build_stack(args,
+                                                                                                         eoscale_manager)
 
             time_stack = time.time()
 
@@ -504,133 +456,9 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
                 and args.nb_valid_other_pixels > args.nb_samples_other
             ):
                 # Nominal case : Ground Truth contains some pixels marked as building.
-                input_for_samples = [
-                    key_valid_stack,
-                    gt_key,
-                    key_phr,
-                    key_ndvi,
-                    key_ndwi,
-                ] + keys_files_layers
-                samples = eoexe.n_images_to_m_scalars(
-                    inputs=input_for_samples,
-                    image_filter=build_samples,
-                    filter_parameters=vars(args),
-                    nb_output_scalars=args.nb_valid_built_pixels
-                    + args.nb_valid_other_pixels,
-                    context_manager=eoscale_manager,
-                    concatenate_filter=eo_utils.concatenate_samples,
-                    output_scalars=[],
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Samples building processing...",
-                )
+                nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, key_original_valid_stack,
+                                       key_phr, key_valid_stack, keys_files_layers, t0, time_stack)
 
-                samples = np.concatenate(samples[:])
-                x_samples = samples[
-                    :, 1:
-                ]  # im_phr, im_ndvi, im_ndwi and files_layers
-                y_samples = samples[:, 0]  # gt
-
-                # Check if we have found "building" AND "non building" samples
-                # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
-                building_areas = len(np.where(y_samples == args.value_classif)[0]) > 0
-                non_building_areas = len(np.where(y_samples == 0)[0]) > 0
-
-                time_samples = time.time()
-
-                if building_areas and non_building_areas:
-                    # Train classifier from samples
-
-                    classifier = RandomForestClassifier(
-                        n_estimators=args.nb_estimators,
-                        max_depth=args.max_depth,
-                        class_weight="balanced",
-                        random_state=0,
-                        n_jobs=args.n_jobs,
-                    )
-                    logger.debug(
-                        "RandomForest parameters: \n%s\n",
-                        str(classifier.get_params())
-                    )
-                    random_forest_utils.train_classifier(classifier, x_samples, y_samples)
-                    random_forest_utils.print_feature_importance(
-                        classifier, args.files_layers
-                    )
-                    gc.collect()
-
-                    # Predict
-                    input_for_prediction = [
-                        key_original_valid_stack,
-                        key_valid_stack,
-                        key_phr,
-                        key_ndvi,
-                        key_ndwi,
-                    ] + keys_files_layers
-                    key_predict = eoexe.n_images_to_m_images_filter(
-                        inputs=input_for_prediction,
-                        image_filter=rf_prediction,
-                        filter_parameters={"classifier": classifier},
-                        generate_output_profiles=eo_utils.double_uint8_profile,
-                        stable_margin=0,
-                        context_manager=eoscale_manager,
-                        multiproc_context="spawn",
-                        filter_desc="RF prediction processing...",
-                    )
-                    time_random_forest = time.time()
-
-                    eoscale_manager.write(
-                        key=key_predict[0], img_path=args.urbanmask
-                    )  # classif
-                    if args.save_mode == "debug":
-                        eoscale_manager.write(
-                            key=key_predict[1],
-                            img_path=args.urbanmask.replace(
-                                ".tif", "_raw_predict.tif"
-                            ),
-                        )
-
-                    end_time = time.time()
-
-                    logger.info(
-                        f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
-                    )
-                    logger.info(
-                        "Total time (user)       :\t"
-                        + utils.convert_time(end_time - t0)
-                    )
-                    logger.info(
-                        "- Build_stack           :\t"
-                        + utils.convert_time(time_stack - t0)
-                    )
-                    logger.info(
-                        "- Build_samples         :\t"
-                        + utils.convert_time(time_samples - time_stack)
-                    )
-                    logger.info(
-                        "- Random forest (total) :\t"
-                        + utils.convert_time(time_random_forest - time_samples)
-                    )
-                    logger.info("***")
-                else:
-                    # Weird corner case : learning/prediction had not enough samples
-                    logger.info(
-                        f"**** Corner case with too few urban samples for {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
-                    )
-
-                    key_predict = eoexe.n_images_to_m_images_filter(
-                        inputs=[key_original_valid_stack],
-                        image_filter=add_nodata,
-                        filter_parameters={"fill_value": 0},
-                        generate_output_profiles=eo_utils.single_uint8_profile,
-                        context_manager=eoscale_manager,
-                        multiproc_context=args.multiproc_context,
-                        filter_desc="Add nodata...",
-                    )
-
-                    # Save proba mask
-                    eoscale_manager.write(
-                        key=key_predict[0], img_path=args.urbanmask
-                    )
-                    
             elif args.nb_valid_built_pixels == nb_valid_pixels:
                 # Corner case : no "non building pixels"
                 logger.info(
@@ -687,6 +515,184 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
         except Exception as exception:  # pylint: disable=broad-except
             logger.error("oups...", exception)
             traceback.print_exc()
+
+
+def nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, key_original_valid_stack, key_phr,
+                           key_valid_stack, keys_files_layers, t0, time_stack):
+    input_for_samples = [
+                            key_valid_stack,
+                            gt_key,
+                            key_phr,
+                            key_ndvi,
+                            key_ndwi,
+                        ] + keys_files_layers
+    samples = eoexe.n_images_to_m_scalars(
+        inputs=input_for_samples,
+        image_filter=build_samples,
+        filter_parameters=vars(args),
+        nb_output_scalars=args.nb_valid_built_pixels
+                          + args.nb_valid_other_pixels,
+        context_manager=eoscale_manager,
+        concatenate_filter=eo_utils.concatenate_samples,
+        output_scalars=[],
+        multiproc_context=args.multiproc_context,
+        filter_desc="Samples building processing...",
+    )
+    samples = np.concatenate(samples[:])
+    x_samples = samples[
+                :, 1:
+                ]  # im_phr, im_ndvi, im_ndwi and files_layers
+    y_samples = samples[:, 0]  # gt
+    # Check if we have found "building" AND "non building" samples
+    # (in very rare cases, WSF has only a small spot that is eroded in the build_samples step)
+    building_areas = len(np.where(y_samples == args.value_classif)[0]) > 0
+    non_building_areas = len(np.where(y_samples == 0)[0]) > 0
+    time_samples = time.time()
+    if building_areas and non_building_areas:
+        # Train classifier from samples
+
+        samples_train_classifier(args, eoscale_manager, key_ndvi, key_ndwi, key_original_valid_stack,
+                                 key_phr, key_valid_stack, keys_files_layers, t0, time_samples, time_stack,
+                                 x_samples, y_samples)
+    else:
+        # Weird corner case : learning/prediction had not enough samples
+        logger.info(
+            f"**** Corner case with too few urban samples for {args.file_vhr} -> void mask saved as {args.urbanmask} ****"
+        )
+
+        key_predict = eoexe.n_images_to_m_images_filter(
+            inputs=[key_original_valid_stack],
+            image_filter=add_nodata,
+            filter_parameters={"fill_value": 0},
+            generate_output_profiles=eo_utils.single_uint8_profile,
+            context_manager=eoscale_manager,
+            multiproc_context=args.multiproc_context,
+            filter_desc="Add nodata...",
+        )
+
+        # Save proba mask
+        eoscale_manager.write(
+            key=key_predict[0], img_path=args.urbanmask
+        )
+
+
+def build_stack(args, eoscale_manager):
+    # Image PHR (numpy array, 4 bands, band number is first dimension),
+    key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
+    profile_phr = eoscale_manager.get_profile(key_phr)
+    # Valid stack
+    key_original_valid_stack = eoscale_manager.open_raster(
+        raster_path=args.valid_stack
+    )
+    key_valid_stack = key_original_valid_stack
+    # Global validity mask construction
+    if args.vegetationmask and path.isfile(args.vegetationmask):
+        key_vegmask = eoscale_manager.open_raster(
+            raster_path=args.vegetationmask
+        )
+        key_valid_stack = eoexe.n_images_to_m_images_filter(
+            inputs=[key_valid_stack, key_vegmask],
+            image_filter=apply_vegetationmask,
+            filter_parameters=vars(args),
+            generate_output_profiles=eo_utils.single_bool_profile,
+            stable_margin=0,
+            context_manager=eoscale_manager,
+            multiproc_context=args.multiproc_context,
+            filter_desc="Valid stack processing with vegetationmask...",
+        )
+        key_valid_stack = key_valid_stack[0]
+    if args.watermask and path.isfile(args.watermask):
+        key_watermask = eoscale_manager.open_raster(
+            raster_path=args.watermask
+        )
+        key_valid_stack = eoexe.n_images_to_m_images_filter(
+            inputs=[key_valid_stack, key_watermask],
+            image_filter=apply_watermask,
+            filter_parameters={},
+            generate_output_profiles=eo_utils.single_bool_profile,
+            stable_margin=0,
+            context_manager=eoscale_manager,
+            multiproc_context=args.multiproc_context,
+            filter_desc="Valid stack processing with watermask...",
+        )
+        key_valid_stack = key_valid_stack[0]
+    # NDXI
+    key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
+    key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
+    # WSF
+    gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
+    return gt_key, key_ndvi, key_ndwi, key_original_valid_stack, key_phr, key_valid_stack
+
+
+def samples_train_classifier(args, eoscale_manager, key_ndvi, key_ndwi, key_original_valid_stack, key_phr,
+                             key_valid_stack, keys_files_layers, t0, time_samples, time_stack, x_samples, y_samples):
+    classifier = RandomForestClassifier(
+        n_estimators=args.nb_estimators,
+        max_depth=args.max_depth,
+        class_weight="balanced",
+        random_state=0,
+        n_jobs=args.n_jobs,
+    )
+    logger.debug(
+        "RandomForest parameters: \n%s\n",
+        str(classifier.get_params())
+    )
+    random_forest_utils.train_classifier(classifier, x_samples, y_samples)
+    random_forest_utils.print_feature_importance(
+        classifier, args.files_layers
+    )
+    gc.collect()
+    # Predict
+    input_for_prediction = [
+                               key_original_valid_stack,
+                               key_valid_stack,
+                               key_phr,
+                               key_ndvi,
+                               key_ndwi,
+                           ] + keys_files_layers
+    key_predict = eoexe.n_images_to_m_images_filter(
+        inputs=input_for_prediction,
+        image_filter=rf_prediction,
+        filter_parameters={"classifier": classifier},
+        generate_output_profiles=eo_utils.double_uint8_profile,
+        stable_margin=0,
+        context_manager=eoscale_manager,
+        multiproc_context="spawn",
+        filter_desc="RF prediction processing...",
+    )
+    time_random_forest = time.time()
+    eoscale_manager.write(
+        key=key_predict[0], img_path=args.urbanmask
+    )  # classif
+    if args.save_mode == "debug":
+        eoscale_manager.write(
+            key=key_predict[1],
+            img_path=args.urbanmask.replace(
+                ".tif", "_raw_predict.tif"
+            ),
+        )
+    end_time = time.time()
+    logger.info(
+        f"**** Urban proba mask for {args.file_vhr} (saved as {args.urbanmask}) ****"
+    )
+    logger.info(
+        "Total time (user)       :\t"
+        + utils.convert_time(end_time - t0)
+    )
+    logger.info(
+        "- Build_stack           :\t"
+        + utils.convert_time(time_stack - t0)
+    )
+    logger.info(
+        "- Build_samples         :\t"
+        + utils.convert_time(time_samples - time_stack)
+    )
+    logger.info(
+        "- Random forest (total) :\t"
+        + utils.convert_time(time_random_forest - time_samples)
+    )
+    logger.info("***")
+
 
 def main():
     """
