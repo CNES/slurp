@@ -2,13 +2,17 @@
 API Usage
 =========
 
-SLURP can be used as a Python library. Please start by installing it through pip.
+SLURP uses some global data, such as Global Surface Water (Pekel) for
+water detection or World Settlement Footprint (WSF) for building
+detection.
 
-.. code-block:: python
+Data preparation can be achieved with Orfeo ToolBox or other tools (for more information, please refer to `SLURP's tutorial <tutorial.html>`_ page), in
+order to bring all necessary data in the same projection. You can either
+build your mask step by step, or use a batch script to launch and build
+the final mask automatically.
 
-   pip install slurp-masks
-
-Then you can import it in your Python scripts or notebooks.
+SLURP can be used as a Python library. Please refer to the `installation guide <installation.html>`_.
+Then, you can import it in your Python scripts or notebooks.
 
 .. code-block:: python
 
@@ -19,8 +23,15 @@ Data preparation
 
 Each mask needs some auxiliary files. They must be on the same
 projection, resolution and bounding box of the VHR input image to enable
-mask computation. You can generate this data yourself or use the prepare
-script available in SLURP.
+mask computation. You can generate this data yourself or use the `prepare
+script <https://github.com/CNES/slurp/tree/main/scripts>`_ available in SLURP.
+
+.. warning::
+
+    Depending on which computation you want to perform (cf. `SLURP pipeline <#slurp-pipeline>`_ section), you may need to install OTB on
+    your system.
+
+    Please refer to the provided `tutorial <tutorial.html>`_ to know if additional steps are required.
 
 The prepare script enables :
 
@@ -31,12 +42,10 @@ The prepare script enables :
     - Extraction of WSF file
     - Computation of texture file with a convolution
 
-It requires an OTB installation.
 
 **To run the script**
 
-1. Configure the JSON file. A template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers, resources and prepare blocs inside the JSON
    file.
 3. Use the python function:
@@ -50,7 +59,7 @@ It requires an OTB installation.
                        wsf, extracted_wsf, file_texture, texture_rad, analyse_glcm,
                        land_cover_map, cropped_land_cover_map, n_workers, tile_max_size, multiproc_context)
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 Features
@@ -66,8 +75,7 @@ post-processed to clean artefacts.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources, post_process and water blocs.
 3. Run the command :
@@ -86,7 +94,7 @@ post-processed to clean artefacts.
                    value_classif, n_workers, tile_max_size, multiproc_context)
 
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 Vegetation mask
@@ -101,8 +109,7 @@ texture denotes for low vegetation).
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources and vegetation blocs.
 3. Run the command :
@@ -116,7 +123,7 @@ texture denotes for low vegetation).
                         binary_dilation, remove_small_objects, remove_small_holes,
                         vegetationmask, n_workers, tile_max_size, multiproc_context)
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 
@@ -131,8 +138,7 @@ probability” layer ([0..100]) that can be used by the stack algorithm.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources and urban blocs.
 3. Run the command :
@@ -145,7 +151,7 @@ probability” layer ([0..100]) that can be used by the stack algorithm.
                    gt_binary_erosion, save_mode, nb_samples_urban, nb_samples_other, max_depth,
                    nb_estimators, n_jobs, urbanmask, n_workers, tile_max_size, multiproc_context)
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 
@@ -160,8 +166,7 @@ in the regularization step.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources, post_process and shadow blocs.
 3. Run the command :
@@ -172,7 +177,7 @@ in the regularization step.
                     th_rgb, th_nir, absolute_threshold, percentile, binary_opening,
                     remove_small_objects, shadowmask, n_workers, tile_max_size, multiproc_context)
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 Stack and regularize buildings
@@ -189,8 +194,7 @@ gradient image, thus regularizing buildings shapes.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks element inside the JSON file. To
    go further you can modify resources, post_process and stack blocs.
 3. Run the command :
@@ -205,7 +209,7 @@ gradient image, thus regularizing buildings shapes.
                     value_classif_false_positive_buildings, value_classif_background, n_workers, tile_max_size,
                     multiproc_context)
 
-Please check complete arguments description available `here <TODO>`_.
+Please check complete arguments description available `here <slurp_config.html>`_.
 Beware that API arguments override the JSON arguments.
 
 
