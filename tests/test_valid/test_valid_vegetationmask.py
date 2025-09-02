@@ -41,16 +41,18 @@ predict_images = glob.glob(
 
 
 def prepare_vegetationmask(file, nb_workers):
+    """Prepares the valid stack, NDVI, NDWI, and texture files for vegetation mask computation."""
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
     texture = get_output_path(file, "texture", remove=True)
 
-    print(f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}")
+    print(
+        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+    )
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
     ).split()
     sys.argv = command
@@ -74,6 +76,7 @@ def prepare_vegetationmask(file, nb_workers):
 def compute_vegetationmask(
     file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, texture=None
 ):
+    """Computes the vegetation mask for a given image and validates output."""
     output_image = get_output_path(file, "vegetationmask", remove=True)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
@@ -110,18 +113,21 @@ def test_prepare_vegetationmask(file):
 @pytest.mark.computation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_vegetationmask(file):
+    """Tests the preparation of valid stack, NDVI, NDWI, and texture files for vegetation mask computation."""
     output_image = compute_vegetationmask(file, 1)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("predict_file", predict_images)
 def test_validation_vegetationmask(predict_file):
+    """Tests the validation of computed vegetation mask files."""
     validate_mask(predict_file, "Vegetation")
 
 
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_vegetationmask(file):
+    """Tests both computation and validation of vegetation mask for each input file."""
     output_image = compute_vegetationmask(file, 1)
     validate_mask(output_image, "Vegetation")
 
@@ -129,6 +135,7 @@ def test_computation_and_validation_vegetationmask(file):
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_vegetationmask(file):
+    """Tests the full workflow of preparation, computation, and validation of vegetation mask for each input file."""
     valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")

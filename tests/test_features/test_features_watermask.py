@@ -16,6 +16,7 @@ from tests.utils import get_aux_path, get_output_path
 
 
 def write_command_compute_watermask(nb_workers, valid_stack=None):
+    """Builds a command string to compute a water mask using the watermask module."""
     output_image = get_output_path(
         pytest.features_test_img, "watermask", remove=True
     )
@@ -27,44 +28,44 @@ def write_command_compute_watermask(nb_workers, valid_stack=None):
 
 @pytest.mark.features
 def test_files_layers():
-    command = (
-        write_command_compute_watermask(1)
-        + f"-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']"
-    ).split()
+    """Tests the water mask computation using a specific external layers file.
+    layers: Add layers as additional features used by learning algorithm."""
+    command = f"{write_command_compute_watermask(1)}-layers ['/work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt']".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_hand_strict():
-    command = (write_command_compute_watermask(1) + f"-hand_strict").split()
+    """Tests the water mask computation with HAND strict filtering enabled.
+    hand_strict: Use not(pekelxx) for other (no water) samples."""
+    command = f"{write_command_compute_watermask(1)}-hand_strict".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.ci
 def test_hand_strict_ci():
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack) + f"-hand_strict"
-    ).split()
+    """Run test_hand_strict with a specified valid_stack (for GithubCI)."""
+    command = f"{write_command_compute_watermask(1, pytest.valid_stack)}-hand_strict".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_simple_ndwi_threshold():
-    command = (
-        write_command_compute_watermask(1) + f"-simple_ndwi_threshold True "
-    ).split()
+    """Tests the water mask computation with a simple NDWI threshold enabled.
+    simple_ndwi_threshold: Compute water mask as a simple NDWI threshold,
+    useful in arid places where no water is known by Peckel"""
+    command = f"{write_command_compute_watermask(1)}-simple_ndwi_threshold True ".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.ci
 def test_simple_ndwi_threshold_ci():
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack) + f"-simple_ndwi_threshold True "
-    ).split()
+    """Run test_simple_nwdi_threshold with specified valid_stack (for GithubCI)."""
+    command = f"{write_command_compute_watermask(1, pytest.valid_stack)}-simple_ndwi_threshold True ".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -72,9 +73,9 @@ def test_simple_ndwi_threshold_ci():
 @pytest.mark.features
 @pytest.mark.parametrize("samples_method", ["random", "smart", "grid"])
 def test_samples_method(samples_method):
-    command = (
-        write_command_compute_watermask(1) + f"-samples_method {samples_method}"
-    ).split()
+    """Tests the water mask computation with different sample selection methods.
+    samples_method: Select method for choosing learning samples"""
+    command = f"{write_command_compute_watermask(1)}-samples_method {samples_method}".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -82,6 +83,7 @@ def test_samples_method(samples_method):
 @pytest.mark.ci
 @pytest.mark.parametrize("samples_method", ["random", "smart", "grid"])
 def test_samples_method_ci(samples_method):
+    """Run test_samples_method with a specified valid_stack (for GithubCI)."""
     command = (
         write_command_compute_watermask(1, pytest.valid_stack)
         + f"-samples_method {samples_method}"
@@ -95,6 +97,9 @@ def test_samples_method_ci(samples_method):
     "nb_samples_water,nb_samples_other", [(10000, 1000), (0, 0)]
 )
 def test_nb_samples(nb_samples_water, nb_samples_other):
+    """Tests the water mask computation with different sample counts for water and other classes.
+    nb_samples_water: Number of samples in water for learning.
+    nb_samples_other: Number of samples in 'other' class for learning."""
     command = (
         write_command_compute_watermask(1)
         + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
@@ -105,38 +110,43 @@ def test_nb_samples(nb_samples_water, nb_samples_other):
 
 @pytest.mark.features
 def test_nb_samples_auto():
-    command = (write_command_compute_watermask(1) + f"-nb_samples_auto").split()
+    """Tests the water mask computation with automatic sample count selection."""
+    command = f"{write_command_compute_watermask(1)}-nb_samples_auto".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
+
 @pytest.mark.features
 def test_pekel_filter():
-    command = (write_command_compute_watermask(1) + f"-no_pekel_filter").split()
+    """Tests the water mask computation with the Pekel filter disabled:
+    Deactivate postprocess with pekel which only keeps surfaces already known by pekel.
+    """
+    command = f"{write_command_compute_watermask(1)}-no_pekel_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.ci
 def test_pekel_filter_ci():
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack)
-        + f"-no_pekel_filter"
-    ).split()
+    """Run test_pekel_filter with a specified valid_stack (for GithubCI)."""
+    command = f"{write_command_compute_watermask(1, pytest.valid_stack)}-no_pekel_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.features
 def test_hand_filter():
-    command = (write_command_compute_watermask(1) + f"-hand_filter").split()
+    """Tests the water mask computation with HAND filtering enabled:
+    Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict
+    """
+    command = f"{write_command_compute_watermask(1)}-hand_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
 
 @pytest.mark.ci
 def test_hand_filter_ci():
-    command = (
-        write_command_compute_watermask(1, pytest.valid_stack) + f"-hand_filter"
-    ).split()
+    """Run test_hand_filter with a specified valid_stack (for GithubCI)."""
+    command = f"{write_command_compute_watermask(1, pytest.valid_stack)}-hand_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()

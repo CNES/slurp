@@ -44,6 +44,7 @@ predict_images = glob.glob(os.path.join(pytest.output_dir + "/urbanmask*.tif"))
 
 
 def prepare_urbanmask(file, nb_workers):
+    """Prepares the valid stack, NDVI, and NDWI files for urban mask computation."""
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
@@ -70,6 +71,7 @@ def prepare_urbanmask(file, nb_workers):
 def compute_urbanmask(
     file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, wsf=None
 ):
+    """Computes the urban mask for a given image and validates output."""
     output_image = get_output_path(file, "urbanmask")
     remove_file(output_image)
     if valid_stack is None:
@@ -81,7 +83,7 @@ def compute_urbanmask(
     if wsf is None:
         wsf = get_aux_path(file, "wsf")
 
-    if not(os.path.exists(wsf)):
+    if not (os.path.exists(wsf)):
         raise Exception(
             f"Please compute the a global wsf file and add it to {wsf}"
         )
@@ -103,6 +105,7 @@ def compute_urbanmask(
 @pytest.mark.prepare
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_urbanmask(file):
+    """Tests the preparation of valid stack, NDVI, and NDWI files for urban mask computation."""
     valid_stack, ndvi, ndwi = prepare_urbanmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
@@ -112,18 +115,21 @@ def test_prepare_urbanmask(file):
 @pytest.mark.computation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_urbanmask(file):
+    """Tests the computation of urban mask for each input file."""
     output_image = compute_urbanmask(file, 1)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("predict_file", predict_images)
 def test_validation_urbanmask(predict_file):
+    """Tests the validation of computed urban mask files."""
     validate_mask(predict_file, "Urban", valid_pixels=False)
 
 
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_urbanmask(file):
+    """Tests both computation and validation of urban mask for each input file."""
     output_image = compute_urbanmask(file, 1)
     validate_mask(output_image, "Urban", valid_pixels=False)
 
@@ -131,6 +137,7 @@ def test_computation_and_validation_urbanmask(file):
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_urbanmask(file):
+    """Tests the full workflow of preparation, computation, and validation of urban mask for each input file."""
     valid_stack, ndvi, ndwi = prepare_urbanmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")

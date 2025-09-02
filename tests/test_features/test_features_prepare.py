@@ -20,6 +20,8 @@ from tests.utils import get_output_path
 
 
 def write_command_compute_prepare(nb_workers, valid_stack=None):
+    """Builds a command string to run the prepare module with
+    specified worker count and valid stack."""
     if not valid_stack:
         valid_stack = get_output_path(
             pytest.features_test_img, "valid_stack", remove=True
@@ -33,20 +35,25 @@ def write_command_compute_prepare(nb_workers, valid_stack=None):
 
 @pytest.mark.features
 def test_absolute_analyse_glcm():
-    command = (write_command_compute_prepare(1) + f"--analyse_glcm").split()
+    """Tests the prepare module with glcm analysis enabled
+    glcm: Use a global land cover map to calculate the better number of
+    vegetation cluster to use for mask computation"""
+    command = f"{write_command_compute_prepare(1)}--analyse_glcm".split()
     sys.argv = command
     slurp.prepare.prepare.main()
 
 
 @pytest.mark.ci
 def test_absolute_analyse_glcm_ci():
+    """Run the test_absolute_analyse_glcm with a specified valid_stack (for GithubCI)."""
     command = (
         write_command_compute_prepare(1, pytest.valid_stack)
         + "--no_analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
-    
+
+
 @pytest.mark.features
 def test_prepare_update_config():
     """
@@ -54,13 +61,17 @@ def test_prepare_update_config():
     is correctly updated.
     """
     possible_size = [128, 256, 512, 1024, 2048, 4096, 8192]
-    i = random.randint(0, len(possible_size)-1)
+    i = random.randint(0, len(possible_size) - 1)
     command = (
-        write_command_compute_prepare(1) + "-tile_max_size " + str(possible_size[i])
+        write_command_compute_prepare(1)
+        + "-tile_max_size "
+        + str(possible_size[i])
     )
     current_dir = os.getcwd()
-    effective_used_config = os.path.join(current_dir, "out/effective_used_config.json")
-    command += " -effective_used_config " + effective_used_config
+    effective_used_config = os.path.join(
+        current_dir, "out/effective_used_config.json"
+    )
+    command += f" -effective_used_config {effective_used_config}"
     result = subprocess.run(command.split(), capture_output=True, text=True)
     assert result.returncode == 0, f"Error : {result.stderr}"
 

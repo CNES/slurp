@@ -39,6 +39,7 @@ predict_images = glob.glob(os.path.join(pytest.output_dir + "/shadowmask*.tif"))
 
 
 def prepare_shadowmask(file, nb_workers):
+    """Prepares the valid stack for shadow mask computation."""
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -valid {valid_stack}"
@@ -52,11 +53,14 @@ def prepare_shadowmask(file, nb_workers):
 
 
 def compute_shadowmask(file, nb_workers, valid_stack=None):
+    """Computes the shadow mask for a given image and validates output."""
     output_image = get_output_path(file, "shadowmask", remove=True)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
-    print(f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-shadowmask {output_image} -valid {valid_stack} -log_f")
+    print(
+        f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-shadowmask {output_image} -valid {valid_stack} -log_f"
+    )
     command = (
         f"shadowmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-shadowmask {output_image} -valid {valid_stack} -log_f"
@@ -72,6 +76,7 @@ def compute_shadowmask(file, nb_workers, valid_stack=None):
 @pytest.mark.prepare
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_shadowmask(file):
+    """Tests the preparation of valid stack for shadow mask computation."""
     valid_stack = prepare_shadowmask(file, 1)
     validate_mask(valid_stack, "Prepare")
 
@@ -79,18 +84,21 @@ def test_prepare_shadowmask(file):
 @pytest.mark.computation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_shadowmask(file):
-    output_image = compute_shadowmask(file, 1)
+    """Tests the computation of shadow mask for each input file."""
+    compute_shadowmask(file, 1)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("predict_file", predict_images)
 def test_validation_shadowmask(predict_file):
+    """Tests the validation of computed shadow mask files."""
     validate_mask(predict_file, "Shadow")
 
 
 @pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_shadowmask(file):
+    """Tests both computation and validation of shadow mask for each input file."""
     output_image = compute_shadowmask(file, 1)
     validate_mask(output_image, "Shadow")
 
@@ -98,6 +106,7 @@ def test_computation_and_validation_shadowmask(file):
 @pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_shadowmask(file):
+    """Tests the full workflow of preparation, computation, and validation of shadow mask for each input file."""
     valid_stack = prepare_shadowmask(file, 1)
     validate_mask(valid_stack, "Prepare")
     output_image = compute_shadowmask(file, 1, valid_stack)
