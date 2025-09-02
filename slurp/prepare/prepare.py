@@ -159,7 +159,7 @@ def getarguments():
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group5.set_defaults(analyse_glcm=True)
+    group5.set_defaults(analyse_glcm=False)
 
     group5.add_argument(
         "-land_cover_map",
