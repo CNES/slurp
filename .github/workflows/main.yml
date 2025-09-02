@@ -36,8 +36,7 @@ jobs:
       - name: Run Pylint
         shell: bash
         run: |
-          pylint --recursive=y --disable=all --fail-under=10 \
-                 --enable=too-many-statements,too-many-nested-blocks slurp
+          pylint --recursive=y --disable=all --fail-under=10 --enable=too-many-statements,too-many-nested-blocks slurp
 
       - name: Run McCabe Complexity Check
         shell: bash

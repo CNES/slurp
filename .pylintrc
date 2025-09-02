@@ -75,7 +75,7 @@ output-format=text
 reports=no
 
 # Activate the evaluation score.
-score=no
+score=yes
 
 
 [REFACTORING]
@@ -502,15 +502,17 @@ max-public-methods=25
 max-returns=6
 
 # Maximum number of statements in function / method body.
-max-statements=100
+max-statements=50
 
 # Minimum number of public methods for a class (see R0903).
 min-public-methods=2
+
+# Maximum number of nested blocks for function / method body
+max-nested-blocks=7
 
 
 [EXCEPTIONS]
 
 # Exceptions that will emit a warning when being caught. Defaults to
 # "BaseException, Exception".
-overgeneral-exceptions=BaseException,
-                       Exception
+overgeneral-exceptions=builtins.BaseException,builtins.Exception
