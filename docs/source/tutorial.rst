@@ -3,6 +3,11 @@
 SLURP tutorial
 ==============
 
+SLURP is designed to compute a simple land cover map (water, low/high vegetation, bare groud, buildings) from a VHR (Very High Resolution) image with
+4 bands (Red, Green, Blue, Near-Infrared). SLURP is based on few or unsupervised algorithms (random forest, clustering, segmentation) that need some auxiliary data for training step.
+
+It had been validated with Pleiades and tested with WordView, CO3D, Pleiades NEO images. It shall also work with images with lower resolution (ex : SPOT 6/7).
+
 This document presents an example of the SLURP pipeline on an image extract from Strasbourg (France).
 
 .. figure:: _static/images/tutorials/strasbourg_vhr_image.png
@@ -30,19 +35,61 @@ __________________________________________
     $ source slurp_env/bin/activate
 
 
+Get the necessary input data
+----------------------------
+
+In addition to the VHR input image, SLURP requires some auxiliary data to compute the different masks.
+
+.. raw:: html
+
+    <style>
+      table.horizontal-borders th,
+      table.horizontal-borders td {
+        border-bottom: 1px solid #000;
+        padding: 8px;
+      }
+    </style>
+
+    <table class="horizontal-borders">
+        <tr>
+          <th>Auxiliary data</th>
+          <th>Step / usage</th>
+          <th>Comments</th>
+        </tr>
+        <tr>
+          <td><a href="https://global-surface-water.appspot.com/download">Pekel</a> <br>(Global Surface Water - uint8)</td>
+          <td><strong>Water mask prediction</strong> : Water occurrence [0–100] during the last 30 years, used to learn a water prediction model (<em>MANDATORY</em>)</td>
+          <td>The global map is mandatory but you can also use some data by month</td>
+        </tr>
+        <tr>
+          <td><a href="http://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/">Hand MERIT</a> <br>(float32)</td>
+          <td><strong>Water mask prediction</strong> : Map of height above nearest drainage used to optimize choice of "non water" samples in the training step (<em>OPTIONAL</em>)</td>
+          <td>Free after registration (other kind of HAND maps exist)</td>
+        </tr>
+        <tr>
+          <td><a href="https://download.geoservice.dlr.de/WSF2019/">WSF 2019</a> <br>(World Settlement Footprint - uint8)</td>
+          <td><strong>Urban mask prediction</strong> : Global buildings map used to learn a building prediction model (<em>MANDATORY</em>)</td>
+          <td>Could be replaced by a better resolution map if available (e.g., OSM buildings)</td>
+        </tr>
+        <tr>
+          <td><a href="https://viewer.esa-worldcover.org/worldcover">ESA WorldCover</a> <br>(uint8)</td>
+          <td><strong>Vegetation mask configuration</strong> : Global land cover map (10m resolution) used to customize vegetation clustering (<em>OPTIONAL</em>)</td>
+          <td>Very helpful to parameterize balance between non-vegetation / low and high vegetation clusters (see vegetation mask algorithm)</td>
+        </tr>
+        <tr>
+          <td><a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM">Copernicus WBM</a> <br>(float32 or int16)</td>
+          <td><strong>Stack mask</strong> : Water Body Mask from Copernicus, used to classify each water body from the watermask (<em>OPTIONAL</em>)</td>
+          <td>If used, the final map will contain river, lake, sea classes</td>
+        </tr>
+    </table>
+    <br><br>
+
+
 Fill in the configuration file
 ------------------------------
 
 A template for the configuration file is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_.
 All parameters are explained in the `SLURP configuration <slurp_config.html>`_ page.
-
-Create the output folders
--------------------------
-
-.. code-block:: console
-
-    mkdir -p prepare
-    mkdir -p out
 
 --------------
 SLURP pipeline
@@ -220,41 +267,9 @@ It contains :
     - the vegetation mask
     - the stack mask
 
-Results without sensor mode
----------------------------
 
-.. raw:: html
-
-    <table border="0" style="margin: auto; text-align: center;">
-      <tr>
-        <td style="width:300px;">
-          <img src="_static/images/tutorials/watermask_with_otb.png" alt="Water mask" title="Water mask">
-        </td>
-        <td style="width:300px;">
-          <img src="_static/images/tutorials/vegmask_with_otb.png" alt="Low/High vegetation and bare ground mask" title="Low/High vegetation mask">
-        </td>
-        <td style="width:300px;">
-          <img src="_static/images/tutorials/shadowmask_with_otb.png" alt="Shadow mask" title="Shadow mask">
-        </td>
-        <td style="width:300px;">
-          <img src="_static/images/tutorials/urbanmask_with_otb.png" alt="Urban probability" title="Urban probability">
-        </td>
-        <td style="width:300px;">
-          <img src="_static/images/tutorials/stackmask_with_otb.png" alt="Final mask" title="Final mask">
-        </td>
-      </tr>
-      <tr>
-        <td><b>Water mask with style <code>conf/style_water.qml</code></b></td>
-        <td><b>Vegetation mask with style <code>conf/style_vegetation.qml</code></b></td>
-        <td><b>Shadow mask with style <code>conf/style_shadow.qml</code></b></td>
-        <td><b>Urban mask (building probability)</b></td>
-        <td><b>Stack mask with style <code>conf/style_stack.qml</code></b></td>
-      </tr>
-    </table>
-
-
-Results with sensor mode
-------------------------
+Results
+-------
 
 .. raw:: html
 
