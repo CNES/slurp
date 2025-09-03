@@ -80,7 +80,7 @@ def prepare_sensor_geom(file, dtm, nb_workers):
     return valid_stack, ndvi, ndwi, wsf, pekel
 
 
-@pytest.mark.prepare
+@pytest.mark.validation
 @pytest.mark.parametrize("file, dtm", input_files)
 def test_prepare_sensor_geom(file, dtm):
     """Tests the sensor geometry preparation and validates output masks."""

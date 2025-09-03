@@ -34,13 +34,6 @@ from tests.validation import validate_mask
 # Input images
 input_files = get_files_to_process("shadow")
 
-# Images to validate
-predict_images = glob.glob(
-    os.path.join(
-        pytest.output_dir
-        + f"/shadowmask_{os.path.basename(pytest.features_test_img)}"
-    )
-)
 
 def prepare_shadowmask(file, nb_workers):
     """Prepares the valid stack for shadow mask computation."""
@@ -77,37 +70,7 @@ def compute_shadowmask(file, nb_workers, valid_stack=None):
     return output_image
 
 
-@pytest.mark.prepare
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_shadowmask(file):
-    """Tests the preparation of valid stack for shadow mask computation."""
-    valid_stack = prepare_shadowmask(file, 1)
-    validate_mask(valid_stack, "Prepare")
-
-
-@pytest.mark.computation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_shadowmask(file):
-    """Tests the computation of shadow mask for each input file."""
-    compute_shadowmask(file, 1)
-
-
 @pytest.mark.validation
-@pytest.mark.parametrize("predict_file", predict_images)
-def test_validation_shadowmask(predict_file):
-    """Tests the validation of computed shadow mask files."""
-    validate_mask(predict_file, "Shadow")
-
-
-@pytest.mark.computation_and_validation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_and_validation_shadowmask(file):
-    """Tests both computation and validation of shadow mask for each input file."""
-    output_image = compute_shadowmask(file, 1)
-    validate_mask(output_image, "Shadow")
-
-
-@pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_shadowmask(file):
     """Tests the full workflow of preparation, computation, and validation of shadow mask for each input file."""

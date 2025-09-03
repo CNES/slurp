@@ -34,13 +34,6 @@ from tests.validation import validate_mask
 # Input images
 input_files = get_files_to_process("water")
 
-# Images to validate
-predict_images = glob.glob(
-    os.path.join(
-        pytest.output_dir
-        + f"/watermask_{os.path.basename(pytest.features_test_img)}"
-    )
-)
 
 def prepare_watermask(file, nb_workers):
     """Prepares the valid stack, NDVI, and NDWI files for water mask computation."""
@@ -104,39 +97,7 @@ def compute_watermask(
     return output_image
 
 
-@pytest.mark.prepare
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_watermask(file):
-    """Tests the preparation of valid stack, NDVI, and NDWI files for water mask computation."""
-    valid_stack, ndvi, ndwi = prepare_watermask(file, 1)
-    validate_mask(valid_stack, "Prepare")
-    validate_mask(ndvi, "Prepare")
-    validate_mask(ndwi, "Prepare")
-
-
-@pytest.mark.computation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_watermask(file):
-    """Tests the computation of water mask for each input file."""
-    compute_watermask(file, 1)
-
-
 @pytest.mark.validation
-@pytest.mark.parametrize("predict_file", predict_images)
-def test_validation_watermask(predict_file):
-    """Tests the validation of computed water mask files."""
-    validate_mask(predict_file, "Water")
-
-
-@pytest.mark.computation_and_validation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_and_validation_watermask(file):
-    """Tests both computation and validation of water mask for each input file."""
-    output_image = compute_watermask(file, 1)
-    validate_mask(output_image, "Water")
-
-
-@pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_watermask(file):
     """Tests the full workflow of preparation, computation, and validation of water mask for each input file."""

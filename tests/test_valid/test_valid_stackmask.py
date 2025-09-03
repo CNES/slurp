@@ -33,9 +33,6 @@ from tests.validation import validate_mask
 # Input images
 input_files = glob.glob(os.path.join(pytest.data_dir, "all") + "/*.tif")
 
-# Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/stack_*.tif"))
-
 
 def compute_stackmask(file, nb_workers):
     """Computes the stack mask for a given image and validates output."""
@@ -90,21 +87,7 @@ def test_computation_stackmask_ci():
     ), f"The file {output_image} has not been created. Error during stackmask computation ?"
 
 
-@pytest.mark.computation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_stackmask(file):
-    """Tests the computation of stack mask for each input file."""
-    compute_stackmask(file, 1)
-
-
 @pytest.mark.validation
-@pytest.mark.parametrize("predict_file", predict_images)
-def test_validation_stackmask(predict_file):
-    """Tests the validation of computed stack mask files."""
-    validate_mask(predict_file, "Stack")
-
-
-@pytest.mark.computation_and_validation
 @pytest.mark.parametrize("file", input_files)
 def test_computation_and_validation_stackask(file):
     """Tests both computation and validation of stack mask for each input file."""
