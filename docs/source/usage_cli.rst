@@ -53,7 +53,7 @@ script <https://github.com/CNES/slurp/tree/main/scripts>`_ available in SLURP.
 
 .. warning::
 
-    Depending on which computation you want to perform (cf. `SLURP pipeline <#slurp-pipeline>`_ section), you may need to install OTB on
+    Depending on which computation you want to perform, you may need to install OTB on
     your system.
 
     Please refer to the provided `tutorial <tutorial.html>`_ to know if additional steps are required.
