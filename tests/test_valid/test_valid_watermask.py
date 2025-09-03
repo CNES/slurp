@@ -35,8 +35,12 @@ from tests.validation import validate_mask
 input_files = get_files_to_process("water")
 
 # Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/watermask*.tif"))
-
+predict_images = glob.glob(
+    os.path.join(
+        pytest.output_dir
+        + f"/watermask_{os.path.basename(pytest.features_test_img)}"
+    )
+)
 
 def prepare_watermask(file, nb_workers):
     """Prepares the valid stack, NDVI, and NDWI files for water mask computation."""

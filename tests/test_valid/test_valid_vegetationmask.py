@@ -36,9 +36,11 @@ input_files = get_files_to_process("vegetation")
 
 # Images to validate
 predict_images = glob.glob(
-    os.path.join(pytest.output_dir + "/vegetationmask*.tif")
+    os.path.join(
+        pytest.output_dir
+        + f"/vegetationmask_{os.path.basename(pytest.features_test_img)}"
+    )
 )
-
 
 def prepare_vegetationmask(file, nb_workers):
     """Prepares the valid stack, NDVI, NDWI, and texture files for vegetation mask computation."""

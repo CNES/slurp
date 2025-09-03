@@ -35,8 +35,12 @@ from tests.validation import validate_mask
 input_files = get_files_to_process("shadow")
 
 # Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/shadowmask*.tif"))
-
+predict_images = glob.glob(
+    os.path.join(
+        pytest.output_dir
+        + f"/shadowmask_{os.path.basename(pytest.features_test_img)}"
+    )
+)
 
 def prepare_shadowmask(file, nb_workers):
     """Prepares the valid stack for shadow mask computation."""

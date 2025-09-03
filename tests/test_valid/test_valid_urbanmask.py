@@ -40,8 +40,12 @@ from tests.validation import validate_mask
 input_files = get_files_to_process("urban")
 
 # Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/urbanmask*.tif"))
-
+predict_images = glob.glob(
+    os.path.join(
+        pytest.output_dir
+        + f"/urbanmask_{os.path.basename(pytest.features_test_img)}"
+    )
+)
 
 def prepare_urbanmask(file, nb_workers):
     """Prepares the valid stack, NDVI, and NDWI files for urban mask computation."""
