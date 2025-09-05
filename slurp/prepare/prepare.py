@@ -543,7 +543,9 @@ def compute_texture(
 
 
 def valid_stack_process(args, eoscale_manager, key_vhr, profile):
-    '''DOCSTRING'''
+    """
+    Create and save a valid stack mask if it doesn't already exist or if overwrite is specified.
+    """
     if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
         valid_stack_key = create_valid_stack(
             args, eoscale_manager, key_vhr, profile
@@ -562,7 +564,12 @@ def valid_stack_process(args, eoscale_manager, key_vhr, profile):
 
 
 def sensor_mode_process(args):
-    '''DOCSTRING'''
+    """
+    Processes the VHR image based on the specified mode. If the mode is not "vegetation",
+    it performs extractions for Pekel, Hand, and Water Body Mask (WBM). If the mode is set to "all",
+    it additionally extracts the WSF (World Settlement Footprint) data. The extraction is done using
+    the given grid and region-of-interest (ROI) computed from the image, DTM (Digital Terrain Model), and geoid data.
+    """
     grid_sensor, grid_geo, all_coords, roi = (
         geometry.compute_interpolation_grid(
             args.file_vhr, args.dtm, args.geoid_file

@@ -447,7 +447,24 @@ def clean_task(
     return im_classif
 
 def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
-    '''DOCSTRING'''
+    """
+    Perform image segmentation on the provided raster data (PHR, NDVI, and valid stack).
+    If the save mode is set to "all" or "debug", the segmentation result
+    is saved as a .tif file.
+
+    Parameters
+    ----------
+    args : Namespace
+        Runtime configuration and file paths.
+    eoscale_manager : EOScaleManager
+        The context manager responsible for managing raster I/O operations.
+    key_ndvi : RasterData
+        The NDVI raster data.
+    key_phr : RasterData
+        The PHR raster data.
+    key_valid_stack : RasterData
+        The valid stack raster data.
+    """
     future_seg = eoexe.n_images_to_m_images_filter(
         inputs=[key_phr, key_ndvi, key_valid_stack],
         image_filter=segmentation_task,
@@ -468,7 +485,9 @@ def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
 
 
 def build_stack(args, eoscale_manager):
-    '''DOCSTRING'''
+    """
+    Build the required stack of input raster layers for processing.
+    """
     # Image PHR
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     args.nodata_phr = eoscale_manager.get_profile(key_phr)["nodata"]
@@ -487,7 +506,21 @@ def build_stack(args, eoscale_manager):
 
 
 def closing(args, eoscale_manager, final_seg, key_valid_stack):
-    '''DOCSTRING'''
+    """
+    Performs morphological closing and other post-processing operations
+    (binary dilation, removal of small objects, and holes,...) in the segmented image if the texture mode is enabled.
+
+    Parameters
+    ----------
+    args : Namespace
+        Runtime configuration and file paths.
+    eoscale_manager : EOScaleManager
+        The context manager responsible for managing raster I/O operations.
+    final_seg : RasterData
+        The segmentation result to be processed.
+    key_valid_stack : RasterData
+        The valid stack raster data.
+    """
     if args.texture_mode == "yes" and (
             args.binary_dilation
             or args.remove_small_objects
@@ -512,7 +545,10 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
 
 
 def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys):
-    '''DOCSTRING'''
+    """
+    Computes statistics (mean NDVI, NDWI, and texture) for each segmented region.
+    Then, the statistics are processed to generate data for clustering or classification.
+    """
     params_stats = {"nb_lab": nb_polys}
     stats = eoexe.n_images_to_m_scalars(
         inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
@@ -541,7 +577,9 @@ def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_tex
 
 
 def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats):
-    '''DOCSTRING'''
+    """
+    Display information on the time spent on each stage of the processing pipeline.
+    """
     logger.info(
         f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
     )

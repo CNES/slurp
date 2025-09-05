@@ -44,7 +44,12 @@ logger = logging.getLogger("slurp")
 
 
 def compute_thresholds(absolute_threshold, local_phr, nodata, percentile, th_rgb, th_nir):
-    '''ADD DOCSTRING'''
+    """
+    Compute thresholds for each band in the provided PHR image.
+    If `absolute_threshold` is provided, the function will use the
+    specified value as the threshold for all bands. If not, it calculates thresholds based on the
+    specified percentile for each band, with different thresholds for RGB bands and NIR band.
+    """
     if absolute_threshold is False:
         # Compute threshold for each band
         th_bands = np.zeros(4)

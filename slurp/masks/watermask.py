@@ -421,8 +421,29 @@ def post_process(
 
     return [im_predict, im_classif]
 
-def build_stack(args, eoscale_manager):
-    '''DOCSTRING'''
+
+def build_stack_water(args, eoscale_manager):
+    """
+    Prepares and returns the required image layers and masks for further processing.
+
+    Parameters
+    ----------
+    args : Namespace
+        Object containing paths and configuration parameters.
+        Expected attributes:
+            - file_vhr : str
+            - valid_stack : str
+            - file_ndvi : str
+            - file_ndwi : str
+        The following attributes will be updated in-place:
+            - nodata_phr
+            - shape
+            - crs
+            - transform
+            - rpc (set to None)
+    eoscale_manager : object
+        Image manager handling raster reading and metadata extraction.
+    """
     # Image PHR (numpy array, 4 bands, band number is first dimension),
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     profile_phr = eoscale_manager.get_profile(key_phr)
@@ -445,7 +466,9 @@ def build_stack(args, eoscale_manager):
 
 
 def display_global_infos(args, end_time, t0, time_stack):
-    '''DOCSTRING'''
+    """
+    Displays general information about the water mask processing.
+    """
     logger.info(
         f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
     )
@@ -460,7 +483,9 @@ def display_global_infos(args, end_time, t0, time_stack):
 
 
 def display_rf_infos(end_time, time_random_forest, time_samples, time_stack):
-    '''DOCSTRING'''
+    """
+    Displays information about the random forest training and prediction process.
+    """
     logger.info(
         "- Build_samples         :\t"
         + utils.convert_time(time_samples - time_stack)
@@ -477,6 +502,9 @@ def display_rf_infos(end_time, time_random_forest, time_samples, time_stack):
 
 def display_computation_info(args, end_time, not_enough_water_samples, t0, time_random_forest, time_samples,
                              time_stack):
+    """
+    Displays information about the entire computation process, including when handling edge cases.
+    """
     logger.info(
         f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
     )
@@ -506,6 +534,11 @@ def display_computation_info(args, end_time, not_enough_water_samples, t0, time_
 
 
 def process_pekel(args, eoscale_manager, margin):
+    """
+    Processes a Pekel (water) raster and applies the `compute_pekel_mask` filter to create a usable water mask.
+    Checks if there are enough water pixels in the Pekel mask to proceed with classification.
+    If not enough water pixels are found, the function flags this and suggests using NDWI thresholding instead.
+    """
     key_pekel = eoscale_manager.open_raster(
         raster_path=args.extracted_pekel
     )
@@ -540,6 +573,9 @@ def process_pekel(args, eoscale_manager, margin):
 
 
 def process_hand(args, eoscale_manager, margin):
+    """
+    Processes a HAND (Height Above Nearest Drainage) raster and applies the `compute_hand_mask` filter to create a usable mask for further processing.
+    """
     key_hand = eoscale_manager.open_raster(
         raster_path=args.extracted_hand
     )
@@ -562,6 +598,9 @@ def process_hand(args, eoscale_manager, margin):
 
 def nominal_case_predict(args, eoscale_manager, key_ndvi, key_ndwi, key_phr, key_valid_stack, local_mask_pekel, margin,
                          mask_hand, mask_pekel):
+    """
+    Performs supervised classification using Random Forest to predict a water mask.
+    """
     keys_files_layers = [
         eoscale_manager.open_raster(
             raster_path=args.files_layers[i]
@@ -645,6 +684,10 @@ def nominal_case_predict(args, eoscale_manager, key_ndvi, key_ndwi, key_phr, key
 
 
 def launch_postprocess(args, eoscale_manager, key_predict, key_valid_stack, margin, mask_hand, mask_pekel):
+    """
+    Combines the predicted mask with additional masks and the validity mask. Then it applies a custom `post_process` filter.
+    Finally, writes the post-processed mask to `args.watermask`, and optionally the raw output (when debug mode is activated).
+    """
     inputs_for_classif = [
         key_predict[0],
         mask_hand[0],
@@ -920,7 +963,7 @@ def slurp_watermask(main_config: str, logs_to_file: bool, debug: bool, user_conf
 
             # --Build stack with all layers-- #
 
-            key_ndvi, key_ndwi, key_phr, key_valid_stack, margin = build_stack(args, eoscale_manager)
+            key_ndvi, key_ndwi, key_phr, key_valid_stack, margin = build_stack_water(args, eoscale_manager)
 
             time_stack = time.time()
 
