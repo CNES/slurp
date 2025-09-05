@@ -542,6 +542,48 @@ def compute_texture(
         logger.info("Pass texture computation")
 
 
+def valid_stack_process(args, eoscale_manager, key_vhr, profile):
+    '''DOCSTRING'''
+    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
+        valid_stack_key = create_valid_stack(
+            args, eoscale_manager, key_vhr, profile
+        )
+        eoscale_manager.write(
+            key=valid_stack_key[0], img_path=args.valid_stack
+        )
+    else:
+        logger.info(
+            "Not computing valid stack mask : the file already exists."
+        )
+        valid_stack_key = [
+            eoscale_manager.open_raster(raster_path=args.valid_stack)
+        ]
+    return valid_stack_key
+
+
+def sensor_mode_process(args):
+    '''DOCSTRING'''
+    grid_sensor, grid_geo, all_coords, roi = (
+        geometry.compute_interpolation_grid(
+            args.file_vhr, args.dtm, args.geoid_file
+        )
+    )
+    if args.mode != "vegetation":
+        # vegetation mask doest not need external data
+        # Pekel
+        pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Hand
+        hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Water Body Mask
+        wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+    if args.mode == "all":
+        # Only urban mask ('all' masks mode) need WSF
+        # WSF
+        wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+        
+
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
     """
     At the end of the prepare pipeline, update the main config.
@@ -667,46 +709,6 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             traceback.print_exc()
 
     logger.info("End of prepare step\n")
-
-
-def valid_stack_process(args, eoscale_manager, key_vhr, profile):
-    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
-        valid_stack_key = create_valid_stack(
-            args, eoscale_manager, key_vhr, profile
-        )
-        eoscale_manager.write(
-            key=valid_stack_key[0], img_path=args.valid_stack
-        )
-    else:
-        logger.info(
-            "Not computing valid stack mask : the file already exists."
-        )
-        valid_stack_key = [
-            eoscale_manager.open_raster(raster_path=args.valid_stack)
-        ]
-    return valid_stack_key
-
-
-def sensor_mode_process(args):
-    grid_sensor, grid_geo, all_coords, roi = (
-        geometry.compute_interpolation_grid(
-            args.file_vhr, args.dtm, args.geoid_file
-        )
-    )
-    if args.mode != "vegetation":
-        # vegetation mask doest not need external data
-        # Pekel
-        pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-        # Hand
-        hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-        # Water Body Mask
-        wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-    if args.mode == "all":
-        # Only urban mask ('all' masks mode) need WSF
-        # WSF
-        wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
 
 
 def main():

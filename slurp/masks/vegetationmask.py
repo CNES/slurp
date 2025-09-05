@@ -447,6 +447,7 @@ def clean_task(
     return im_classif
 
 def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
+    '''DOCSTRING'''
     future_seg = eoexe.n_images_to_m_images_filter(
         inputs=[key_phr, key_ndvi, key_valid_stack],
         image_filter=segmentation_task,
@@ -467,6 +468,7 @@ def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
 
 
 def build_stack(args, eoscale_manager):
+    '''DOCSTRING'''
     # Image PHR
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     args.nodata_phr = eoscale_manager.get_profile(key_phr)["nodata"]
@@ -485,6 +487,7 @@ def build_stack(args, eoscale_manager):
 
 
 def closing(args, eoscale_manager, final_seg, key_valid_stack):
+    '''DOCSTRING'''
     if args.texture_mode == "yes" and (
             args.binary_dilation
             or args.remove_small_objects
@@ -508,7 +511,8 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
     return final_seg
 
 
-def process_stat(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys):
+def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys):
+    '''DOCSTRING'''
     params_stats = {"nb_lab": nb_polys}
     stats = eoexe.n_images_to_m_scalars(
         inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
@@ -537,6 +541,7 @@ def process_stat(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_text
 
 
 def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats):
+    '''DOCSTRING'''
     logger.info(
         f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
     )
@@ -777,7 +782,7 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
             if args.debug: logger.debug(f"Number of different segments detected : {nb_polys}")
             
             # Stats calculation
-            stats = process_stat(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys)
+            stats = process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys)
 
             time_stats = time.time()
 

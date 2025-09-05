@@ -519,6 +519,7 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
 
 def nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, key_original_valid_stack, key_phr,
                            key_valid_stack, keys_files_layers, t0, time_stack):
+    '''DOCSTRING'''
     input_for_samples = [
                             key_valid_stack,
                             gt_key,
@@ -577,6 +578,7 @@ def nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, ke
 
 
 def build_stack(args, eoscale_manager):
+    '''DOCSTRING'''
     # Image PHR (numpy array, 4 bands, band number is first dimension),
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     profile_phr = eoscale_manager.get_profile(key_phr)
@@ -626,6 +628,7 @@ def build_stack(args, eoscale_manager):
 
 def samples_train_classifier(args, eoscale_manager, key_ndvi, key_ndwi, key_original_valid_stack, key_phr,
                              key_valid_stack, keys_files_layers, t0, time_samples, time_stack, x_samples, y_samples):
+    '''DOCSTRING , sortir les logs dans les autres fonctionss, changer le nom de la fonction ou faire deux fonctions'''
     classifier = RandomForestClassifier(
         n_estimators=args.nb_estimators,
         max_depth=args.max_depth,

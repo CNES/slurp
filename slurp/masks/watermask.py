@@ -422,6 +422,7 @@ def post_process(
     return [im_predict, im_classif]
 
 def build_stack(args, eoscale_manager):
+    '''DOCSTRING'''
     # Image PHR (numpy array, 4 bands, band number is first dimension),
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     profile_phr = eoscale_manager.get_profile(key_phr)
@@ -444,6 +445,7 @@ def build_stack(args, eoscale_manager):
 
 
 def display_global_infos(args, end_time, t0, time_stack):
+    '''DOCSTRING'''
     logger.info(
         f"**** Water mask for {args.file_vhr} (saved as {args.watermask}) ****"
     )
@@ -458,6 +460,7 @@ def display_global_infos(args, end_time, t0, time_stack):
 
 
 def display_rf_infos(end_time, time_random_forest, time_samples, time_stack):
+    '''DOCSTRING'''
     logger.info(
         "- Build_samples         :\t"
         + utils.convert_time(time_samples - time_stack)
