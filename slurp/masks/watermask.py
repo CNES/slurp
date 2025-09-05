@@ -897,19 +897,9 @@ def getarguments():
     )
     args = parser.parse_args()
 
-    store_arglist(parser)
+    utils.store_arglist(parser)
 
     return vars(args)
-
-
-def store_arglist(parser):
-    arglist = []
-    for arg in parser._actions:
-        if arg.dest not in ["help"]:
-            arglist.append(arg.dest)
-    with open("args_list.json", 'w') as f:
-        json.dump(arglist, f)
-
 
 # --Main function-- #
 

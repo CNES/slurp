@@ -22,7 +22,6 @@
 
 import os
 import time
-import pathlib
 import json
 from os import makedirs, path, remove
 from importlib.resources import files
@@ -35,6 +34,18 @@ from slurp.tools import io_utils
 from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
+
+def store_arglist(parser):
+    """
+    Stores the list of argument names from the CLI parser into a JSON file.
+    This file is then used to overwrite the main configuration file parameters.
+    """
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
 
 def setup_logging(config_file : str):
     with open(config_file) as f_in:

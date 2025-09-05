@@ -189,7 +189,7 @@ def build_samples(
 
 
 def rf_prediction(
-    input_buffer: list, input_profiles: list, params: dictn
+    input_buffer: list, input_profiles: list, params: dict
 ) -> list:
     """
     Random Forest prediction
@@ -302,10 +302,10 @@ def nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, ke
     time_samples = time.time()
     if building_areas and non_building_areas:
         # Train classifier from samples and predict urban mask
-        samples_train_and_predict(args, eoscale_manager, key_ndvi, key_ndwi, key_original_valid_stack,
+        time_random_forest = samples_train_and_predict(args, eoscale_manager, key_ndvi, key_ndwi, key_original_valid_stack,
                                  key_phr, key_valid_stack, keys_files_layers, x_samples, y_samples)
         end_time = time.time()
-        display_logs_rf(args, end_time, t0, time_samples, time_stack)
+        display_logs_rf(args, end_time, t0, time_samples, time_stack, time_random_forest)
     else:
         # Weird corner case : learning/prediction had not enough samples
         logger.info(
@@ -328,7 +328,7 @@ def nominal_case_urbanmask(args, eoscale_manager, gt_key, key_ndvi, key_ndwi, ke
         )
 
 
-def display_logs_rf(args, end_time, t0, time_samples, time_stack):
+def display_logs_rf(args, end_time, t0, time_samples, time_stack, time_random_forest):
     """
     Logs timing information and output paths for the urban mask generation pipeline.
     """
@@ -474,6 +474,7 @@ def samples_train_and_predict(args, eoscale_manager, key_ndvi, key_ndwi, key_ori
                 ".tif", "_raw_predict.tif"
             ),
         )
+    return time_random_forest
 
 def add_nodata(
     input_buffer: list, input_profiles: list, params: dict

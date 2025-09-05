@@ -25,9 +25,8 @@ This script compute all files needed for masks calculation
 import argparse
 import time
 import traceback
-import pathlib
 import json
-from os import makedirs, path, remove
+from os import makedirs, path
 from typing import List
 import logging
 
@@ -39,7 +38,7 @@ from slurp.prepare import analyse_glcm
 from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 
 logger = logging.getLogger("slurp")
 
@@ -185,18 +184,9 @@ def getarguments():
     )
     args = parser.parse_args()
 
-    store_arglist(parser)
+    utils.store_arglist(parser)
 
     return vars(args)
-
-
-def store_arglist(parser):
-    arglist = []
-    for arg in parser._actions:
-        if arg.dest not in ["help"]:
-            arglist.append(arg.dest)
-    with open("args_list.json", 'w') as f:
-        json.dump(arglist, f)
 
 
 def add_cluster_vegetation_info(
