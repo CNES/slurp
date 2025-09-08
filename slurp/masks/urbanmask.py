@@ -420,7 +420,6 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
         tile_max_size=args.tile_max_size,
     ) as eoscale_manager:
         try:
-
             t0 = time.time()
 
             # Build stack with all layers #
@@ -474,7 +473,7 @@ def slurp_urbanmask(main_config: str, logs_to_file: bool, debug: bool, user_conf
 
             # WSF
             gt_key = eoscale_manager.open_raster(raster_path=args.extracted_wsf)
-
+            
             time_stack = time.time()
 
             # BUILD SAMPLES
