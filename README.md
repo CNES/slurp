@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://github.com/CNES/slurp"><img src="docs/source/images/logo_SLURP_256.png" alt="SLURP" title="SLURP"  width="20%"></a>
+  <a href="https://github.com/CNES/slurp"><img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/logo_SLURP_256.png" alt="SLURP" title="SLURP"  width="20%"></a>
 
 <h4>slurp</h4>
 
@@ -28,22 +28,22 @@ Data preparation can be achieved with [Orfeo ToolBox](https://www.orfeo-toolbox.
 <table border="0">
 <tr>
 <td>
-<img src="docs/source/images/example_step0_PHR_image.png" alt="Initial VHR image" title="Initial VHR image"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step0_PHR_image.png" alt="Initial VHR image" title="Initial VHR image"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step1_watermask.png" alt="Water mask" title="Water mask"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step1_watermask.png" alt="Water mask" title="Water mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation and bare ground mask" title="Low/High vegetation mask"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step2_vegetationmask.png" alt="Low/High vegetation and bare ground mask" title="Low/High vegetation mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step3_shadowmask.png" alt="Shadow mask" title="Shadow mask"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step3_shadowmask.png" alt="Shadow mask" title="Shadow mask"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step4_urbanproba.png" alt="Urban probability" title="Urban probability"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step4_urbanproba.png" alt="Urban probability" title="Urban probability"  width="80%">
 </td>
 <td>
-<img src="docs/source/images/example_step5_stack_regul.png" alt="Final mask" title="Final mask"  width="80%">
+<img src="https://raw.githubusercontent.com/CNES/slurp/main/docs/source/images/example_step5_stack_regul.png" alt="Final mask" title="Final mask"  width="80%">
 </td>
 </tr>
 <tr>
