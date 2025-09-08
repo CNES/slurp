@@ -71,12 +71,12 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="session")
 def config(request):
-    config_file = request.getoption("config")
-    m_config = request.getoption("main_config")
+    config_file = request.config.getoption("config")
+    m_config = request.config.getoption("main_config")
     current_dir = os.path.dirname(__file__)
     with open(os.path.join(current_dir, config_file)) as f:
         conf = json.load(f)
-        conf["main_config"] = m_config
+        conf["main_config"] = os.path.join(current_dir, m_config)
         if not os.path.exists(conf["output_dir"]):
             os.makedirs(conf["output_dir"])
         return conf

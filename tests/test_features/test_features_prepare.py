@@ -21,37 +21,37 @@ from tests.utils import get_output_path
 
 
 def write_command_compute_prepare(
-    nb_workers, main_config, features_test_img, valid_stack=None
+    nb_workers, main_config, features_test_img, output_dir, valid_stack=None
 ):
     """Builds a command string to run the prepare module with
     specified worker count and valid stack."""
     if not valid_stack:
         valid_stack = get_output_path(
-            features_test_img, "valid_stack", remove=True
+            features_test_img, "valid_stack", output_dir, remove=True
         )
-    ndvi = get_output_path(features_test_img, "ndvi")
-    ndwi = get_output_path(features_test_img, "ndwi")
-    texture = get_output_path(features_test_img, "texture")
+    ndvi = get_output_path(features_test_img, "ndvi", output_dir)
+    ndwi = get_output_path(features_test_img, "ndwi", output_dir)
+    texture = get_output_path(features_test_img, "texture", output_dir)
 
     return f"prepare.py {main_config} -file_vhr {features_test_img} -n_workers {nb_workers} -valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
 
 
 @pytest.mark.features
-def test_absolute_analyse_glcm(main_config, features_test_img):
+def test_absolute_analyse_glcm(main_config, features_test_img, output_dir):
     """Tests the prepare module with glcm analysis enabled
     glcm: Use a global land cover map to calculate the better number of
     vegetation cluster to use for mask computation"""
-    command = f"{write_command_compute_prepare(1, main_config, features_test_img)}--analyse_glcm".split()
+    command = f"{write_command_compute_prepare(1, main_config, features_test_img, output_dir)}--analyse_glcm".split()
     sys.argv = command
     slurp.prepare.prepare.main()
 
 
 @pytest.mark.ci
-def test_absolute_analyse_glcm_ci(main_config, features_test_img, valid_stack):
+def test_absolute_analyse_glcm_ci(main_config, features_test_img, valid_stack, output_dir):
     """Run the test_absolute_analyse_glcm with a specified valid_stack (for GithubCI)."""
     command = (
         write_command_compute_prepare(
-            1, main_config, features_test_img, valid_stack
+            1, main_config, features_test_img, output_dir, valid_stack
         )
         + "--no_analyse_glcm"
     ).split()
@@ -60,7 +60,7 @@ def test_absolute_analyse_glcm_ci(main_config, features_test_img, valid_stack):
 
 
 @pytest.mark.features
-def test_prepare_update_config(main_config, features_test_img):
+def test_prepare_update_config(main_config, features_test_img, output_dir):
     """
     test that the effective_used_config.json file created during slurp_prepare
     is correctly updated.
@@ -68,7 +68,7 @@ def test_prepare_update_config(main_config, features_test_img):
     possible_size = [128, 256, 512, 1024, 2048, 4096, 8192]
     i = random.randint(0, len(possible_size) - 1)
     command = (
-        write_command_compute_prepare(1, main_config, features_test_img)
+        write_command_compute_prepare(1, main_config, features_test_img, output_dir)
         + "-tile_max_size "
         + str(possible_size[i])
     )
