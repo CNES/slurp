@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://gitlab.cnes.fr/pluto/slurp"><img src="docs/source/images/logo_SLURP_256.png" alt="SLURP" title="SLURP"  width="20%"></a>
+  <a href="https://github.com/CNES/slurp"><img src="docs/source/images/logo_SLURP_256.png" alt="SLURP" title="SLURP"  width="20%"></a>
 
 <h4>slurp</h4>
 
