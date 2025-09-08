@@ -141,8 +141,6 @@
       "value_classif_false_positive_buildings": 10,
       "value_classif_background": 11,
       "vegmask_min_value":21,
-      "binary_closing":0,
-      "binary_opening":0,
       "minimal_size_water_area": 10000,
       "categorized_watermask": false
     }

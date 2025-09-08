@@ -6,13 +6,13 @@
   "aux_layers": {
       "file_cloud_gml": null,
       "valid_stack": null,
-      "file_ndvi": null,
-      "file_ndwi": null,
-      "extracted_pekel": null,
-      "extracted_hand":null,
-      "extracted_wsf":null,
+      "file_ndvi": "tests/out/ndvi_demo.tif",
+      "file_ndwi": "tests/out/ndwi_demo.tif",
+      "extracted_pekel": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_pekel_demo.tif",
+      "extracted_hand": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_hand_demo.tif",
+      "extracted_wsf":"/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_wsf_demo.tif",
       "extracted_wbm":null,
-      "file_texture": null,
+      "file_texture": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_texture_demo.tif",
       "mnh": null
   },
   "masks": {

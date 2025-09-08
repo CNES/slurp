@@ -43,6 +43,7 @@ predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
 
 
 def prepare_sensor_geom(file, dtm, nb_workers):
+    """Prepares sensor geometry data and validates output files."""
     filename = os.path.basename(file)
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
@@ -79,10 +80,11 @@ def prepare_sensor_geom(file, dtm, nb_workers):
     return valid_stack, ndvi, ndwi, wsf, pekel
 
 
-@pytest.mark.prepare
+@pytest.mark.validation
 @pytest.mark.parametrize("file, dtm", input_files)
 def test_prepare_sensor_geom(file, dtm):
-    valid_stack, ndvi, ndwi, wsf, pekel = prepare_sensor_geom(file, dtm,1)
+    """Tests the sensor geometry preparation and validates output masks."""
+    _, _, _, wsf, pekel = prepare_sensor_geom(file, dtm, 1)
     validate_mask(pekel, "Sensor", valid_pixels=False)
     validate_mask(wsf, "Sensor", valid_pixels=False)
 
@@ -90,10 +92,12 @@ def test_prepare_sensor_geom(file, dtm):
 @pytest.mark.validation
 @pytest.mark.parametrize("file_pekel", predict_pekel)
 def test_validation_sensor_geom_pekel(file_pekel):
+    """Tests the validation of Pekel masks generated from sensor geometry."""
     validate_mask(file_pekel, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("file_wsf", predict_wsf)
 def test_validation_sensor_geom_wsf(file_wsf):
+    """Tests the validation of WSF masks generated from sensor geometry."""
     validate_mask(file_wsf, "Sensor", valid_pixels=False)
