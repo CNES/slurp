@@ -25,9 +25,8 @@ This script compute all files needed for masks calculation
 import argparse
 import time
 import traceback
-import pathlib
 import json
-from os import makedirs, path, remove
+from os import makedirs, path
 from typing import List
 import logging
 
@@ -39,7 +38,7 @@ from slurp.prepare import analyse_glcm
 from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 
 logger = logging.getLogger("slurp")
 
@@ -185,13 +184,7 @@ def getarguments():
     )
     args = parser.parse_args()
 
-    arglist = []
-    for arg in parser._actions:
-        if arg.dest not in ["help"]:
-            arglist.append(arg.dest)
-
-    with open("args_list.json", 'w') as f:
-        json.dump(arglist, f)
+    utils.store_arglist(parser)
 
     return vars(args)
 
@@ -539,6 +532,55 @@ def compute_texture(
         logger.info("Pass texture computation")
 
 
+def valid_stack_process(args, eoscale_manager, key_vhr, profile):
+    """
+    Create and save a valid stack mask if it doesn't already exist or if overwrite is specified.
+    """
+    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
+        valid_stack_key = create_valid_stack(
+            args, eoscale_manager, key_vhr, profile
+        )
+        eoscale_manager.write(
+            key=valid_stack_key[0], img_path=args.valid_stack
+        )
+    else:
+        logger.info(
+            "Not computing valid stack mask : the file already exists."
+        )
+        valid_stack_key = [
+            eoscale_manager.open_raster(raster_path=args.valid_stack)
+        ]
+    return valid_stack_key
+
+
+def sensor_mode_process(args):
+    """
+    Processes the VHR image based on the specified mode. If the mode is not "vegetation",
+    it performs extractions for Pekel, Hand, and Water Body Mask (WBM). If the mode is set to "all",
+    it additionally extracts the WSF (World Settlement Footprint) data. The extraction is done using
+    the given grid and region-of-interest (ROI) computed from the image, DTM (Digital Terrain Model), and geoid data.
+    """
+    grid_sensor, grid_geo, all_coords, roi = (
+        geometry.compute_interpolation_grid(
+            args.file_vhr, args.dtm, args.geoid_file
+        )
+    )
+    if args.mode != "vegetation":
+        # vegetation mask doest not need external data
+        # Pekel
+        pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Hand
+        hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Water Body Mask
+        wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+    if args.mode == "all":
+        # Only urban mask ('all' masks mode) need WSF
+        # WSF
+        wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+        
+
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
     """
     At the end of the prepare pipeline, update the main config.
@@ -611,20 +653,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
-                valid_stack_key = create_valid_stack(
-                    args, eoscale_manager, key_vhr, profile
-                )
-                eoscale_manager.write(
-                    key=valid_stack_key[0], img_path=args.valid_stack
-                )
-            else:
-                logger.info(
-                    "Not computing valid stack mask : the file already exists."
-                )
-                valid_stack_key = [
-                    eoscale_manager.open_raster(raster_path=args.valid_stack)
-                ]
+            valid_stack_key = valid_stack_process(args, eoscale_manager, key_vhr, profile)
 
             # NDVI
             if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
@@ -645,27 +674,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 logger.info("Not computing NDWI : the file already exists.")
 
             if args.sensor_mode:
-                grid_sensor, grid_geo, all_coords, roi = (
-                    geometry.compute_interpolation_grid(
-                        args.file_vhr, args.dtm, args.geoid_file
-                    )
-                )
-                
-                if args.mode != "vegetation":
-                    # vegetation mask doest not need external data
-                    # Pekel
-                    pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                    # Hand
-                    hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                    # Water Body Mask
-                    wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-                if args.mode == "all":
-                    # Only urban mask ('all' masks mode) need WSF
-                    # WSF
-                    wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+                sensor_mode_process(args)
 
             if args.mode != "water":
                 # Only vegetation mask need to compute texture
@@ -697,6 +706,7 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             traceback.print_exc()
 
     logger.info("End of prepare step\n")
+
 
 def main():
     """

@@ -446,6 +446,176 @@ def clean_task(
 
     return im_classif
 
+def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
+    """
+    Perform image segmentation on the provided raster data (PHR, NDVI, and valid stack).
+    If the save mode is set to "all" or "debug", the segmentation result
+    is saved as a .tif file.
+
+    Parameters
+    ----------
+    args : Namespace
+        Runtime configuration and file paths.
+    eoscale_manager : EOScaleManager
+        The context manager responsible for managing raster I/O operations.
+    key_ndvi : RasterData
+        The NDVI raster data.
+    key_phr : RasterData
+        The PHR raster data.
+    key_valid_stack : RasterData
+        The valid stack raster data.
+    """
+    future_seg = eoexe.n_images_to_m_images_filter(
+        inputs=[key_phr, key_ndvi, key_valid_stack],
+        image_filter=segmentation_task,
+        filter_parameters=vars(args),
+        generate_output_profiles=eo_utils.single_int32_profile,
+        stable_margin=0,
+        context_manager=eoscale_manager,
+        concatenate_filter=concat_seg,
+        multiproc_context=args.multiproc_context,
+        filter_desc="Segmentation processing...",
+    )
+    if args.save_mode in ["all", "debug"]:
+        eoscale_manager.write(
+            key=future_seg[0],
+            img_path=args.vegetationmask.replace(".tif", "_slic.tif"),
+        )
+    return future_seg
+
+
+def build_stack(args, eoscale_manager):
+    """
+    Build the required stack of input raster layers for processing.
+    """
+    # Image PHR
+    key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
+    args.nodata_phr = eoscale_manager.get_profile(key_phr)["nodata"]
+    # Valid stack
+    key_valid_stack = eoscale_manager.open_raster(
+        raster_path=args.valid_stack
+    )
+    # NDXI
+    key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
+    key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
+    # Texture file
+    key_texture = eoscale_manager.open_raster(
+        raster_path=args.file_texture
+    )
+    return key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack
+
+
+def closing(args, eoscale_manager, final_seg, key_valid_stack):
+    """
+    Performs morphological closing and other post-processing operations
+    (binary dilation, removal of small objects, and holes,...) in the segmented image if the texture mode is enabled.
+
+    Parameters
+    ----------
+    args : Namespace
+        Runtime configuration and file paths.
+    eoscale_manager : EOScaleManager
+        The context manager responsible for managing raster I/O operations.
+    final_seg : RasterData
+        The segmentation result to be processed.
+    key_valid_stack : RasterData
+        The valid stack raster data.
+    """
+    if args.texture_mode == "yes" and (
+            args.binary_dilation
+            or args.remove_small_objects
+            or args.remove_small_holes
+    ):
+        margin = max(
+            2 * args.binary_dilation,
+            ceil(sqrt(args.remove_small_objects)),
+            ceil(sqrt(args.remove_small_holes)),
+        )
+        final_seg = eoexe.n_images_to_m_images_filter(
+            inputs=[final_seg[0], key_valid_stack],
+            image_filter=clean_task,
+            filter_parameters=vars(args),
+            generate_output_profiles=eo_utils.single_uint8_profile,
+            stable_margin=margin,
+            context_manager=eoscale_manager,
+            multiproc_context=args.multiproc_context,
+            filter_desc="Post-processing...",
+        )
+    return final_seg
+
+
+def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys):
+    """
+    Computes statistics (mean NDVI, NDWI, and texture) for each segmented region.
+    Then, the statistics are processed to generate data for clustering or classification.
+    """
+    params_stats = {"nb_lab": nb_polys}
+    stats = eoexe.n_images_to_m_scalars(
+        inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
+        image_filter=compute_stats_image,
+        filter_parameters=params_stats,
+        nb_output_scalars=nb_polys,
+        context_manager=eoscale_manager,
+        concatenate_filter=stats_concatenate,
+        multiproc_context=args.multiproc_context,
+        filter_desc="Stats ",
+    )
+    # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
+    # stats[1] : nb pixels by segment   [ counter  ]
+    # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
+    np.seterr(divide="ignore", invalid="ignore")
+    stats[0][:nb_polys] = stats[0][:nb_polys] / stats[1][:nb_polys]
+    stats[0][nb_polys: 2 * nb_polys] = (
+            stats[0][nb_polys: 2 * nb_polys] / stats[1][:nb_polys]
+    )
+    stats[0][2 * nb_polys: 3 * nb_polys] = (
+            stats[0][2 * nb_polys: 3 * nb_polys] / stats[1][:nb_polys]
+    )
+    # Replace NaN by 0. After clustering, NO_DATA values will be masked
+    stats[0] = np.where(np.isnan(stats[0]), 0, stats[0])
+    return stats
+
+
+def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats):
+    """
+    Display information on the time spent on each stage of the processing pipeline.
+    """
+    logger.info(
+        f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
+    )
+    logger.info(
+        "Total time (user)       :\t"
+        + utils.convert_time(end_time - t0)
+    )
+    logger.info(
+        "- Build_stack           :\t"
+        + utils.convert_time(time_stack - t0)
+    )
+    logger.info(
+        "- Segmentation          :\t"
+        + utils.convert_time(time_seg - time_stack)
+    )
+    logger.info(
+        "- Stats                 :\t"
+        + utils.convert_time(time_stats - time_seg)
+    )
+    logger.info(
+        "- Clustering            :\t"
+        + utils.convert_time(time_cluster - time_stats)
+    )
+    logger.info(
+        "- Finalize Cython       :\t"
+        + utils.convert_time(time_final - time_cluster)
+    )
+    logger.info(
+        "- Post-processing       :\t"
+        + utils.convert_time(time_closing - time_final)
+    )
+    logger.info(
+        "- Write final image     :\t"
+        + utils.convert_time(end_time - time_closing)
+    )
+    logger.info("***")
 
 # MAIN #
 
@@ -633,45 +803,13 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Build stack with all layers #
 
-            # Image PHR
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
-            args.nodata_phr = eoscale_manager.get_profile(key_phr)["nodata"]
-
-            # Valid stack
-            key_valid_stack = eoscale_manager.open_raster(
-                raster_path=args.valid_stack
-            )
-
-            # NDXI
-            key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
-            key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
-
-            # Texture file
-            key_texture = eoscale_manager.open_raster(
-                raster_path=args.file_texture
-            )
+            key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack = build_stack(args, eoscale_manager)
 
             time_stack = time.time()
 
             # Segmentation #
 
-            future_seg = eoexe.n_images_to_m_images_filter(
-                inputs=[key_phr, key_ndvi, key_valid_stack],
-                image_filter=segmentation_task,
-                filter_parameters=vars(args),
-                generate_output_profiles=eo_utils.single_int32_profile,
-                stable_margin=0,
-                context_manager=eoscale_manager,
-                concatenate_filter=concat_seg,
-                multiproc_context=args.multiproc_context,
-                filter_desc="Segmentation processing...",
-            )
-
-            if args.save_mode in ["all", "debug"]:
-                eoscale_manager.write(
-                    key=future_seg[0],
-                    img_path=args.vegetationmask.replace(".tif", "_slic.tif"),
-                )
+            future_seg = segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack)
 
             time_seg = time.time()
 
@@ -682,33 +820,7 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
             if args.debug: logger.debug(f"Number of different segments detected : {nb_polys}")
             
             # Stats calculation
-            params_stats = {"nb_lab": nb_polys}
-            stats = eoexe.n_images_to_m_scalars(
-                inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
-                image_filter=compute_stats_image,
-                filter_parameters=params_stats,
-                nb_output_scalars=nb_polys,
-                context_manager=eoscale_manager,
-                concatenate_filter=stats_concatenate,
-                multiproc_context=args.multiproc_context,
-                filter_desc="Stats ",
-            )
-
-            # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
-            # stats[1] : nb pixels by segment   [ counter  ]
-            # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
-            np.seterr(divide="ignore", invalid="ignore")
-
-            stats[0][:nb_polys] = stats[0][:nb_polys] / stats[1][:nb_polys]
-            stats[0][nb_polys : 2 * nb_polys] = (
-                stats[0][nb_polys : 2 * nb_polys] / stats[1][:nb_polys]
-            )
-            stats[0][2 * nb_polys : 3 * nb_polys] = (
-                stats[0][2 * nb_polys : 3 * nb_polys] / stats[1][:nb_polys]
-            )
-
-            # Replace NaN by 0. After clustering, NO_DATA values will be masked
-            stats[0] = np.where(np.isnan(stats[0]), 0, stats[0])
+            stats = process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys)
 
             time_stats = time.time()
 
@@ -742,26 +854,7 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Closing #
 
-            if args.texture_mode == "yes" and (
-                args.binary_dilation
-                or args.remove_small_objects
-                or args.remove_small_holes
-            ):
-                margin = max(
-                    2 * args.binary_dilation,
-                    ceil(sqrt(args.remove_small_objects)),
-                    ceil(sqrt(args.remove_small_holes)),
-                )
-                final_seg = eoexe.n_images_to_m_images_filter(
-                    inputs=[final_seg[0], key_valid_stack],
-                    image_filter=clean_task,
-                    filter_parameters=vars(args),
-                    generate_output_profiles=eo_utils.single_uint8_profile,
-                    stable_margin=margin,
-                    context_manager=eoscale_manager,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Post-processing...",
-                )
+            final_seg = closing(args, eoscale_manager, final_seg, key_valid_stack)
             time_closing = time.time()
 
             # Write output mask #
@@ -771,42 +864,7 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
             )
             end_time = time.time()
 
-            logger.info(
-                f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
-            )
-            logger.info(
-                "Total time (user)       :\t"
-                + utils.convert_time(end_time - t0)
-            )
-            logger.info(
-                "- Build_stack           :\t"
-                + utils.convert_time(time_stack - t0)
-            )
-            logger.info(
-                "- Segmentation          :\t"
-                + utils.convert_time(time_seg - time_stack)
-            )
-            logger.info(
-                "- Stats                 :\t"
-                + utils.convert_time(time_stats - time_seg)
-            )
-            logger.info(
-                "- Clustering            :\t"
-                + utils.convert_time(time_cluster - time_stats)
-            )
-            logger.info(
-                "- Finalize Cython       :\t"
-                + utils.convert_time(time_final - time_cluster)
-            )
-            logger.info(
-                "- Post-processing       :\t"
-                + utils.convert_time(time_closing - time_final)
-            )
-            logger.info(
-                "- Write final image     :\t"
-                + utils.convert_time(end_time - time_closing)
-            )
-            logger.info("***")
+            display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats)
 
         except FileNotFoundError as fnfe_exception:
             logger.error("FileNotFoundError", fnfe_exception)
@@ -823,6 +881,8 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
         except Exception as exception:  # pylint: disable=broad-except
             logger.error("oups...", exception)
             traceback.print_exc()
+
+
 
 def main():
     """

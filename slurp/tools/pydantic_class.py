@@ -134,9 +134,6 @@ class AuxLayers(BaseModel):
 class Input(BaseModel):
     file_vhr: str = Field(..., description="Input 4 bands VHR (Very High Resolution) image")
     sensor_mode: bool = Field(..., description="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)")
-    pekel: str = Field(..., description="Path of the global Pekel file")
-    hand: str = Field(..., description="Path of the global HAND file")
-    wsf: str = Field(..., description="Path to store the extracted WSF file")
 
 
 class MainConfig(BaseModel):
