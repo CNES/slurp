@@ -28,18 +28,20 @@ import pytest
 from tests.utils import get_output_path
 from tests.validation import validate_mask
 
-# Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
-DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
+def get_input_files():
+    # Input images in sensor geometry
+    input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
+    DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
+    # Create correct object for parametrize loop
+    return [(input_images[i], DTMs[i]) for i in range(len(input_images))]
 
-# Create correct object for parametrize loop
-input_files = []
-for i in range(len(input_images)):
-    input_files.append((input_images[i], DTMs[i]))
+def get_predict_pekel():
+    # Images to validate
+    return glob.glob(os.path.join(pytest.output_dir + "/pekel*.tif"))
 
-# Images to validate
-predict_pekel = glob.glob(os.path.join(pytest.output_dir + "/pekel*.tif"))
-predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
+def get_predict_wsf():
+    #Images to validate
+    return glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
 
 
 def prepare_sensor_geom(file, dtm, nb_workers):
@@ -81,7 +83,7 @@ def prepare_sensor_geom(file, dtm, nb_workers):
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file, dtm", input_files)
+@pytest.mark.parametrize("file, dtm", get_input_files())
 def test_prepare_sensor_geom(file, dtm):
     """Tests the sensor geometry preparation and validates output masks."""
     _, _, _, wsf, pekel = prepare_sensor_geom(file, dtm, 1)
@@ -90,14 +92,14 @@ def test_prepare_sensor_geom(file, dtm):
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_pekel", predict_pekel)
+@pytest.mark.parametrize("file_pekel", get_predict_pekel())
 def test_validation_sensor_geom_pekel(file_pekel):
     """Tests the validation of Pekel masks generated from sensor geometry."""
     validate_mask(file_pekel, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_wsf", predict_wsf)
+@pytest.mark.parametrize("file_wsf", get_predict_wsf())
 def test_validation_sensor_geom_wsf(file_wsf):
     """Tests the validation of WSF masks generated from sensor geometry."""
     validate_mask(file_wsf, "Sensor", valid_pixels=False)
