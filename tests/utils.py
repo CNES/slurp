@@ -37,9 +37,7 @@ def get_files_to_process(key, data_dir):
 
 def get_output_path(file, key, output_dir, remove=False):
     assert os.path.exists(file), f"The file {file} doesn't exist"
-    assert os.path.exists(
-        output_dir
-    ), f"The file {output_dir} doesn't exist"
+    assert os.path.exists(output_dir), f"The file {output_dir} doesn't exist"
     filename = os.path.basename(file)
     output_image = os.path.join(output_dir, key + "_" + filename)
     if remove:
@@ -47,11 +45,9 @@ def get_output_path(file, key, output_dir, remove=False):
     return output_image
 
 
-def get_aux_path(file, key):
+def get_aux_path(file, key, ref_dir):
     filename = os.path.basename(file)
-    aux_image = os.path.join(
-        pytest.ref_dir, "Prepare", "ref_" + key + "_" + filename
-    )
+    aux_image = os.path.join(ref_dir, "Prepare", "ref_" + key + "_" + filename)
     return aux_image
 
 
