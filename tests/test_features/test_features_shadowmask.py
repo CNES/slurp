@@ -44,7 +44,7 @@ def test_absolute_threshold(
     main_config, features_test_img, output_dir, ref_dir
 ):
     """Tests the shadow mask computation with absolute thresholding enabled."""
-    command = f"{write_command_compute_shadowmask(1, main_config, features_test_img, output_dir)} -absolute_threshold 10.0".split()
+    command = f"{write_command_compute_shadowmask(1, main_config, features_test_img, output_dir, ref_dir)} -absolute_threshold 10.0".split()
     sys.argv = command
     slurp.masks.shadowmask.main()
 
