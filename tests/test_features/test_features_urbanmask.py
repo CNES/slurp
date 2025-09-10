@@ -41,8 +41,8 @@ def test_vegmask_max_value(
     """Tests the urban mask computation with different vegetation mask minimum values.
     vegmask_min_value: Vegetation min value for vegetated areas :
     all pixels with lower value will be predicted"""
-    ndvi = get_output_path(features_test_img, "ndvi")
-    ndwi = get_output_path(features_test_img, "ndwi")
+    ndvi = get_output_path(features_test_img, "ndvi", output_dir)
+    ndwi = get_output_path(features_test_img, "ndwi", output_dir)
     command = (
         write_command_compute_urbanmask(
             1, main_config, features_test_img, output_dir, ref_dir
