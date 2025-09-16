@@ -1,7 +1,7 @@
 {
   "input": {
 	"file_vhr": "absolute_path_to_image.tif",
-	"sensor_mode": false,
+	"sensor_mode": false
   },
   "aux_layers": {
       "file_cloud_gml": null,
