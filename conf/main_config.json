@@ -2,7 +2,7 @@
   "input":
 	{
 	    "file_vhr": "/path/to/your/4bands/VHR/input_image.tif",
-	    "sensor_mode": false,
+	    "sensor_mode": false
 	},
 
   "aux_layers":
@@ -141,7 +141,9 @@
       "value_classif_false_positive_buildings": 10,
       "value_classif_background": 11,
       "vegmask_min_value":21,
-      "minimal_size_water_area": 10000,
+	"minimal_size_water_area": 10000,
+	"binary_closing":0,
+	"binary_opening":0,
       "categorized_watermask": false
     }
 }
