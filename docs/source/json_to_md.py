@@ -37,13 +37,27 @@ def extract_field_info(model_class, prefix="", indent=0):
 
         display_name = f"{'&nbsp;&nbsp;' * indent}**{field_name}**" if indent == 0 else f"{'&nbsp;&nbsp;' * indent}{field_name}"
 
-        # Nested Pydantic model
+        # Get default value
+        if model_field.default is not None:
+            default = repr(model_field.default)
+        elif model_field.default_factory is not None:
+            default = "<factory>"
+        elif model_field.is_required():
+            default = ""
+        else:
+            default = "None"
+
+        # Append default to type string
+        type_str = format_type(field_type)
+        if default != "PydanticUndefined":
+            type_str += f" (Default {default})"
+
+        # Handle nested models
         if isinstance(field_type, type) and issubclass(field_type, BaseModel):
             table_data.append([display_name, "", "", description, status])
             table_data.extend(extract_field_info(field_type, prefix=full_field_name, indent=indent + 1))
-
         else:
-            table_data.append(["", display_name, format_type(field_type), description, status])
+            table_data.append(["", display_name, type_str, description, status])
 
     return table_data
 
