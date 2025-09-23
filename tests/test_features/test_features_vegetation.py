@@ -25,7 +25,7 @@ def write_command_compute_vegetationmask(
 ):
     """Builds a command string to compute a vegetation mask using the vegetationmask module."""
     output_image = get_output_path(
-        pytest.features_test_img, "vegetationmask", output_dir, remove=True
+        features_test_img, "vegetationmask", output_dir, remove=True
     )
     if valid_stack is None:
         valid_stack = get_aux_path(features_test_img, "valid_stack", ref_dir)
