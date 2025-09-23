@@ -107,7 +107,7 @@ def test_samples_method_ci(
         write_command_compute_watermask(
             1, main_config, features_test_img, output_dir, ref_dir, valid_stack
         )
-        + f"-samples_method {samples_method}"
+        + f" -samples_method {samples_method}"
     ).split()
     sys.argv = command
     slurp.masks.watermask.main()
