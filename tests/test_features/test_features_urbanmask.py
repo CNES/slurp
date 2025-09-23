@@ -30,7 +30,13 @@ def write_command_compute_urbanmask(
     if valid_stack is None:
         valid_stack = get_aux_path(features_test_img, "valid_stack", ref_dir)
 
-    return f"urbanmask.py {main_config} -file_vhr {features_test_img} -n_workers {nb_workers} -urbanmask {output_image} -valid {valid_stack} "
+    return (
+        f"urbanmask.py {main_config} "
+        f"-file_vhr {features_test_img} "
+        f"-n_workers {nb_workers} "
+        f"-urbanmask {output_image} "
+        f"-valid {valid_stack} "
+    )
 
 
 @pytest.mark.features
@@ -41,8 +47,6 @@ def test_vegmask_max_value(
     """Tests the urban mask computation with different vegetation mask minimum values.
     vegmask_min_value: Vegetation min value for vegetated areas :
     all pixels with lower value will be predicted"""
-    ndvi = get_output_path(features_test_img, "ndvi", output_dir)
-    ndwi = get_output_path(features_test_img, "ndwi", output_dir)
     command = (
         write_command_compute_urbanmask(
             1, main_config, features_test_img, output_dir, ref_dir
