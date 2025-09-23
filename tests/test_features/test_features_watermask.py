@@ -132,7 +132,7 @@ def test_nb_samples(
         write_command_compute_watermask(
             1, main_config, features_test_img, output_dir, ref_dir
         )
-        + f"-nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
+        + f" -nb_samples_water {nb_samples_water} -nb_samples_other {nb_samples_other}"
     ).split()
     sys.argv = command
     slurp.masks.watermask.main()
