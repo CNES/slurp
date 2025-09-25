@@ -41,7 +41,7 @@ def input_files():
 
     # Create correct object for parametrize loop
     input_files = []
-    for i in range(len(input_images)):
+    for i in enumerate(input_images):
         input_files.append((input_images[i], DTMs[i]))
     return input_files
 
@@ -95,12 +95,12 @@ def prepare_sensor_geom(main_config, file, dtm, nb_workers):
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file, dtm", input_files)
-def test_prepare_sensor_geom(file, dtm, main_config):
+def test_prepare_sensor_geom(main_config, input_files):
     """Tests the sensor geometry preparation and validates output masks."""
-    _, _, _, wsf, pekel = prepare_sensor_geom(main_config, file, dtm, 1)
-    validate_mask(pekel, "Sensor", valid_pixels=False)
-    validate_mask(wsf, "Sensor", valid_pixels=False)
+    for file, dtm in input_files:
+        _, _, _, wsf, pekel = prepare_sensor_geom(main_config, file, dtm, 1)
+        validate_mask(pekel, "Sensor", valid_pixels=False)
+        validate_mask(wsf, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
