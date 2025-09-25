@@ -71,7 +71,9 @@ def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
 
     command = (
         f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} -extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {wsf} -sensor_mode True -dtm {dtm}"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} "
+        f"-extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {wsf} -sensor_mode True -dtm {dtm} "
+        f"--no_analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
