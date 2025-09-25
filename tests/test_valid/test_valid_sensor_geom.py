@@ -100,11 +100,13 @@ def prepare_sensor_geom(
 
 
 @pytest.mark.validation
-def test_prepare_sensor_geom(main_config, output_dir, ref_dir, input_files):
+def test_prepare_sensor_geom(
+    main_config, wsf, pekel, output_dir, ref_dir, input_files
+):
     """Tests the sensor geometry preparation and validates output masks."""
     for file, dtm in input_files:
         _, _, _, wsf, pekel = prepare_sensor_geom(
-            main_config, output_dir, file, dtm, 1
+            main_config, wsf, pekel, output_dir, file, dtm, 1
         )
         validate_mask(pekel, "Sensor", ref_dir, valid_pixels=False)
         validate_mask(wsf, "Sensor", valid_pixels=False)
