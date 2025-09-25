@@ -40,10 +40,7 @@ def input_files():
     DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
     # Create correct object for parametrize loop
-    input_files = []
-    for i in enumerate(input_images):
-        input_files.append((input_images[i], DTMs[i]))
-    return input_files
+    return list(zip(input_images, DTMs))
 
 
 # Images to validate
