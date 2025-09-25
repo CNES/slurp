@@ -104,14 +104,12 @@ def test_prepare_sensor_geom(main_config, input_files):
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_pekel", predict_pekel)
-def test_validation_sensor_geom_pekel(file_pekel):
+def test_validation_sensor_geom_pekel(predict_pekel):
     """Tests the validation of Pekel masks generated from sensor geometry."""
-    validate_mask(file_pekel, "Sensor", valid_pixels=False)
+    validate_mask(predict_pekel, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_wsf", predict_wsf)
-def test_validation_sensor_geom_wsf(file_wsf):
+def test_validation_sensor_geom_wsf(predict_wsf):
     """Tests the validation of WSF masks generated from sensor geometry."""
-    validate_mask(file_wsf, "Sensor", valid_pixels=False)
+    validate_mask(predict_wsf, "Sensor", valid_pixels=False)
