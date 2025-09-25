@@ -54,13 +54,13 @@ def predict_wsf(output_dir):
     return glob.glob(os.path.join(output_dir + "/wsf*.tif"))
 
 
-def prepare_sensor_geom(main_config, file, dtm, nb_workers):
+def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
     """Prepares sensor geometry data and validates output files."""
-    valid_stack = get_output_path(file, "valid_stack", remove=True)
-    ndvi = get_output_path(file, "ndvi", remove=True)
-    ndwi = get_output_path(file, "ndwi", remove=True)
-    wsf = get_output_path(file, "wsf", remove=True)
-    pekel = get_output_path(file, "pekel", remove=True)
+    valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
+    ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
+    ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
+    wsf = get_output_path(file, "wsf", output_dir, remove=True)
+    pekel = get_output_path(file, "pekel", output_dir, remove=True)
 
     if not wsf:
         raise Exception(
@@ -92,10 +92,12 @@ def prepare_sensor_geom(main_config, file, dtm, nb_workers):
 
 
 @pytest.mark.validation
-def test_prepare_sensor_geom(main_config, input_files):
+def test_prepare_sensor_geom(main_config, output_dir, input_files):
     """Tests the sensor geometry preparation and validates output masks."""
     for file, dtm in input_files:
-        _, _, _, wsf, pekel = prepare_sensor_geom(main_config, file, dtm, 1)
+        _, _, _, wsf, pekel = prepare_sensor_geom(
+            main_config, output_dir, file, dtm, 1
+        )
         validate_mask(pekel, "Sensor", valid_pixels=False)
         validate_mask(wsf, "Sensor", valid_pixels=False)
 
