@@ -47,12 +47,12 @@ def input_files(input_images):
 
 # Images to validate
 @pytest.fixture
-def predict_pekel(output_dir):
+def predict_pekels(output_dir):
     return glob.glob(os.path.join(output_dir + "/pekel*.tif"))
 
 
 @pytest.fixture
-def predict_wsf(output_dir):
+def predict_wsfs(output_dir):
     return glob.glob(os.path.join(output_dir + "/wsf*.tif"))
 
 
@@ -113,12 +113,14 @@ def test_prepare_sensor_geom(
 
 
 @pytest.mark.validation
-def test_validation_sensor_geom_pekel(predict_pekel, ref_dir):
+def test_validation_sensor_geom_pekel(predict_pekels, ref_dir):
     """Tests the validation of Pekel masks generated from sensor geometry."""
-    validate_mask(predict_pekel, "Sensor", ref_dir, valid_pixels=False)
+    for predict_pekel in predict_pekels:
+        validate_mask(predict_pekel, "Sensor", ref_dir, valid_pixels=False)
 
 
 @pytest.mark.validation
-def test_validation_sensor_geom_wsf(predict_wsf, ref_dir):
+def test_validation_sensor_geom_wsf(predict_wsfs, ref_dir):
     """Tests the validation of WSF masks generated from sensor geometry."""
-    validate_mask(predict_wsf, "Sensor", ref_dir, valid_pixels=False)
+    for predict_wsf in predict_wsfs:
+        validate_mask(predict_wsf, "Sensor", ref_dir, valid_pixels=False)
