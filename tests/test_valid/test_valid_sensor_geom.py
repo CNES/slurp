@@ -63,8 +63,8 @@ def prepare_sensor_geom(
     valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
     ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
     ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
-    extracted_wsf = get_output_path(file, "wsf", remove=True)
-    extracted_pekel = get_output_path(file, "pekel", remove=True)
+    extracted_wsf = get_output_path(file, "wsf", output_dir, remove=True)
+    extracted_pekel = get_output_path(file, "pekel", output_dir, remove=True)
 
     if not wsf:
         raise Exception(
