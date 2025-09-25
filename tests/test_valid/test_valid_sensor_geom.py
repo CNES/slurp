@@ -28,37 +28,51 @@ import pytest
 from tests.utils import get_output_path
 from tests.validation import validate_mask
 
-# Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
-DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
-# Create correct object for parametrize loop
-input_files = []
-for i in range(len(input_images)):
-    input_files.append((input_images[i], DTMs[i]))
+# Input images in sensor geometry
+@pytest.fixture
+def input_images(sensor_geom_dir):
+    return glob.glob(sensor_geom_dir + "/*.tif")
+
+
+@pytest.fixture
+def input_files():
+    DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
+
+    # Create correct object for parametrize loop
+    input_files = []
+    for i in range(len(input_images)):
+        input_files.append((input_images[i], DTMs[i]))
+    return input_files
+
 
 # Images to validate
-predict_pekel = glob.glob(os.path.join(pytest.output_dir + "/pekel*.tif"))
-predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
+@pytest.fixture
+def predict_pekel(output_dir):
+    return glob.glob(os.path.join(output_dir + "/pekel*.tif"))
 
 
-def prepare_sensor_geom(file, dtm, nb_workers):
+@pytest.fixture
+def predict_wsf(output_dir):
+    return glob.glob(os.path.join(output_dir + "/wsf*.tif"))
+
+
+def prepare_sensor_geom(main_config, file, dtm, nb_workers):
     """Prepares sensor geometry data and validates output files."""
-    filename = os.path.basename(file)
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
     wsf = get_output_path(file, "wsf", remove=True)
     pekel = get_output_path(file, "pekel", remove=True)
 
-    if not pytest.wsf:
+    if not wsf:
         raise Exception(
             "Please add a global wsf file in 'config_tests.json' to run this test"
         )
 
     os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pytest.pekel} -extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {pytest.wsf} -sensor_mode True -dtm {dtm}"
+        f"slurp_prepare {main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} -extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {wsf} -sensor_mode True -dtm {dtm}"
     )
 
     assert os.path.exists(
@@ -82,9 +96,9 @@ def prepare_sensor_geom(file, dtm, nb_workers):
 
 @pytest.mark.validation
 @pytest.mark.parametrize("file, dtm", input_files)
-def test_prepare_sensor_geom(file, dtm):
+def test_prepare_sensor_geom(file, dtm, main_config):
     """Tests the sensor geometry preparation and validates output masks."""
-    _, _, _, wsf, pekel = prepare_sensor_geom(file, dtm, 1)
+    _, _, _, wsf, pekel = prepare_sensor_geom(main_config, file, dtm, 1)
     validate_mask(pekel, "Sensor", valid_pixels=False)
     validate_mask(wsf, "Sensor", valid_pixels=False)
 
