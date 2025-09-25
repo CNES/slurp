@@ -96,7 +96,7 @@ def prepare_sensor_geom(
         pekel
     ), f"The file {pekel} has not been created. Error during WSF extraction ?"
 
-    return valid_stack, ndvi, ndwi, wsf, pekel
+    return valid_stack, ndvi, ndwi, extracted_wsf, extracted_pekel
 
 
 @pytest.mark.validation
