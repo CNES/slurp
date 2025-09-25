@@ -109,7 +109,7 @@ def test_prepare_sensor_geom(
             main_config, wsf, pekel, output_dir, file, dtm, 1
         )
         validate_mask(out_pekel, "Sensor", ref_dir, valid_pixels=False)
-        validate_mask(out_wsf, "Sensor", valid_pixels=False)
+        validate_mask(out_wsf, "Sensor", ref_dir, valid_pixels=False)
 
 
 @pytest.mark.validation
