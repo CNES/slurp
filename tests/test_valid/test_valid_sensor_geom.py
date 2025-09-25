@@ -61,8 +61,8 @@ def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
     valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
     ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
     ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
-    wsf = get_output_path(file, "wsf", output_dir, remove=True)
-    pekel = get_output_path(file, "pekel", output_dir, remove=True)
+    wsf = "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Sensor/ref_wsf_xt_Toulouse_PontsJumeaux.tif"
+    pekel = "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Sensor/ref_pekel_xt_Toulouse_PontsJumeaux.tif"
 
     if not wsf:
         raise Exception(
