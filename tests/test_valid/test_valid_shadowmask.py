@@ -34,8 +34,8 @@ from tests.validation import validate_mask
 
 # Input images
 @pytest.fixture
-def input_files():
-    return get_files_to_process("shadow")
+def input_files(data_dir):
+    return get_files_to_process("shadow", data_dir)
 
 
 def prepare_shadowmask(main_config, output_dir, file, nb_workers):
@@ -80,11 +80,12 @@ def test_prepare_computation_and_validation_shadowmask(
     main_config, output_dir, ref_dir, input_files
 ):
     """Tests the full workflow of preparation, computation, and validation of shadow mask for each input file."""
-    valid_stack = prepare_shadowmask(
-        main_config, output_dir, ref_dir, input_files, 1
-    )
-    validate_mask(valid_stack, "Prepare", ref_dir)
-    output_image = compute_shadowmask(
-        main_config, output_dir, ref_dir, input_files, 1, valid_stack
-    )
-    validate_mask(output_image, "Shadow", ref_dir)
+    for input_file in input_files:
+        valid_stack = prepare_shadowmask(
+            main_config, output_dir, input_file, 1
+        )
+        validate_mask(valid_stack, "Prepare", ref_dir)
+        output_image = compute_shadowmask(
+            main_config, output_dir, ref_dir, input_file, 1, valid_stack
+        )
+        validate_mask(output_image, "Shadow", ref_dir)
