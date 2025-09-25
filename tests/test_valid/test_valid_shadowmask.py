@@ -31,15 +31,18 @@ import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
+
 # Input images
-input_files = get_files_to_process("shadow")
+@pytest.fixture
+def input_files():
+    return get_files_to_process("shadow")
 
 
-def prepare_shadowmask(file, nb_workers):
+def prepare_shadowmask(main_config, output_dir, file, nb_workers):
     """Prepares the valid stack for shadow mask computation."""
-    valid_stack = get_output_path(file, "valid_stack", remove=True)
+    valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
     command = (
-        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} -valid {valid_stack}"
+        f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} -valid {valid_stack}"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
@@ -49,17 +52,19 @@ def prepare_shadowmask(file, nb_workers):
     return valid_stack
 
 
-def compute_shadowmask(file, nb_workers, valid_stack=None):
+def compute_shadowmask(
+    main_config, output_dir, ref_dir, file, nb_workers, valid_stack=None
+):
     """Computes the shadow mask for a given image and validates output."""
-    output_image = get_output_path(file, "shadowmask", remove=True)
+    output_image = get_output_path(file, "shadowmask", output_dir, remove=True)
     if valid_stack is None:
-        valid_stack = get_aux_path(file, "valid_stack")
+        valid_stack = get_aux_path(file, "valid_stack", ref_dir)
     print(
-        f"slurp_shadowmask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"slurp_shadowmask {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-shadowmask {output_image} -valid {valid_stack} -log_f"
     )
     command = (
-        f"shadowmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"shadowmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-shadowmask {output_image} -valid {valid_stack} -log_f"
     ).split()
     sys.argv = command
@@ -71,10 +76,15 @@ def compute_shadowmask(file, nb_workers, valid_stack=None):
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_computation_and_validation_shadowmask(file):
+def test_prepare_computation_and_validation_shadowmask(
+    main_config, output_dir, ref_dir, input_files
+):
     """Tests the full workflow of preparation, computation, and validation of shadow mask for each input file."""
-    valid_stack = prepare_shadowmask(file, 1)
-    validate_mask(valid_stack, "Prepare")
-    output_image = compute_shadowmask(file, 1, valid_stack)
-    validate_mask(output_image, "Shadow")
+    valid_stack = prepare_shadowmask(
+        main_config, output_dir, ref_dir, input_files, 1
+    )
+    validate_mask(valid_stack, "Prepare", ref_dir)
+    output_image = compute_shadowmask(
+        main_config, output_dir, ref_dir, input_files, 1, valid_stack
+    )
+    validate_mask(output_image, "Shadow", ref_dir)

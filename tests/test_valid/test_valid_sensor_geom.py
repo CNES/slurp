@@ -56,13 +56,15 @@ def predict_wsf(output_dir):
     return glob.glob(os.path.join(output_dir + "/wsf*.tif"))
 
 
-def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
+def prepare_sensor_geom(
+    main_config, wsf, pekel, output_dir, file, dtm, nb_workers
+):
     """Prepares sensor geometry data and validates output files."""
     valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
     ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
     ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
-    wsf = "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Sensor/ref_wsf_xt_Toulouse_PontsJumeaux.tif"
-    pekel = "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Sensor/ref_pekel_xt_Toulouse_PontsJumeaux.tif"
+    extracted_wsf = get_output_path(file, "wsf", remove=True)
+    extracted_pekel = get_output_path(file, "pekel", remove=True)
 
     if not wsf:
         raise Exception(
@@ -72,7 +74,7 @@ def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
     command = (
         f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} "
-        f"-extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {wsf} -sensor_mode True -dtm {dtm} "
+        f"-extracted_pekel {extracted_pekel} -extracted_wsf {extracted_wsf} -wsf {wsf} -sensor_mode True -dtm {dtm} "
         f"--no_analyse_glcm"
     ).split()
     sys.argv = command
