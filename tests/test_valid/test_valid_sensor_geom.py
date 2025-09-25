@@ -36,7 +36,7 @@ def input_images(sensor_geom_dir):
 
 
 @pytest.fixture
-def input_files():
+def input_files(input_images):
     DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
     # Create correct object for parametrize loop
