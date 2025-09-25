@@ -22,11 +22,13 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
 from tests.utils import get_output_path
 from tests.validation import validate_mask
+import slurp.prepare.prepare
 
 
 # Input images in sensor geometry
@@ -67,10 +69,12 @@ def prepare_sensor_geom(main_config, output_dir, file, dtm, nb_workers):
             "Please add a global wsf file in 'config_tests.json' to run this test"
         )
 
-    os.system(
-        f"slurp_prepare {main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} -extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {wsf} -sensor_mode True -dtm {dtm}"
-    )
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
