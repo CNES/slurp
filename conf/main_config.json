@@ -49,7 +49,7 @@
 	    "dtm":null,
 	    "geoid_file":"/softs/projets/3d/geoids/egm96.grd",
 	    "analyse_glcm": true,
-	    "land_cover_map": "/work/CAMPUS/etudes/Masques_CO3D/Data/ClassifRef/WORLDCOVER/esa_worldcover.vrt",
+	    "land_cover_map": "/work/CAMPUS/DATA/ESA_WORLDCOVER/ESA_WorldCover.vrt",
             "cropped_land_cover_map": false,
 	    "effective_used_config": "out/effective_used_config.json",
 	    "wbm":"/path/to/the/wbm/wbm.tif"
