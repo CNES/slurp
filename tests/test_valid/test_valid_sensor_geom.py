@@ -25,16 +25,16 @@ import os
 
 import pytest
 
-from tests.utils import get_aux_path, get_files_to_process, get_output_path
+from tests.utils import get_output_path
 from tests.validation import validate_mask
 
 # Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_goem_dir + "/*.tif")
+input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
 DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
 # Create correct object for parametrize loop
 input_files = []
-for i in range(len(input_files)):
+for i in range(len(input_images)):
     input_files.append((input_images[i], DTMs[i]))
 
 # Images to validate
@@ -43,6 +43,7 @@ predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
 
 
 def prepare_sensor_geom(file, dtm, nb_workers):
+    """Prepares sensor geometry data and validates output files."""
     filename = os.path.basename(file)
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
@@ -79,19 +80,24 @@ def prepare_sensor_geom(file, dtm, nb_workers):
     return valid_stack, ndvi, ndwi, wsf, pekel
 
 
-@pytest.mark.prepare
+@pytest.mark.validation
 @pytest.mark.parametrize("file, dtm", input_files)
 def test_prepare_sensor_geom(file, dtm):
-    valid_stack, ndvi, ndwi, wsf, pekel = prepare_sensor_geom(file, 1)
+    """Tests the sensor geometry preparation and validates output masks."""
+    _, _, _, wsf, pekel = prepare_sensor_geom(file, dtm, 1)
+    validate_mask(pekel, "Sensor", valid_pixels=False)
+    validate_mask(wsf, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("file_pekel", predict_pekel)
 def test_validation_sensor_geom_pekel(file_pekel):
+    """Tests the validation of Pekel masks generated from sensor geometry."""
     validate_mask(file_pekel, "Sensor", valid_pixels=False)
 
 
 @pytest.mark.validation
 @pytest.mark.parametrize("file_wsf", predict_wsf)
 def test_validation_sensor_geom_wsf(file_wsf):
+    """Tests the validation of WSF masks generated from sensor geometry."""
     validate_mask(file_wsf, "Sensor", valid_pixels=False)

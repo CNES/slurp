@@ -22,39 +22,32 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
+import slurp.masks.watermask
+import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
 # Input images
 input_files = get_files_to_process("water")
 
-# Images to validate
-predict_images = glob.glob(os.path.join(pytest.output_dir + "/watermask*.tif"))
-
 
 def prepare_watermask(file, nb_workers):
+    """Prepares the valid stack, NDVI, and NDWI files for water mask computation."""
     valid_stack = get_output_path(file, "valid_stack", remove=True)
     ndvi = get_output_path(file, "ndvi", remove=True)
     ndwi = get_output_path(file, "ndwi", remove=True)
-    pekel = get_output_path(file, "pekel", remove=True)
-    hand = get_output_path(file, "hand", remove=True)
-    if not pytest.pekel:
-        raise Exception(
-            "Please add a global pekel file in 'config_tests.json' to run this test"
-        )
-    if not pytest.hand:
-        raise Exception(
-            "Please add a global hand file in 'config_tests.json' to run this test"
-        )
 
-    os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+    command = (
+        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
-        f"-extracted_pekel {pekel} -extracted_hand {hand} -pekel {pytest.pekel} -hand {pytest.hand}"
-    )
+        f"-pekel {pytest.pekel} -hand {pytest.hand} -log_f"
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
@@ -65,13 +58,7 @@ def prepare_watermask(file, nb_workers):
     assert os.path.exists(
         ndwi
     ), f"The file {ndwi} has not been created. Error during NDWI computation ?"
-    assert os.path.exists(
-        pekel
-    ), f"The file {pekel} has not been created. Error during Pekel extraction ?"
-    assert os.path.exists(
-        hand
-    ), f"The file {hand} has not been created. Error during HAND extraction ?"
-    return valid_stack, ndvi, ndwi, pekel, hand
+    return valid_stack, ndvi, ndwi
 
 
 def compute_watermask(
@@ -83,6 +70,7 @@ def compute_watermask(
     pekel=None,
     hand=None,
 ):
+    """Computes the water mask for a given image and validates output."""
     output_image = get_output_path(file, "watermask", remove=True)
     if valid_stack is None:
         valid_stack = get_aux_path(file, "valid_stack")
@@ -95,10 +83,12 @@ def compute_watermask(
     if hand is None:
         hand = get_aux_path(file, "hand")
 
-    os.system(
-        f"slurp_watermask {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand}"
-    )
+    command = (
+        f"watermask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand} -log_f"
+    ).split()
+    sys.argv = command
+    slurp.masks.watermask.main()
 
     assert os.path.exists(
         output_image
@@ -107,46 +97,13 @@ def compute_watermask(
     return output_image
 
 
-@pytest.mark.prepare
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_watermask(file):
-    valid_stack, ndvi, ndwi, pekel, hand = prepare_watermask(file, 1)
-    validate_mask(valid_stack, "Prepare")
-    validate_mask(ndvi, "Prepare")
-    validate_mask(ndwi, "Prepare")
-    validate_mask(pekel, "Prepare")
-    validate_mask(hand, "Prepare")
-
-
-@pytest.mark.computation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_watermask(file):
-    output_image = compute_watermask(file, 1)
-
-
 @pytest.mark.validation
-@pytest.mark.parametrize("predict_file", predict_images)
-def test_validation_watermask(predict_file):
-    validate_mask(predict_file, "Water")
-
-
-@pytest.mark.computation_and_validation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_and_validation_watermask(file):
-    output_image = compute_watermask(file, 1)
-    validate_mask(output_image, "Water")
-
-
-@pytest.mark.all
 @pytest.mark.parametrize("file", input_files)
 def test_prepare_computation_and_validation_watermask(file):
-    valid_stack, ndvi, ndwi, pekel, hand = prepare_watermask(file, 1)
+    """Tests the full workflow of preparation, computation, and validation of water mask for each input file."""
+    valid_stack, ndvi, ndwi = prepare_watermask(file, 1)
     validate_mask(valid_stack, "Prepare")
     validate_mask(ndvi, "Prepare")
     validate_mask(ndwi, "Prepare")
-    validate_mask(pekel, "Prepare")
-    validate_mask(hand, "Prepare")
-    output_image = compute_watermask(
-        file, 1, valid_stack, ndvi, ndwi, pekel, hand
-    )
+    output_image = compute_watermask(file, 1, valid_stack, ndvi, ndwi)
     validate_mask(output_image, "Water")

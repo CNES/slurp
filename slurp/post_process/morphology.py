@@ -22,6 +22,7 @@
 """Brings together the morphology functions"""
 
 import numpy as np
+import logging
 from skimage.morphology import (
     area_closing,
     binary_closing,
@@ -33,6 +34,7 @@ from skimage.morphology import (
     remove_small_objects,
 )
 
+logger = logging.getLogger("slurp")
 
 def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
     """

@@ -1,0 +1,138 @@
+{
+  "input": {
+    "file_vhr": "absolute_path_to_image.tif",
+    "sensor_mode": false,
+    "pekel" : "",
+    "hand" : "",
+    "wsf": ""
+
+  },
+  "aux_layers": {
+    "valid_stack": null,
+    "file_ndvi": "tests/inputs/ndvi.tif",
+    "file_ndwi": "tests/inputs/ndwi.tif",
+    "extracted_pekel": "tests/inputs/pekel.tif",
+    "extracted_hand": "tests/inputs/hand.tif",
+    "extracted_wsf": "tests/inputs/wsf.tif",
+    "extracted_wbm": null,
+    "file_texture": "tests/inputs/texture.tif",
+    "mnh": null,
+    "file_cloud_gml": null
+  },
+  "masks": {
+    "watermask": null,
+    "urbanmask": null,
+    "vegetationmask": null,
+    "shadowmask": null,
+    "stackmask": null
+  },
+  "resources": {
+    "n_workers": 1,
+    "tile_max_size": 50,
+    "multiproc_context": "fork",
+    "save_mode": "none",
+    "n_jobs": 1,
+    "debug":false
+  },
+  "prepare": {
+    "red": 1,
+    "green": 2,
+    "nir": 4,
+    "cloud_mask": null,
+    "pekel_method": "all",
+    "pekel": null,
+    "pekel_obs": null,
+    "hand": null,
+    "wsf": null,
+    "texture_rad": 5,
+    "dtm": null,
+    "analyse_glcm": false,
+    "geoid_file": "",
+    "land_cover_map": "",
+    "cropped_land_cover_map": false,
+    "effective_used_config": "tests/effective_used_config.json",
+    "wbm": null
+  },
+  "post_process": {
+    "binary_opening": 2,
+    "binary_closing": 3,
+    "binary_dilation": 3,
+    "remove_small_objects": 50,
+    "remove_small_holes": 50,
+    "area_closing": null
+  },
+  "shadows": {
+    "th_rgb": 0.2,
+    "th_nir": 0.2,
+    "percentile": 2,
+    "absolute_threshold": false
+  },
+  "urban": {
+    "vegmask_max_value": 21,
+    "nb_samples_other": 10,
+    "nb_samples_urban": 10,
+    "files_layers": [],
+    "value_classif": 255,
+    "max_depth": 8,
+    "nb_estimators": 100,
+    "gt_binary_erosion": 0,
+    "veg_binary_dilation": 0
+  },
+  "vegetation": {
+    "slic_seg_size": 1,
+    "slic_compactness": 0.1,
+    "nb_clusters_veg": 3,
+    "min_ndvi_veg": null,
+    "max_ndvi_noveg": null,
+    "non_veg_clusters": null,
+    "nb_clusters_low_veg": 3,
+    "max_texture_th": null,
+    "texture_mode": "yes",
+    "filter_texture": 90
+  },
+  "water": {
+    "files_layers": [],
+    "thresh_pekel": 50,
+    "thresh_hand": 25,
+    "strict_thresh": 50,
+    "hand_strict": false,
+    "simple_ndwi_threshold": false,
+    "ndwi_threshold": 0.1,
+    "samples_method": "grid",
+    "nb_samples_water": 10,
+    "nb_samples_other": 10,
+    "nb_samples_auto": false,
+    "auto_pct": 0.0002,
+    "smart_area_pct": 50,
+    "smart_minimum": 10,
+    "grid_spacing": 40,
+    "max_depth": 8,
+    "nb_estimators": 100,
+    "no_pekel_filter": false,
+    "hand_filter": false,
+    "value_classif": 1
+  },
+  "stack": {
+    "building_threshold": 70,
+    "building_erosion": 0,
+    "bonus_gt": 10,
+    "malus_shadow": 10,
+    "remove_small_objects": 0,
+    "remove_small_holes": 0,
+    "value_classif_low_veg": 1,
+    "value_classif_high_veg": 2,
+    "value_classif_water": 3,
+    "value_classif_buildings": 4,
+    "value_classif_bare_ground": 6,
+    "value_classif_sea": 7,
+    "value_classif_lake": 8,
+    "value_classif_river": 9,
+    "value_classif_false_positive_buildings": 10,
+    "value_classif_background": 11,
+    "vegmask_min_value":21,
+    "binary_closing":0,
+    "binary_opening":0,
+    "minimal_size_water_area": 10000,
+    "categorized_watermask": false
+  }
+}

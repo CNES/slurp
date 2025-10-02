@@ -8,15 +8,19 @@ Installation
 Stable release
 --------------
 
-If deployed in Pypi, to install slurp, run this command in your terminal:
+SLURP is deployed on Pypi. To install slurp, please create a python 3.10 virtual environment :
 
 .. code-block:: console
 
-    $ pip install slurp
+    $ python3.10 -m venv slurp_env
+    $ pip install slurp-masks
 
 This is the preferred method to install slurp, as it will always install the most recent stable release.
 
-Consider using a virtualenv to separate and test the installation.
+.. warning::
+
+    Depending on which computation you want to perform (cf. `Use cases <use_cases.html>`_ page), you may need to install OTB on your system as an additional dependencies.
+    Please refer to the OTB installation guide provided `here <https://www.orfeo-toolbox.org/CookBook-develop/Installation.html#create-an-healthy-python-environment-for-otb>`_  for more details.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
@@ -28,7 +32,7 @@ you through the process.
 From sources
 ------------
 
-The sources for slurp can be downloaded from the `Github repo`_.
+The sources for SLURP can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 

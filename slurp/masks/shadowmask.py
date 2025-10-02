@@ -26,7 +26,10 @@ This script computes a shadow mask
 import argparse
 import time
 import traceback
-from os import makedirs, path
+import logging
+import pathlib
+import json
+from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -36,6 +39,52 @@ from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import NODATA_INT8
+
+logger = logging.getLogger("slurp")
+
+
+def compute_thresholds(absolute_threshold, local_phr, nodata, percentile, th_rgb, th_nir):
+    """
+    Compute thresholds for each band in the provided PHR image.
+    If `absolute_threshold` is provided, the function will use the
+    specified value as the threshold for all bands. If not, it calculates thresholds based on the
+    specified percentile for each band, with different thresholds for RGB bands and NIR band.
+    """
+    if absolute_threshold is False:
+        # Compute threshold for each band
+        th_bands = np.zeros(4)
+        for cpt in range(3):
+            min_band = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                percentile,
+            )
+            max_percentile = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                100 - percentile,
+            )
+            th_bands[cpt] = min_band + th_rgb * (
+                    max_percentile - min_band
+            )
+
+        cpt = 3
+        min_band = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            percentile,
+        )
+        max_percentile = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            100 - percentile,
+        )
+        th_bands[cpt] = min_band + th_nir * (
+                max_percentile - min_band
+        )
+    else:
+        # Use an absolute threshold instead of relative threshold
+        # Useful when using calibrated images
+        th_bands = np.zeros(4)
+        for i in range(4):
+            th_bands[i] = absolute_threshold
+    return th_bands
 
 
 def compute_shadowmask(
@@ -85,7 +134,7 @@ def compute_shadowmask(
     return final_shadow_mask
 
 
-def getarguments():
+def getarguments() -> dict:
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Shadow Mask.")
@@ -93,6 +142,12 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
+    parser.add_argument("-log_f",
+                        "--logs_to_file",
+                        action="store_true",
+                        help="Store all logs to a file, instead of stdout",
+                        )
+    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -149,16 +204,25 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-
     args = parser.parse_args()
 
-    return args
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+    return vars(args)
 
 
-def main():
-    """Main function that compute Shadowmask"""
-
-    argparse_dict = vars(getarguments())
+def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
+                    th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
+                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
+    """
+    Main API to compute shadow mask.
+    """
     t0 = time.time()
 
     # Read the JSON files
@@ -170,27 +234,27 @@ def main():
         "post_process",
         "shadows",
     ]
-    argsdict = io_utils.read_json(
-        argparse_dict["main_config"], keys, argparse_dict.get("user_config")
-    )
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
-    # Overload with manually passed arguments if not None
-    for key in argparse_dict.keys():
-        if argparse_dict[key] is not None:
-            argsdict[key] = argparse_dict[key]
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
 
-    print("JSON data loaded:")
-    print(argsdict)
+    logger.info("--" * 50)
+    logger.info("SLURP - Shadow mask\n")
+    logger.info(f"JSON data loaded: {main_config}")
     args = argparse.Namespace(**argsdict)
 
-    # Create output folder
-    makedirs(path.dirname(args.shadowmask), exist_ok=True)
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG) 
+    logger.debug(f"{argsdict=}")   
 
     # Mask calculation
     with eom.EOContextManager(
-        nb_workers=args.n_workers,
-        tile_mode=True,
-        tile_max_size=args.tile_max_size,
+            nb_workers=args.n_workers,
+            tile_mode=True,
+            tile_max_size=args.tile_max_size,
     ) as eoscale_manager:
         try:
 
@@ -204,40 +268,7 @@ def main():
                 raster_path=args.valid_stack
             )
 
-            if args.absolute_threshold is False:
-                # Compute threshold for each band
-                th_bands = np.zeros(4)
-                for cpt in range(3):
-                    min_band = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        args.percentile,
-                    )
-                    max_percentile = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        100 - args.percentile,
-                    )
-                    th_bands[cpt] = min_band + args.th_rgb * (
-                        max_percentile - min_band
-                    )
-
-                cpt = 3
-                min_band = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    args.percentile,
-                )
-                max_percentile = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    100 - args.percentile,
-                )
-                th_bands[cpt] = min_band + args.th_nir * (
-                    max_percentile - min_band
-                )
-            else:
-                # Use an absolute threshold instead of relative threshold
-                # Useful when using calibrated images
-                th_bands = np.zeros(4)
-                for i in range(4):
-                    th_bands[i] = args.absolute_threshold
+            th_bands = compute_thresholds(args.absolute_threshold, local_phr, nodata, args.percentile, args.th_rgb, args.th_nir)
 
             params = {
                 "thresholds": th_bands,
@@ -270,30 +301,38 @@ def main():
             eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
 
             end_time = time.time()
-            print(
+            logger.info(
                 f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
             )
-            print(
+            logger.info(
                 "Total time (user)       :\t"
                 + utils.convert_time(end_time - t0)
             )
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:  # pylint: disable=broad-except
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
+
+def main():
+    """
+    Main function to run the shadow mask computation.
+    It parses the command line arguments and calls the slurp_shadowmask function.
+    """
+    args = getarguments()
+    slurp_shadowmask(**args)
 
 if __name__ == "__main__":
     main()

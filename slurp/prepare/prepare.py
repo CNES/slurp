@@ -23,11 +23,12 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
-import json
 import time
 import traceback
+import json
 from os import makedirs, path
 from typing import List
+import logging
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -37,8 +38,9 @@ from slurp.prepare import analyse_glcm
 from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 
+logger = logging.getLogger("slurp")
 
 def getarguments():
     """Parse command line arguments."""
@@ -51,12 +53,24 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-mode",
+        choices= ["all", "water", "vegetation" ],
+        dest="mode",
+        default="all",
+        help="Prepare for all maks, water only or vegetation only",
+    )
+    parser.add_argument(
         "-w",
         "--overwrite",
         action="store_true",
         help="Recompute files even if exists",
     )
     parser.add_argument("-effective_used_config", type=str, help="")
+    parser.add_argument("-log_f",
+        "--logs_to_file",
+        action="store_true",
+        help="Store all logs to a file, instead of stdout",
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -108,9 +122,10 @@ def getarguments():
         "-extracted_pekel", help="Path to store the extracted Pekel file"
     )
     group3.add_argument("-hand", help="Path of the global HAND file")
-    group3.add_argument(
-        "-extracted_hand", help="Path to store the extracted HAND file"
-    )
+    group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+    group3.add_argument("-wbm", help="Path of the Water Body Mask (WBM) file")
+    group3.add_argument("-extracted_wbm", help="Path to store the extracted WBM file")
+    
 
     group4 = parser.add_argument_group(
         description="*** AUX FILES FOR URBAN MASK ***"
@@ -167,44 +182,11 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
-
     args = parser.parse_args()
 
-    return args
+    utils.store_arglist(parser)
 
-
-def read_and_overload_arguments(args: dict) -> dict:
-    """
-    This function aims to read and overload arguments.
-    To run the prepare pipeline, the user has to give at least 1 JSON file
-    called main_config. It contains all the common parameters that the user might
-    not want to modify on each run of prepare pipeline (e.g 'resources' arg).
-
-    If the user want to overload this first JSON file or add new keys, he can do it by giving
-    a second file called user_config. The user can also overload the first JSON file
-    by giving other arguments that matches the keys in the main_config JSON file (e.g
-    -file_vhr, etc ...).
-
-    Args:
-        arguments (dict): list of all arguments including main_config and user_config
-        + all others arguments to overload.
-
-    Returns:
-        dict: The final dict of arguments.
-    """
-    keys_to_keep = ["input", "prepare", "aux_layers", "resources", "vegetation"]
-
-    # Read the JSON files
-    argsdict = io_utils.read_json(
-        args["main_config"], keys_to_keep, args.get("user_config")
-    )
-
-    # Overload with manually passed arguments if not None
-    for key in args.keys():
-        if args[key] is not None:
-            argsdict[key] = args[key]
-
-    return argsdict
+    return vars(args)
 
 
 def analayse_glcm_and_update_config(
@@ -239,7 +221,7 @@ def analayse_glcm_and_update_config(
             "pct_non_veg": lcm_summary["non_veg"],
         }
     )
-    return args
+    return args_dict
 
 
 def create_valid_stack(
@@ -371,7 +353,7 @@ def pekel_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.pekel and args.extracted_pekel:
-        if args.overwrite or not path.isfile(args.extracted_pekel):
+        if args.extracted_pekel is not None and (args.overwrite or not path.isfile(args.extracted_pekel)):
             makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
             if args.pekel_method == "month":
                 file_pekel = path.join(
@@ -383,9 +365,6 @@ def pekel_extraction(
                     args.file_vhr,
                     file_pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -396,9 +375,6 @@ def pekel_extraction(
                     args.file_vhr,
                     args.pekel,
                     args.extracted_pekel,
-                    args.sensor_mode,
-                    args.dtm,
-                    args.geoid_file,
                     grid_sensor,
                     grid_geo,
                     all_coords,
@@ -409,9 +385,9 @@ def pekel_extraction(
                     "Method for Pekel extraction not accepted. Use 'month' or 'all'"
                 )
         else:
-            print("Not extracting Pekel : the file already exists.")
+            logger.info("Not extracting Pekel : the file already exists.")
     else:
-        print("Pass Pekel extraction")
+        logger.info("Pass Pekel extraction")
 
 
 def hand_extraction(
@@ -429,24 +405,21 @@ def hand_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.hand and args.extracted_hand:
-        if args.overwrite or not path.isfile(args.extracted_hand):
+        if args.extracted_hand is not None and (args.overwrite or not path.isfile(args.extracted_hand)):
             makedirs(path.dirname(args.extracted_hand), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
                 args.hand,
                 args.extracted_hand,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
                 roi,
             )
         else:
-            print("Not extracting Hand : the file already exists.")
+            logger.info("Not extracting Hand : the file already exists.")
     else:
-        print("Pass Hand extraction")
+        logger.info("Pass Hand extraction")
 
 
 def wsf_extraction(
@@ -465,25 +438,54 @@ def wsf_extraction(
     """
 
     if args.wsf and args.extracted_wsf:
-        if args.overwrite or not path.isfile(args.extracted_wsf):
+        if args.extracted_wsf is not None and (args.overwrite or not path.isfile(args.extracted_wsf)):
             makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
                 args.wsf,
                 args.extracted_wsf,
-                args.sensor_mode,
-                args.dtm,
-                args.geoid_file,
                 grid_sensor,
                 grid_geo,
                 all_coords,
                 roi,
             )
         else:
-            print("Not extracting WSF : the file already exists.")
+            logger.info("Not extracting WSF : the file already exists.")
     else:
-        print("Pass WSF extraction")
+        logger.info("Pass WSF extraction")
 
+        
+def wbm_extraction(
+    args: argparse.Namespace,
+    grid_sensor,
+    grid_geo,
+    all_coords,
+    roi,
+) -> None:
+    """
+    Extract Water Body Mask (WBM) and superimpose it on
+    the VHR image.
+
+    Args:
+        args (argparse.Namespace): Namespace object of arguments.
+    """
+
+    if args.wbm and args.extracted_wbm and args.categorized_watermask:
+        if args.extracted_wbm is not None and (args.overwrite or not path.isfile(args.extracted_wbm)):
+            makedirs(path.dirname(args.extracted_wbm), exist_ok=True)
+            aux.aux_file_recovery(
+                args.file_vhr,
+                args.wbm,
+                args.extracted_wbm,
+                grid_sensor,
+                grid_geo,
+                all_coords,
+                roi,
+            )
+        else:
+            logger.info("Not extracting WBM : the file already exists.")
+    else:
+        logger.info("Pass WBM extraction")
 
 def compute_texture(
     args: argparse.Namespace,
@@ -502,7 +504,7 @@ def compute_texture(
     valid stack image.
     """
     if args.texture_rad:
-        if args.overwrite or not path.isfile(args.file_texture):
+        if args.file_texture is not None and (args.overwrite or not path.isfile(args.file_texture)):
             makedirs(path.dirname(args.file_texture), exist_ok=True)
             # take percentiles to avoid outliers that could affect texture computation
             # compute texture on NIR band
@@ -529,10 +531,59 @@ def compute_texture(
                 key=key_texture[0], img_path=args.file_texture
             )
         else:
-            print("Not computing texture file : the file already exists.")
+            logger.info("Not computing texture file : the file already exists.")
     else:
-        print("Pass texture computation")
+        logger.info("Pass texture computation")
 
+
+def valid_stack_process(args, eoscale_manager, key_vhr, profile):
+    """
+    Create and save a valid stack mask if it doesn't already exist or if overwrite is specified.
+    """
+    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
+        valid_stack_key = create_valid_stack(
+            args, eoscale_manager, key_vhr, profile
+        )
+        eoscale_manager.write(
+            key=valid_stack_key[0], img_path=args.valid_stack
+        )
+    else:
+        logger.info(
+            "Not computing valid stack mask : the file already exists."
+        )
+        valid_stack_key = [
+            eoscale_manager.open_raster(raster_path=args.valid_stack)
+        ]
+    return valid_stack_key
+
+
+def sensor_mode_process(args):
+    """
+    Processes the VHR image based on the specified mode. If the mode is not "vegetation",
+    it performs extractions for Pekel, Hand, and Water Body Mask (WBM). If the mode is set to "all",
+    it additionally extracts the WSF (World Settlement Footprint) data. The extraction is done using
+    the given grid and region-of-interest (ROI) computed from the image, DTM (Digital Terrain Model), and geoid data.
+    """
+    grid_sensor, grid_geo, all_coords, roi = (
+        geometry.compute_interpolation_grid(
+            args.file_vhr, args.dtm, args.geoid_file
+        )
+    )
+    if args.mode != "vegetation":
+        # vegetation mask doest not need external data
+        # Pekel
+        pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Hand
+        hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+
+        # Water Body Mask
+        wbm_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+    if args.mode == "all":
+        # Only urban mask ('all' masks mode) need WSF
+        # WSF
+        wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
+        
 
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
     """
@@ -546,6 +597,8 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
     print(f"DBG> before update_and_save {args=}")
     with open(args.main_config, "r", encoding="utf8") as json_file:
         final_used_config = json.load(json_file)
+        if not isinstance(args_dict, dict):
+            args_dict = vars(args_dict)
         for key in final_used_config:
             for sub_key in final_used_config[key]:
                 if sub_key in args_dict:
@@ -556,7 +609,12 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         json.dump(final_used_config, file_to_save, indent=4)
 
 
-def main():
+def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
+                  file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
+                  file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
+                  pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
+                  wsf: str, extracted_wsf: str, wbm: str, extracted_wbm: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
+                  land_cover_map: str, cropped_land_cover_map: bool, n_workers: int, tile_max_size: int, multiproc_context: str):
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
@@ -567,10 +625,19 @@ def main():
     sensor geometry, geoid and DTM.
 
     """
+    # Read the JSON files
+    keys = ["input", "prepare", "aux_layers", "resources"]
+    argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
-    argsdict = read_and_overload_arguments(vars(getarguments()))
-    print("JSON data loaded:")
-    print(argsdict)
+    for param in cli_params:
+        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        if locals()[param] is not None:
+            argsdict[param] = locals()[param]
+
+    logger.info("--" * 50)
+    logger.info("SLURP - Prepare step\n")
+    logger.info(f"JSON data loaded: {main_config}")
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
 
     # Compute prepare data with eoscale
@@ -586,67 +653,38 @@ def main():
             key_vhr = eoscale_manager.open_raster(raster_path=args.file_vhr)
             profile = eoscale_manager.get_profile(key_vhr)
 
-            # Global land cover map
-            if args.analyse_glcm:
-                args = analayse_glcm_and_update_config(argsdict, args)
+            # Global land cover map (used for vegetation mask, not water mask)
+            if args.analyse_glcm and args.mode != "water":
+                argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            if args.overwrite or not path.isfile(args.valid_stack):
-                valid_stack_key = create_valid_stack(
-                    args, eoscale_manager, key_vhr, profile
-                )
-                eoscale_manager.write(
-                    key=valid_stack_key[0], img_path=args.valid_stack
-                )
-            else:
-                print(
-                    "Not computing valid stack mask : the file already exists."
-                )
-                valid_stack_key = [
-                    eoscale_manager.open_raster(raster_path=args.valid_stack)
-                ]
+            valid_stack_key = valid_stack_process(args, eoscale_manager, key_vhr, profile)
 
             # NDVI
-            if args.overwrite or not path.isfile(args.file_ndvi):
+            if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
                 ndvi_key = compute_ndvi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
                 eoscale_manager.write(key=ndvi_key[0], img_path=args.file_ndvi)
             else:
-                print("Not computing NDVI : the file already exists.")
+                logger.info("Not computing NDVI : the file already exists.")
 
             # NDWI
-            if args.overwrite or not path.isfile(args.file_ndwi):
+            if args.file_ndwi is not None and (args.overwrite or not path.isfile(args.file_ndwi)):
                 ndwi_key = compute_ndwi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
                 eoscale_manager.write(key=ndwi_key[0], img_path=args.file_ndwi)
             else:
-                print("Not computing NDWI : the file already exists.")
+                logger.info("Not computing NDWI : the file already exists.")
 
             if args.sensor_mode:
-                grid_sensor, grid_geo, all_coords, roi = (
-                    geometry.compute_interpolation_grid(
-                        args.file_vhr, args.dtm, args.geoid_file
-                    )
-                )
-            else:
-                grid_sensor = None
-                grid_geo = None
-                all_coords = None
-                roi = None
+                sensor_mode_process(args)
 
-            # Pekel
-            pekel_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # Hand
-            hand_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # WSF
-            wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-
-            # Texture
-            compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
+            if args.mode != "water":
+                # Only vegetation mask need to compute texture
+                # Texture
+                compute_texture(args, eoscale_manager, key_vhr, valid_stack_key)
 
             # Write effective used config
             update_and_save_used_config(argsdict, args)
@@ -654,26 +692,34 @@ def main():
             eoscale_manager._release_all()
 
             t1 = time.time()
-            print("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
 
         except FileNotFoundError as fnfe_exception:
-            print("FileNotFoundError", fnfe_exception)
+            logger.error("FileNotFoundError", fnfe_exception)
 
         except PermissionError as pe_exception:
-            print("PermissionError", pe_exception)
+            logger.error("PermissionError", pe_exception)
 
         except ArithmeticError as ae_exception:
-            print("ArithmeticError", ae_exception)
+            logger.error("ArithmeticError", ae_exception)
 
         except MemoryError as me_exception:
-            print("MemoryError", me_exception)
+            logger.error("MemoryError", me_exception)
 
         except Exception as exception:
-            print("oups...", exception)
+            logger.error("oups...", exception)
             traceback.print_exc()
 
-    print("End of prepare step")
+    logger.info("End of prepare step\n")
 
+
+def main():
+    """
+    Main function to run the preparation step of SLURP.
+    It parses the command line arguments and calls the slurp_prepare function.
+    """
+    args = getarguments()
+    slurp_prepare(**args)
 
 if __name__ == "__main__":
     main()

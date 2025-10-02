@@ -1,0 +1,11 @@
+{
+    "data_dir": "",
+    "sensor_geom_dir": "",
+    "features_test_img": "tests/inputs/xt_low_res_Toulouse.tif",
+    "output_dir": "out/",
+    "ref_dir": "",
+    "pekel": "tests/inputs/out/pekel.tif",
+    "hand": "tests/inputs/hand.tif",
+    "wsf": "tests/inputs/wsf.tif",
+    "valid_stack": "tests/inputs/out/valid_stack.tif"
+}

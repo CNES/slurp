@@ -22,11 +22,59 @@
 
 import os
 import time
+import json
+from os import makedirs, path, remove
+from importlib.resources import files
 
+import logging.config
 import numpy as np
 import psutil
 
+from slurp.tools import io_utils
 from slurp.tools.constant import NODATA_INT8
+
+logger = logging.getLogger("slurp")
+
+def store_arglist(parser):
+    """
+    Stores the list of argument names from the CLI parser into a JSON file.
+    This file is then used to overwrite the main configuration file parameters.
+    """
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+    with open("args_list.json", 'w') as f:
+        json.dump(arglist, f)
+
+def setup_logging(config_file : str):
+    with open(config_file) as f_in:
+        config = json.load(f_in)
+
+    logging.config.dictConfig(config)
+
+
+def parse_args(keys, logs_to_file, main_config):
+    '''
+    Parse command line arguments.
+    Setup logging with a configuration file based on logs_to_file option value.
+    '''
+    argsdict = io_utils.read_json(
+        main_config, keys)
+
+    # Read the list back from the JSON file
+    with open("args_list.json", 'r') as f:
+        cli_params = json.load(f)
+    remove("args_list.json")
+
+    if logs_to_file:
+        config_file = files("slurp.tools.logs").joinpath("out2json.json")
+        if not path.exists("logs"):
+            makedirs("logs")
+    else:
+        config_file = files("slurp.tools.logs").joinpath("out2stdout.json")
+    setup_logging(config_file)
+    return argsdict, cli_params
 
 
 def convert_time(seconds):
@@ -75,4 +123,4 @@ def display_mem_usage(debug_mode, message):
         memory_use = (
             python_process.memory_info()[0] / 2.0**30
         )  # memory use in GB...I think
-        print(f">> {message} >> Mem usage : {memory_use} Gb")
+        logger.debug(f">> {message} >> Mem usage : {memory_use} Gb")
