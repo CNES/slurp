@@ -83,7 +83,7 @@ def compute_vegetationmask(
         texture = get_aux_path(file, "texture")
 
     command = (
-        f"vegetationmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"vegetationmask.py out/effective_used_config.json -file_vhr {file} -n_workers {nb_workers} "
         f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()
     sys.argv = command
