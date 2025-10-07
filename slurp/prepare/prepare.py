@@ -210,16 +210,23 @@ def add_cluster_vegetation_info(
     Returns:
         dict: The updated parameter dictionnary.
     """
-    nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.compute_stats(
-        args.file_vhr,
-        args.land_cover_map,
-        args.cropped_land_cover_map,
-        args.sensor_mode,
+    nb_clusters_veg, nb_clusters_low_veg, veg, low_veg, high_veg, non_veg = (
+        analyse_glcm.compute_stats(
+            args.file_vhr,
+            args.land_cover_map,
+            args.cropped_land_cover_map,
+            args.sensor_mode,
+        )
     )
+    logger.info(f"veg proportion : {veg=} {low_veg=} {high_veg=} {non_veg=}")
     args_dict.update(
         {
             "nb_clusters_veg": nb_clusters_veg,
             "nb_clusters_low_veg": nb_clusters_low_veg,
+            "pct_veg": veg,
+            "pct_low_veg": low_veg,
+            "pct_high_veg": high_veg,
+            "pct_non_veg": non_veg,
         }
     )
     return args_dict
@@ -668,7 +675,7 @@ def slurp_prepare(
 
     """
     # Read the JSON files
-    keys = ["input", "prepare", "aux_layers", "resources"]
+    keys = ["input", "prepare", "aux_layers", "vegetation", "resources"]
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:

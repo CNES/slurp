@@ -91,7 +91,8 @@ def compute_stats(
     :param str im: path to the input VHR image
     :param str map_lc: path to the land cover map
     :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
-    :returns: number of clusters for vegetation and low vegetation
+    :returns: number of clusters for vegetation and low vegetation,
+              + proportion of pixels of  veg, low_veg, high_veg, non_veg
     """
     if not cropped:
         # get ROI before computing stats
@@ -143,11 +144,23 @@ def compute_stats(
         veg, low_veg, high_veg, nb_total
     )
 
-    logger.info(f"Vegetation (% area) \t: {100*veg/nb_total:.2f}%")
-    logger.info(f"Low vegetation (% area) \t: {100*low_veg/nb_total:.2f}%")
-    logger.info(f"High vegetation (% area) \t: {100*high_veg/nb_total:.2f}%")
+    veg_ratio = veg / nb_total
+    low_veg_ratio = low_veg / nb_total
+    high_veg_ratio = high_veg / nb_total
+    non_veg_ratio = non_veg / nb_total
+
+    logger.info(f"Vegetation (% area) \t: {100*veg_ratio:.2f}%")
+    logger.info(f"Low vegetation (% area) \t: {100*low_veg_ratio:.2f}%")
+    logger.info(f"High vegetation (% area) \t: {100*high_veg_ratio:.2f}%")
 
     logger.info(f"VEG_CLUSTERS : {nb_clusters_veg}")
     logger.info(f"LOW_VEG_CLUSTERS : {nb_clusters_low_veg}")
 
-    return nb_clusters_veg, nb_clusters_low_veg
+    return (
+        nb_clusters_veg,
+        nb_clusters_low_veg,
+        veg_ratio,
+        low_veg_ratio,
+        high_veg_ratio,
+        non_veg_ratio,
+    )

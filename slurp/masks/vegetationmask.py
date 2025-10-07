@@ -346,16 +346,13 @@ def frac_veg_from_segments(segments, params: dict):
     nb_clusters_veg = min(index_cluster_veg + 1, NB_CLUSTERS)
     nb_clusters_no_veg = min(index_cluster_no_veg + 1, NB_CLUSTERS)
 
-    # if params["debug"]:
-    print("**************************************************************")
-    print(
+    logger.debug(
         f"Compute clusters repartition to fit {100*params['pct_veg']}% veg and {100*params['pct_non_veg']}% non veg"
     )
-    print(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")
-    print(
+    logger.debug(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")
+    logger.debug(
         f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and {nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})"
     )
-    print("**************************************************************")
 
     return nb_clusters_veg, nb_clusters_no_veg
 
@@ -432,12 +429,12 @@ def frac_low_high_veg_from_segments(
     nb_clusters_low_veg = min(index_cluster + 1, NB_CLUSTERS)
     nb_clusters_high_veg = NB_CLUSTERS - nb_clusters_low_veg
 
-    # if params["debug"]:
-    print("**************************************************************")
-    print(
+    logger.debug(
         f"Compute clusters repartition to fit {100*params['pct_low_veg']}% low veg"
     )
-    print(f"{ratios_surfaces=}\n{nb_clusters_low_veg=} {nb_clusters_high_veg=}")
+    logger.debug(
+        f"{ratios_surfaces=} {nb_clusters_low_veg=} {nb_clusters_high_veg=}"
+    )
 
     return nb_clusters_low_veg, nb_clusters_high_veg
 
@@ -485,28 +482,6 @@ def vegetation_labeling_with_rule_of_third(params: dict, segments: np.ndarray):
             map_centroid.append(VEG_CODE)
 
     return apply_map(segments, map_centroid)
-
-
-def vegetation_labeling_with_NDVI_thresholds(
-    segments: np.ndarray,
-    ndvi_centroids: list,
-    ndvi_min_veg: int,
-    ndvi_max_nonveg: int,
-):
-    """
-    Label the segmentation with thresholds on NDVI :
-    - vegetation clusters should have NDVI > ndvi_min_veg
-    - non vegetation clusters should have NDVI < ndvi_max_nonveg
-    """
-    for i in range(NB_CLUSTERS):
-        if ndvi_centroids[i] < ndvi_max_nonveg:
-            map_centroid.append(NO_VEG_CODE)
-        elif ndvi_centroids[i] < ndvi_min_veg:
-            map_centroid.append(UNDEFINED_VEG)
-        else:
-            map_centroid.append(VEG_CODE)
-
-    return apply_map(pred_veg, map_centroid)
 
 
 def texture_labeling_with_rule_of_third(
@@ -976,6 +951,26 @@ def getarguments():
         default="nearest",
         help="In case of automatic labeling, choose the cluster that gives the nearest ratio, or that overestimage a little bit vegetation(resp underestimate)",
     )
+    group3.add_argument(
+        "-pct_veg",
+        type=float,
+        help="Pourcentage of vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_low_veg",
+        type=float,
+        help="Pourcentage of low vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_high_veg",
+        type=float,
+        help="Pourcentage of high vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_non_veg",
+        type=float,
+        help="Pourcentage of non vegetation pixels in the global land cover map",
+    )
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group4.add_argument(
@@ -1048,6 +1043,10 @@ def slurp_vegetationmask(
     nb_clusters_low_veg: int,
     autolabel: bool,
     labeling_strategy: str,
+    pct_veg: float,
+    pct_low_veg: float,
+    pct_high_veg: float,
+    pct_non_veg: float,
     max_texture_th: int,
     binary_dilation: int,
     remove_small_objects: int,

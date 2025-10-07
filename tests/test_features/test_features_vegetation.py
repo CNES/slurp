@@ -80,6 +80,23 @@ def test_percentile(min_ndvi_veg, max_ndvi_noveg):
 
 @pytest.mark.features
 @pytest.mark.parametrize(
+    "labeling_strategy", ("nearest", "overestimate", "underestimate")
+)
+def test_autolabel(labeling_strategy):
+    """Tests the vegetation mask autolabel strategy with different parameters :
+    choose the cluster repartition with nearest proportion to fit the input image, or overestimate
+    vegetation rate, or underestimate.
+    """
+    command = (
+        write_command_compute_vegetationmask(1)
+        + f"-autolabel -labeling_strategy {labeling_strategy}"
+    ).split()
+    sys.argv = command
+    slurp.masks.vegetationmask.main()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize(
     "nb_clusters_veg,nb_clusters_low_veg", [(3, 0), (0, 5)]
 )
 def test_nb_clusters(nb_clusters_veg, nb_clusters_low_veg):
