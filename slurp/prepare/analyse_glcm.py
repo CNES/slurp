@@ -22,13 +22,15 @@
 Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation
 """
 
-import numpy as np
 import logging
+
+import numpy as np
 import rasterio as rio
 
 from slurp.prepare import geometry
 
 logger = logging.getLogger("slurp")
+
 
 def get_advices(veg, low_veg, high_veg, nb_total):
     """
@@ -106,18 +108,18 @@ def compute_stats(
         ds.close()
         del ds
 
-    width = data_map.shape[0]
-    height = data_map.shape[1]
+    width = data_map.shape[1]
+    height = data_map.shape[2]
 
     nb_total = width * height
     unique, counts = np.unique(data_map, return_counts=True)
 
     veg, low_veg, high_veg, non_veg = 0, 0, 0, 0
     vegetation_classes = [10, 20, 30, 90, 95, 100]
-    undefined_vegetation_classes = [40] # crop-lands may be vegetated or not 
+    undefined_vegetation_classes = [40]  # crop-lands may be vegetated or not
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
-    non_vegetation_classes =  [70, 80]
+    non_vegetation_classes = [70, 80]
     logger.debug("Count nb of pixels per class")
 
     for v, c in zip(unique, counts):
@@ -126,8 +128,8 @@ def compute_stats(
             veg += c
 
         if v in undefined_vegetation_classes:
-            veg += int(0.5*c)
-            
+            veg += int(0.5 * c)
+
         if v in low_vegetation_classes:
             low_veg += c
 
