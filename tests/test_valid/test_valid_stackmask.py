@@ -37,7 +37,7 @@ def input_files(data_dir):
     return glob.glob(os.path.join(data_dir, "all") + "/*.tif")
 
 
-def compute_stackmask(file, main_config, output_dir, data_dir, nb_workers):
+def compute_stackmask(file, main_config, output_dir, data_dir, ref_dir, nb_workers):
     """Computes the stack mask for a given image and validates output."""
     output_image = get_output_path(file, "stack", output_dir, remove=True)
 
@@ -49,7 +49,7 @@ def compute_stackmask(file, main_config, output_dir, data_dir, nb_workers):
     urbanmask = os.path.join(masks_folder, "urbanmask.tif")
     shadowmask = os.path.join(masks_folder, "shadowmask.tif")
     wsf = os.path.join(masks_folder, "wsf.tif")
-    valid_stack = get_aux_path(file, "valid_stack")
+    valid_stack = get_aux_path(file, "valid_stack", ref_dir)
 
     command = (
         f"slurp_stackmasks {main_config} -file_vhr {file} -n_workers {nb_workers} -stackmask {output_image} "
@@ -87,10 +87,9 @@ def test_computation_stackmask_ci(features_test_img, main_config, valid_stack):
         output_image
     ), f"The file {output_image} has not been created. Error during stackmask computation ?"
 
-
 @pytest.mark.validation
-@pytest.mark.parametrize("file", input_files)
-def test_computation_and_validation_stackask(file):
+def test_computation_and_validation_stackask(input_files, main_config, output_dir, data_dir, ref_dir):
     """Tests both computation and validation of stack mask for each input file."""
-    output_image = compute_stackmask(file, 1)
-    validate_mask(output_image, "Stack")
+    for input_file in input_files:
+        output_image = compute_stackmask(input_file, main_config, output_dir, data_dir, ref_dir, 1)
+        validate_mask(output_image, "Stack", ref_dir)
