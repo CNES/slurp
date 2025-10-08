@@ -39,15 +39,15 @@ from tests.validation import validate_mask
 
 # Input images
 @pytest.fixture
-def input_files():
-    return get_files_to_process("urban")
+def input_files(data_dir):
+    return get_files_to_process("urban", data_dir)
 
 
-def prepare_urbanmask(file, main_config, wsf, nb_workers):
+def prepare_urbanmask(file, main_config, output_dir, wsf, nb_workers):
     """Prepares the valid stack, NDVI, and NDWI files for urban mask computation."""
-    valid_stack = get_output_path(file, "valid_stack", remove=True)
-    ndvi = get_output_path(file, "ndvi", remove=True)
-    ndwi = get_output_path(file, "ndwi", remove=True)
+    valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
+    ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
+    ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
 
     command = (
         f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
@@ -111,17 +111,17 @@ def compute_urbanmask(
 
 @pytest.mark.validation
 def test_prepare_computation_and_validation_urbanmask(
-    input_files, ref_dir, main_config, wsf
+    input_files, ref_dir, main_config, output_dir, wsf
 ):
     """Tests the full workflow of preparation, computation, and validation of urban mask for each input file."""
     for input_file in input_files:
         valid_stack, ndvi, ndwi = prepare_urbanmask(
-            input_file, main_config, wsf, 1
+            file=input_file, main_config=main_config, output_dir=output_dir, wsf=wsf, nb_workers=1
         )
         validate_mask(valid_stack, "Prepare", ref_dir)
         validate_mask(ndvi, "Prepare", ref_dir)
         validate_mask(ndwi, "Prepare", ref_dir)
         output_image = compute_urbanmask(
-            input_file, main_config, 1, ref_dir, valid_stack, ndvi, ndwi, wsf
+            input_file, main_config, 1, ref_dir
         )
-        validate_mask(output_image, "Urban", valid_pixels=False)
+        validate_mask(output_image, "Urban", ref_dir, valid_pixels=False)
