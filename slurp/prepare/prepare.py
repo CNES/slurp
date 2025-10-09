@@ -54,6 +54,9 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-d", "--debug", default=None, action="store_true", help="Debug flag"
+    )
+    parser.add_argument(
         "-mode",
         choices=["all", "water", "vegetation"],
         dest="mode",
@@ -163,7 +166,7 @@ def getarguments():
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group5.set_defaults(analyse_glcm=True)
+    group5.set_defaults(analyse_glcm=None)
 
     group5.add_argument(
         "-land_cover_map",
@@ -628,6 +631,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
 
 def slurp_prepare(
     main_config: str,
+    debug: bool,
     mode: str,
     overwrite: bool,
     effective_used_config: str,
@@ -688,6 +692,9 @@ def slurp_prepare(
     logger.info(f"JSON data loaded: {main_config}")
     logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG)
+    logger.debug(f"{argsdict=}")
 
     # Compute prepare data with eoscale
     with eom.EOContextManager(

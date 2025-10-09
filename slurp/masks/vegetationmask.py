@@ -212,6 +212,7 @@ def clustering_vegetation(
     sorted_ndvi = np.sort(ndvi_values).tolist()
 
     sorted_clusters = np.array([sorted_ndvi.index(v) for v in ndvi_values])
+    logger.debug(f"1st clustering : NDVI centroids : {sorted_ndvi}")
     pred_veg_sorted = apply_map(pred_veg, sorted_clusters)
 
     return pred_veg_sorted, sorted_ndvi
@@ -254,7 +255,7 @@ def clustering_texture(
     sorted_clusters = np.array(
         [sorted_texture.index(v) for v in texture_values]
     )
-
+    logger.debug(f"2nd clustering : Texture centroids : {sorted_texture}")
     textures = np.zeros(nb_segments).astype(np.uint8)
     textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(
         pred_texture, sorted_clusters
