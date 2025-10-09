@@ -44,11 +44,11 @@ def prepare_vegetationmask(file, nb_workers):
 
     print(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} --analyse_glcm"
     )
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f --analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
