@@ -117,27 +117,20 @@ def single_int32_profile(input_profiles: list, map_params):
 
 def three_uint8_profile(input_profiles: list, map_params):
     """Define profiles for eoscale"""
-    profile = input_profiles[0]
-    profile["count"] = 3
-    profile["dtype"] = np.uint8
-    profile["compress"] = COMPRESSION.lower()
-    profile["nodata"] = NODATA_INT8
-    profile["driver"] = DRIVER
+    profile1 = input_profiles[0]
+    profile1["count"] = 1
+    profile1["dtype"] = np.uint8
+    profile1["compress"] = COMPRESSION.lower()
+    profile1["nodata"] = NODATA_INT8
+    profile1["driver"] = DRIVER
 
-    return profile
+    # avoid to modify profile1
+    profile2 = copy.deepcopy(profile1)
+    
+    # avoid to modify profile1
+    profile3 = copy.deepcopy(profile1)
 
-
-def five_uint8_profile(input_profiles: list, map_params):
-    """Define profiles for eoscale"""
-    profile = input_profiles[0]
-    profile["count"] = 5
-    profile["dtype"] = np.uint8
-    profile["compress"] = COMPRESSION.lower()
-    profile["nodata"] = NODATA_INT8
-    profile["driver"] = DRIVER
-
-    return profile
-
+    return [profile1, profile2, profile3]
 
 def double_uint8_profile(input_profiles: list, map_params):
     """Define profiles for eoscale"""
