@@ -92,20 +92,24 @@ def watershed_regul_buildings(
         wsf[0] == 255, "binary_erosion", params["building_erosion"]
     )
 
+    normalized_building_threshold = np.percentile(urbanmask[0], params["building_threshold"])
+    logger.debug(f"Normalized building threshold {normalized_building_threshold}")
+    
+    
     # Bonus for pixels above ground truth
     urbanmask[0][ground_truth_eroded] += params["bonus_gt"]
     # Malus for pixels in shadow areas
     urbanmask[0][shadowmask[0] == 2] -= params["malus_shadow"]
     probable_buildings = np.logical_and(
-        ground_truth_eroded, urbanmask[0] > params["building_threshold"]
+        ground_truth_eroded, urbanmask[0] > normalized_building_threshold
     )
     probable_buildings = apply_morpho(
         probable_buildings, "binary_erosion", params["building_erosion"]
     )
-
+    # TODO : validate marker
     false_positive = np.logical_and(
         apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
-        urbanmask[0] > params["building_threshold"],
+        urbanmask[0] > normalized_building_threshold
     )
 
     markers[0][probable_buildings] = params["value_classif_buildings"]
@@ -228,7 +232,7 @@ def post_process(
     wsf = input_buffer[6]
 
     # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
-    stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
+    stack = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
     # If "winter vegetation" is activated, medium "NDVI" but textured segments (classified as 12/13)
     # by vegetation mask will be considered as high vegetation
@@ -241,6 +245,8 @@ def post_process(
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
 
+    logger.debug(f"{np.unique(seg)=}")
+    
     clean_bare_ground = (
         morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
     )
@@ -262,24 +268,6 @@ def post_process(
     clean_high_veg = morpho_clean(high_veg, params) == 1
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
 
-    # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    # Estimation of heigth
-    # Supposed to be low
-    stack[1][clean_bare_ground] = LOW
-    stack[1][low_veg] = LOW
-
-    # Supposed to be high
-    stack[1][clean_buildings] = HIGH
-    stack[1][high_veg] = HIGH
-
-    # No confidence in heigh
-    stack[1][watermask[0] == 1] = 0
-    stack[1][shadowmask[0] == 2] = 0
-
-    stack[1][np.logical_not(valid_stack[0])] = NODATA_INT8
-
     # Layer 2: watermask categorized
     if params["categorized_watermask"]:
         wbm = input_buffer[7]
@@ -289,12 +277,38 @@ def post_process(
         stack[0] = np.where(
             categorized_watermask != 0, categorized_watermask, stack[0]
         )
+    
+    # Apply NODATA
+    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
 
+    
+    height_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+    
+    # Estimation of heigth
+    # Supposed to be low
+    height_layer[0][clean_bare_ground] = LOW
+    height_layer[0][low_veg] = LOW
+
+    # Supposed to be high
+    height_layer[0][clean_buildings] = HIGH
+    height_layer[0][high_veg] = HIGH
+
+    # No confidence in heigh
+    height_layer[0][watermask[0] == 1] = 0
+    height_layer[0][shadowmask[0] == 2] = 0
+
+    height_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+
+    markers_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
     # Markers
-    stack[2] = markers
-    stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
+    markers_layer[0] = markers
+    markers_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
 
-    return stack
+
+    #TODO remove once validated
+    logger.info(f"{np.unique(seg)=}")
+    height_layer[0] = seg
+    return [stack, height_layer, markers_layer]
 
 
 def getarguments():
@@ -571,6 +585,8 @@ def slurp_stackmask(
                 ]
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
+            logger.info("Before post process")
+            logger.debug("another debug msg")
             final_mask = eoexe.n_images_to_m_images_filter(
                 inputs=inputs_final,
                 image_filter=post_process,
@@ -581,9 +597,21 @@ def slurp_stackmask(
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
             )
-
+            # 1st layer : stack mask
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
 
+            if args.debug:
+                # 2nd layer : mask of (supposed) ground areas / (supposed) structures
+                stackmask_filename = path.basename(args.stackmask)
+                height_mask = str.replace(args.stackmask, path.splitext(stackmask_filename)[0],
+                                          path.splitext(stackmask_filename)[0]+"_segwatershed")
+                eoscale_manager.write(key=final_mask[1], img_path=height_mask)
+
+                # 3rd layer : mask of markers (debug purpose)
+                markers_mask = str.replace(args.stackmask, path.splitext(stackmask_filename)[0],
+                                      path.splitext(stackmask_filename)[0]+"_markers")
+                eoscale_manager.write(key=final_mask[2], img_path=markers_mask)
+            
             t1 = time.time()
             logger.info(
                 f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
