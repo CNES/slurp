@@ -66,7 +66,9 @@ def compute_stackmask(file, main_config, output_dir, data_dir, ref_dir, nb_worke
 
 
 @pytest.mark.ci
-def test_computation_stackmask_ci(features_test_img, main_config, valid_stack):
+def test_computation_stackmask_ci(
+        features_test_img, main_config, output_dir, valid_stack
+):
     """Tests the computation of stack mask in a CI environment using test input masks."""
     masks_folder = "tests/inputs"
     vegetationmask = os.path.join(masks_folder, "vegetationmask.tif")
@@ -74,7 +76,7 @@ def test_computation_stackmask_ci(features_test_img, main_config, valid_stack):
     urbanmask = os.path.join(masks_folder, "urbanmask.tif")
     shadowmask = os.path.join(masks_folder, "shadowmask.tif")
     wsf = os.path.join(masks_folder, "wsf.tif")
-    output_image = get_output_path(features_test_img, "stackmask", remove=True)
+    output_image = get_output_path(features_test_img, "stackmask", output_dir, remove=True)
     command = (
         f"slurp_stackmasks {main_config} -file_vhr {features_test_img} -n_workers 1 -stackmask {output_image} "
         f"-vegetationmask {vegetationmask} -watermask {watermask} "
