@@ -49,26 +49,6 @@ def pytest_addoption(parser):
     )
 
 
-# def pytest_configure(config):
-#     config_file = config.getoption("config")
-#     main_config = config.getoption("main_config")
-#     current_dir = os.path.dirname(__file__)
-#     with open(os.path.join(current_dir, config_file)) as f:
-#         conf = json.load(f)
-#         pytest.data_dir = conf["data_dir"]
-#         pytest.sensor_geom_dir = conf["sensor_geom_dir"]
-#         pytest.features_test_img = conf["features_test_img"]
-#         pytest.output_dir = os.path.join(current_dir, conf["output_dir"])
-#         pytest.ref_dir = conf["ref_dir"]
-#         pytest.pekel = conf["pekel"]
-#         pytest.hand = conf["hand"]
-#         pytest.wsf = conf["wsf"]
-#         pytest.valid_stack = conf["valid_stack"]
-#     pytest.main_config = os.path.join(current_dir, main_config)
-#     if not os.path.exists(pytest.output_dir):
-#         os.makedirs(pytest.output_dir)
-
-
 @pytest.fixture(scope="session")
 def config(request):
     config_file = request.config.getoption("config")

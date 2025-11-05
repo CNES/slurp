@@ -88,6 +88,12 @@ def test_prepare_update_config(main_config, features_test_img, output_dir):
                     assert config[key][sub_key] == possible_size[i]
                     break
 
-    dir_to_remove = os.path.join(current_dir, "out")
-    if os.path.exists(dir_to_remove):
-        shutil.rmtree(dir_to_remove)
+    dir_to_clean = os.path.join(current_dir, "out")
+    if os.path.exists(dir_to_clean):
+        for filename in os.listdir(dir_to_clean):
+            file_path = os.path.join(dir_to_clean, filename)
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            if os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+    #     shutil.rmtree(dir_to_remove)
