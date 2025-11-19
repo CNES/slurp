@@ -457,8 +457,10 @@ def texture_labeling_with_LCM(
 
     textures = np.zeros_like(segments_vegetation)
     textures[np.where(segments_vegetation >= UNDEFINED_VEG)] = apply_map(
-        segments_texture[np.where(segments_vegetation >= UNDEFINED_VEG)], map_centroid)
-            
+        segments_texture[np.where(segments_vegetation >= UNDEFINED_VEG)],
+        map_centroid,
+    )
+
     return textures
 
 
@@ -513,6 +515,7 @@ def texture_labeling_with_rule_of_third(
 
     return textures
 
+
 def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     """
     Finalize mask : for each pixel in input segmentation,
@@ -538,7 +541,8 @@ def clean_task(
     input_buffers: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    Post-processing : apply closing on low veg
+    Post-processing : remove small holes/objects, apply binary dilation on low veg
+    and filter with the NDVI of the fist vegetation cluster
 
     :param list input_buffers: [final_seg, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
@@ -546,6 +550,7 @@ def clean_task(
     :returns: final mask
     """
     im_classif = input_buffers[0][0]
+    im_ndvi = input_buffers[2][0]
 
     if params["remove_small_objects"]:
         high_veg_binary = np.where(im_classif > LOW_VEG_CLASS, True, False)
@@ -577,6 +582,20 @@ def clean_task(
         im_classif[
             np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)
         ] = LOW_VEG_CLASS
+
+    # Filter final mask with a NDVI threshold (1st cluster of vegetation)
+    im_classif = np.where(
+        im_classif == LOW_VEG_CLASS,
+        np.where(im_ndvi > params["min_ndvi_veg"], LOW_VEG_CLASS, 0),
+        im_classif,
+    )
+    im_classif = np.where(
+        im_classif > LOW_VEG_CLASS,
+        np.where(
+            im_ndvi > params["min_ndvi_veg"], VEG_CODE + MIDDLE_TEXTURE_CODE, 0
+        ),
+        im_classif,
+    )
 
     return im_classif
 
@@ -636,7 +655,7 @@ def build_stack(args, eoscale_manager):
     return key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack
 
 
-def closing(args, eoscale_manager, final_seg, key_valid_stack):
+def postprocess(args, eoscale_manager, final_seg, key_valid_stack, key_ndvi):
     """
     Performs morphological closing and other post-processing operations
     (binary dilation, removal of small objects, and holes,...) in the segmented image if the texture mode is enabled.
@@ -663,7 +682,7 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
             ceil(sqrt(args.remove_small_holes)),
         )
         final_seg = eoexe.n_images_to_m_images_filter(
-            inputs=[final_seg[0], key_valid_stack],
+            inputs=[final_seg[0], key_valid_stack, key_ndvi],
             image_filter=clean_task,
             filter_parameters=vars(args),
             generate_output_profiles=eo_utils.single_uint8_profile,
@@ -1056,6 +1075,9 @@ def slurp_vegetationmask(
             pred_veg, sorted_ndvi_centroids = clustering_vegetation(
                 vars(args), nb_segments, stats[0]
             )
+            logger.debug(
+                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
+            )
             if args.autolabel:
                 clusters_veg = vegetation_labeling_with_LCM(
                     vars(args), pred_veg
@@ -1143,10 +1165,13 @@ def slurp_vegetationmask(
 
             time_final = time.time()
 
-            # Closing #
-
-            final_seg = closing(
-                args, eoscale_manager, final_seg, key_valid_stack
+            # Post-process : delete small holes / objects, dilate low veg areas a little bit
+            # and filter output mask with the NDVI of the fist vegetation cluster
+            vars(args)["min_ndvi_veg"] = sorted_ndvi_centroids[
+                -args.nb_clusters_veg
+            ]
+            final_seg = postprocess(
+                args, eoscale_manager, final_seg, key_valid_stack, key_ndvi
             )
             time_closing = time.time()
 
