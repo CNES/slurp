@@ -27,31 +27,27 @@ import os
 import pytest
 
 
-def get_files_to_process(key):
-    all_input_folder = os.path.join(pytest.data_dir, "all")
-    key_input_folder = os.path.join(pytest.data_dir, key)
+def get_files_to_process(key, data_dir):
+    all_input_folder = os.path.join(data_dir, "all")
+    key_input_folder = os.path.join(data_dir, key)
     return glob.glob(all_input_folder + "/*.tif") + glob.glob(
         key_input_folder + "/*.tif"
     )
 
 
-def get_output_path(file, key, remove=False):
+def get_output_path(file, key, output_dir, remove=False):
     assert os.path.exists(file), f"The file {file} doesn't exist"
-    assert os.path.exists(
-        pytest.output_dir
-    ), f"The file {pytest.output_dir} doesn't exist"
+    assert os.path.exists(output_dir), f"The file {output_dir} doesn't exist"
     filename = os.path.basename(file)
-    output_image = os.path.join(pytest.output_dir, key + "_" + filename)
+    output_image = os.path.join(output_dir, key + "_" + filename)
     if remove:
         remove_file(output_image)
     return output_image
 
 
-def get_aux_path(file, key):
+def get_aux_path(file, key, ref_dir):
     filename = os.path.basename(file)
-    aux_image = os.path.join(
-        pytest.ref_dir, "Prepare", "ref_" + key + "_" + filename
-    )
+    aux_image = os.path.join(ref_dir, "Prepare", "ref_" + key + "_" + filename)
     return aux_image
 
 

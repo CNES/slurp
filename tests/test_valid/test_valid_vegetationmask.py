@@ -31,23 +31,26 @@ import slurp.prepare.prepare
 from tests.utils import get_aux_path, get_files_to_process, get_output_path
 from tests.validation import validate_mask
 
+
 # Input images
-input_files = get_files_to_process("vegetation")
+@pytest.fixture
+def input_files(data_dir):
+    return get_files_to_process("vegetation", data_dir)
 
 
-def prepare_vegetationmask(file, nb_workers):
+def prepare_vegetationmask(file, main_config, output_dir, nb_workers):
     """Prepares the valid stack, NDVI, NDWI, and texture files for vegetation mask computation."""
-    valid_stack = get_output_path(file, "valid_stack", remove=True)
-    ndvi = get_output_path(file, "ndvi", remove=True)
-    ndwi = get_output_path(file, "ndwi", remove=True)
-    texture = get_output_path(file, "texture", remove=True)
+    valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
+    ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
+    ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
+    texture = get_output_path(file, "texture", output_dir, remove=True)
 
     print(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"slurp_prepare {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
     )
     command = (
-        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
     ).split()
     sys.argv = command
@@ -69,21 +72,31 @@ def prepare_vegetationmask(file, nb_workers):
 
 
 def compute_vegetationmask(
-    file, nb_workers, valid_stack=None, ndvi=None, ndwi=None, texture=None
+    file,
+    main_config,
+    output_dir,
+    ref_dir,
+    nb_workers,
+    valid_stack=None,
+    ndvi=None,
+    ndwi=None,
+    texture=None,
 ):
     """Computes the vegetation mask for a given image and validates output."""
-    output_image = get_output_path(file, "vegetationmask", remove=True)
+    output_image = get_output_path(
+        file, "vegetationmask", output_dir, remove=True
+    )
     if valid_stack is None:
-        valid_stack = get_aux_path(file, "valid_stack")
+        valid_stack = get_aux_path(file, "valid_stack", ref_dir)
     if ndvi is None:
-        ndvi = get_aux_path(file, "ndvi")
+        ndvi = get_aux_path(file, "ndvi", ref_dir)
     if ndwi is None:
-        ndwi = get_aux_path(file, "ndwi")
+        ndwi = get_aux_path(file, "ndwi", ref_dir)
     if texture is None:
-        texture = get_aux_path(file, "texture")
+        texture = get_aux_path(file, "texture", ref_dir)
 
     command = (
-        f"vegetationmask.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"vegetationmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()
     sys.argv = command
@@ -96,15 +109,27 @@ def compute_vegetationmask(
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file", input_files)
-def test_prepare_computation_and_validation_vegetationmask(file):
+def test_prepare_computation_and_validation_vegetationmask(
+    input_files, main_config, output_dir, ref_dir
+):
     """Tests the full workflow of preparation, computation, and validation of vegetation mask for each input file."""
-    valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(file, 1)
-    validate_mask(valid_stack, "Prepare")
-    validate_mask(ndvi, "Prepare")
-    validate_mask(ndwi, "Prepare")
-    validate_mask(texture, "Prepare")
-    output_image = compute_vegetationmask(
-        file, 1, valid_stack, ndvi, ndwi, texture
-    )
-    validate_mask(output_image, "Vegetation")
+    for input_file in input_files:
+        valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(
+            input_file, main_config, output_dir, 1
+        )
+        validate_mask(valid_stack, "Prepare", ref_dir)
+        validate_mask(ndvi, "Prepare", ref_dir)
+        validate_mask(ndwi, "Prepare", ref_dir)
+        validate_mask(texture, "Prepare", ref_dir)
+        output_image = compute_vegetationmask(
+            input_file,
+            main_config,
+            output_dir,
+            ref_dir,
+            1,
+            valid_stack,
+            ndvi,
+            ndwi,
+            texture,
+        )
+        validate_mask(output_image, "Vegetation", ref_dir)

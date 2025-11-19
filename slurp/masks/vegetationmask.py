@@ -22,12 +22,11 @@
 """Compute vegetation mask of PHR image."""
 
 import argparse
+import json
+import logging
 import time
 import traceback
-import logging
 from math import ceil, sqrt
-import json
-from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -62,8 +61,6 @@ UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 
 def apply_map(pred, map_centroids):
     return np.array(list(map(lambda n: map_centroids[n], pred)))
-
-
 
 
 # Segmentation #
@@ -203,8 +200,12 @@ def apply_clustering(
     if params["debug"]:
         logger.debug(f"K-Means on radiometric indices {nb_polys} elements")
 
-    kmeans_rad_indices, list_clusters, pred_veg = cluster_on_radiometry(nb_polys, params, stats)
-    map_centroid, nb_clusters_no_veg, nb_clusters_veg = classify_veg_indices(kmeans_rad_indices, list_clusters, params)
+    kmeans_rad_indices, list_clusters, pred_veg = cluster_on_radiometry(
+        nb_polys, params, stats
+    )
+    map_centroid, nb_clusters_no_veg, nb_clusters_veg = classify_veg_indices(
+        kmeans_rad_indices, list_clusters, params
+    )
 
     clustering = apply_map(pred_veg, map_centroid)
 
@@ -221,9 +222,7 @@ def apply_clustering(
         data_textures = np.transpose(texture_values)
         data_textures[data_textures > threshold_max] = threshold_max
         if params["debug"]:
-            logger.debug(
-                f"K-Means on texture : {len(data_textures)} elements"
-            )
+            logger.debug(f"K-Means on texture : {len(data_textures)} elements")
 
         kmeans_texture = KMeans(
             n_clusters=NB_CLUSTERS,
@@ -233,7 +232,7 @@ def apply_clustering(
             random_state=712,
         )
         pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
-        
+
         if params["debug"]:
             logger.debug("Clustering on texture index")
             logger.debug("Clusters ordered by increasing texture values")
@@ -284,7 +283,6 @@ def apply_clustering(
                 else:
                     map_centroid.append(MIDDLE_TEXTURE_CODE)
 
-
         textures = np.zeros(nb_polys)
         textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(
             pred_texture, map_centroid
@@ -296,11 +294,10 @@ def apply_clustering(
     return clustering
 
 
-
 def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
-    '''
+    """
     Assign vegetation class codes to each cluster based on NDVI thresholds or proportions.
-    '''
+    """
     list_clusters_by_ndvi = list_clusters.sort_values(
         by="ndvi", ascending=True
     ).index
@@ -314,7 +311,7 @@ def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
                 map_centroid.append(VEG_CODE)
                 nb_clusters_veg += 1
             elif list_clusters.iloc[t]["ndvi"] < float(
-                    params["max_ndvi_noveg"]
+                params["max_ndvi_noveg"]
             ):
                 if params["non_veg_clusters"]:
                     l_ndvi = list(list_clusters_by_ndvi)
@@ -342,10 +339,10 @@ def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
                 else:
                     map_centroid.append(NO_VEG_CODE)  # 0
             elif (
-                    t
-                    in list_clusters_by_ndvi[
-                       nb_clusters_no_veg: NB_CLUSTERS - params["nb_clusters_veg"]
-                       ]
+                t
+                in list_clusters_by_ndvi[
+                    nb_clusters_no_veg : NB_CLUSTERS - params["nb_clusters_veg"]
+                ]
             ):
                 map_centroid.append(UNDEFINED_VEG)  # 10
             else:
@@ -354,9 +351,9 @@ def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
 
 
 def cluster_on_radiometry(nb_polys, params, stats):
-    '''
+    """
     K-means clustering on NDVI and NDWI indices
-    '''
+    """
     kmeans_rad_indices = KMeans(
         n_clusters=NB_CLUSTERS,
         init="k-means++",
@@ -365,7 +362,7 @@ def cluster_on_radiometry(nb_polys, params, stats):
         random_state=712,
     )
     pred_veg = kmeans_rad_indices.fit_predict(
-        np.stack((stats[0:nb_polys], stats[nb_polys: 2 * nb_polys]), axis=1)
+        np.stack((stats[0:nb_polys], stats[nb_polys : 2 * nb_polys]), axis=1)
     )
     if params["debug"]:
         logger.debug("Clustering on NDVI/NDWI indices")
@@ -446,6 +443,7 @@ def clean_task(
 
     return im_classif
 
+
 def segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack):
     """
     Perform image segmentation on the provided raster data (PHR, NDVI, and valid stack).
@@ -492,16 +490,12 @@ def build_stack(args, eoscale_manager):
     key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
     args.nodata_phr = eoscale_manager.get_profile(key_phr)["nodata"]
     # Valid stack
-    key_valid_stack = eoscale_manager.open_raster(
-        raster_path=args.valid_stack
-    )
+    key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
     # NDXI
     key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
     key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
     # Texture file
-    key_texture = eoscale_manager.open_raster(
-        raster_path=args.file_texture
-    )
+    key_texture = eoscale_manager.open_raster(raster_path=args.file_texture)
     return key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack
 
 
@@ -522,9 +516,9 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
         The valid stack raster data.
     """
     if args.texture_mode == "yes" and (
-            args.binary_dilation
-            or args.remove_small_objects
-            or args.remove_small_holes
+        args.binary_dilation
+        or args.remove_small_objects
+        or args.remove_small_holes
     ):
         margin = max(
             2 * args.binary_dilation,
@@ -544,7 +538,9 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
     return final_seg
 
 
-def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys):
+def process_stats(
+    args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys
+):
     """
     Computes statistics (mean NDVI, NDWI, and texture) for each segmented region.
     Then, the statistics are processed to generate data for clustering or classification.
@@ -565,18 +561,28 @@ def process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_tex
     # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
     np.seterr(divide="ignore", invalid="ignore")
     stats[0][:nb_polys] = stats[0][:nb_polys] / stats[1][:nb_polys]
-    stats[0][nb_polys: 2 * nb_polys] = (
-            stats[0][nb_polys: 2 * nb_polys] / stats[1][:nb_polys]
+    stats[0][nb_polys : 2 * nb_polys] = (
+        stats[0][nb_polys : 2 * nb_polys] / stats[1][:nb_polys]
     )
-    stats[0][2 * nb_polys: 3 * nb_polys] = (
-            stats[0][2 * nb_polys: 3 * nb_polys] / stats[1][:nb_polys]
+    stats[0][2 * nb_polys : 3 * nb_polys] = (
+        stats[0][2 * nb_polys : 3 * nb_polys] / stats[1][:nb_polys]
     )
     # Replace NaN by 0. After clustering, NO_DATA values will be masked
     stats[0] = np.where(np.isnan(stats[0]), 0, stats[0])
     return stats
 
 
-def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats):
+def display_infos(
+    args,
+    end_time,
+    t0,
+    time_closing,
+    time_cluster,
+    time_final,
+    time_seg,
+    time_stack,
+    time_stats,
+):
     """
     Display information on the time spent on each stage of the processing pipeline.
     """
@@ -584,12 +590,10 @@ def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, ti
         f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
     )
     logger.info(
-        "Total time (user)       :\t"
-        + utils.convert_time(end_time - t0)
+        "Total time (user)       :\t" + utils.convert_time(end_time - t0)
     )
     logger.info(
-        "- Build_stack           :\t"
-        + utils.convert_time(time_stack - t0)
+        "- Build_stack           :\t" + utils.convert_time(time_stack - t0)
     )
     logger.info(
         "- Segmentation          :\t"
@@ -617,6 +621,7 @@ def display_infos(args, end_time, t0, time_closing, time_cluster, time_final, ti
     )
     logger.info("***")
 
+
 # MAIN #
 
 
@@ -628,13 +633,16 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
-    parser.add_argument("-log_f",
-                        "--logs_to_file",
-                        action="store_true",
-                        help="Store all logs to a file, instead of stdout",
-                        )
+    parser.add_argument(
+        "-log_f",
+        "--logs_to_file",
+        action="store_true",
+        help="Store all logs to a file, instead of stdout",
+    )
 
-    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
+    parser.add_argument(
+        "-d", "--debug", default=None, action="store_true", help="Debug flag"
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -751,18 +759,41 @@ def getarguments():
         if arg.dest not in ["help"]:
             arglist.append(arg.dest)
 
-    with open("args_list.json", 'w') as f:
+    with open("args_list.json", "w") as f:
         json.dump(arglist, f)
 
     return vars(args)
 
 
-def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, user_config : str, file_vhr : str, valid_stack : bool,
-                        file_ndvi : str, file_ndwi : str, file_texture : str, texture_mode : str, filter_texture : int, save_mode : str,
-                        slic_seg_size : int, slic_compactness : float, nb_clusters_veg : int, min_ndvi_veg : int,
-                        max_ndvi_noveg : int, non_veg_clusters : bool, nb_clusters_low_veg : int, max_texture_th : int,
-                        binary_dilation : int, remove_small_objects : int, remove_small_holes : int,
-                        vegetationmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
+def slurp_vegetationmask(
+    main_config: str,
+    debug: bool,
+    logs_to_file: bool,
+    user_config: str,
+    file_vhr: str,
+    valid_stack: bool,
+    file_ndvi: str,
+    file_ndwi: str,
+    file_texture: str,
+    texture_mode: str,
+    filter_texture: int,
+    save_mode: str,
+    slic_seg_size: int,
+    slic_compactness: float,
+    nb_clusters_veg: int,
+    min_ndvi_veg: int,
+    max_ndvi_noveg: int,
+    non_veg_clusters: bool,
+    nb_clusters_low_veg: int,
+    max_texture_th: int,
+    binary_dilation: int,
+    remove_small_objects: int,
+    remove_small_holes: int,
+    vegetationmask: str,
+    n_workers: int,
+    tile_max_size: int,
+    multiproc_context: str,
+):
     """
     Main API to compute shadow mask.
     """
@@ -787,8 +818,8 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
     logger.info(f"JSON data loaded: {main_config}")
     args = argparse.Namespace(**argsdict)
     if args.debug:
-        logger.handlers[0].setLevel(logging.DEBUG) 
-    logger.debug(f"{argsdict=}")   
+        logger.handlers[0].setLevel(logging.DEBUG)
+    logger.debug(f"{argsdict=}")
 
     # Mask calculation
     with eom.EOContextManager(
@@ -803,13 +834,17 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Build stack with all layers #
 
-            key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack = build_stack(args, eoscale_manager)
+            key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack = (
+                build_stack(args, eoscale_manager)
+            )
 
             time_stack = time.time()
 
             # Segmentation #
 
-            future_seg = segmentation(args, eoscale_manager, key_ndvi, key_phr, key_valid_stack)
+            future_seg = segmentation(
+                args, eoscale_manager, key_ndvi, key_phr, key_valid_stack
+            )
 
             time_seg = time.time()
 
@@ -817,10 +852,21 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Recover number total of segments
             nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
-            if args.debug: logger.debug(f"Number of different segments detected : {nb_polys}")
-            
+            if args.debug:
+                logger.debug(
+                    f"Number of different segments detected : {nb_polys}"
+                )
+
             # Stats calculation
-            stats = process_stats(args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys)
+            stats = process_stats(
+                args,
+                eoscale_manager,
+                future_seg,
+                key_ndvi,
+                key_ndwi,
+                key_texture,
+                nb_polys,
+            )
 
             time_stats = time.time()
 
@@ -854,7 +900,9 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
 
             # Closing #
 
-            final_seg = closing(args, eoscale_manager, final_seg, key_valid_stack)
+            final_seg = closing(
+                args, eoscale_manager, final_seg, key_valid_stack
+            )
             time_closing = time.time()
 
             # Write output mask #
@@ -864,7 +912,17 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
             )
             end_time = time.time()
 
-            display_infos(args, end_time, t0, time_closing, time_cluster, time_final, time_seg, time_stack, time_stats)
+            display_infos(
+                args,
+                end_time,
+                t0,
+                time_closing,
+                time_cluster,
+                time_final,
+                time_seg,
+                time_stack,
+                time_stats,
+            )
 
         except FileNotFoundError as fnfe_exception:
             logger.error("FileNotFoundError", fnfe_exception)
@@ -883,7 +941,6 @@ def slurp_vegetationmask(main_config : str, debug :bool, logs_to_file : bool, us
             traceback.print_exc()
 
 
-
 def main():
     """
     Main function to run the vegetation mask computation.
@@ -891,6 +948,7 @@ def main():
     """
     args = getarguments()
     slurp_vegetationmask(**args)
+
 
 if __name__ == "__main__":
     main()

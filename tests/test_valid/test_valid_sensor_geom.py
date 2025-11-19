@@ -22,44 +22,63 @@
 
 import glob
 import os
+import sys
 
 import pytest
 
 from tests.utils import get_output_path
 from tests.validation import validate_mask
+import slurp.prepare.prepare
+
 
 # Input images in sensor geometry
-input_images = glob.glob(pytest.sensor_geom_dir + "/*.tif")
-DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
+@pytest.fixture
+def input_images(sensor_geom_dir):
+    return glob.glob(sensor_geom_dir + "/*.tif")
 
-# Create correct object for parametrize loop
-input_files = []
-for i in range(len(input_images)):
-    input_files.append((input_images[i], DTMs[i]))
+
+@pytest.fixture
+def input_files(input_images):
+    DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
+
+    # Create correct object for parametrize loop
+    return list(zip(input_images, DTMs))
+
 
 # Images to validate
-predict_pekel = glob.glob(os.path.join(pytest.output_dir + "/pekel*.tif"))
-predict_wsf = glob.glob(os.path.join(pytest.output_dir + "/wsf*.tif"))
+@pytest.fixture
+def predict_pekels(output_dir):
+    return glob.glob(os.path.join(output_dir + "/pekel*.tif"))
 
 
-def prepare_sensor_geom(file, dtm, nb_workers):
+@pytest.fixture
+def predict_wsfs(output_dir):
+    return glob.glob(os.path.join(output_dir + "/wsf*.tif"))
+
+
+def prepare_sensor_geom(
+    main_config, wsf, pekel, output_dir, file, dtm, nb_workers
+):
     """Prepares sensor geometry data and validates output files."""
-    filename = os.path.basename(file)
-    valid_stack = get_output_path(file, "valid_stack", remove=True)
-    ndvi = get_output_path(file, "ndvi", remove=True)
-    ndwi = get_output_path(file, "ndwi", remove=True)
-    wsf = get_output_path(file, "wsf", remove=True)
-    pekel = get_output_path(file, "pekel", remove=True)
+    valid_stack = get_output_path(file, "valid_stack", output_dir, remove=True)
+    ndvi = get_output_path(file, "ndvi", output_dir, remove=True)
+    ndwi = get_output_path(file, "ndwi", output_dir, remove=True)
+    extracted_wsf = get_output_path(file, "wsf", output_dir, remove=True)
+    extracted_pekel = get_output_path(file, "pekel", output_dir, remove=True)
 
-    if not pytest.wsf:
+    if not wsf:
         raise Exception(
             "Please add a global wsf file in 'config_tests.json' to run this test"
         )
 
-    os.system(
-        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pytest.pekel} -extracted_pekel {pekel} -extracted_wsf {wsf} -wsf {pytest.wsf} -sensor_mode True -dtm {dtm}"
-    )
+    command = (
+        f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} "
+        f"-extracted_pekel {extracted_pekel} -extracted_wsf {extracted_wsf} -wsf {wsf} -sensor_mode True -dtm {dtm} "
+        f"--no_analyse_glcm"
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
 
     assert os.path.exists(
         valid_stack
@@ -77,27 +96,31 @@ def prepare_sensor_geom(file, dtm, nb_workers):
         pekel
     ), f"The file {pekel} has not been created. Error during WSF extraction ?"
 
-    return valid_stack, ndvi, ndwi, wsf, pekel
+    return valid_stack, ndvi, ndwi, extracted_wsf, extracted_pekel
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file, dtm", input_files)
-def test_prepare_sensor_geom(file, dtm):
+def test_prepare_sensor_geom(
+    main_config, wsf, pekel, output_dir, ref_dir, input_files
+):
     """Tests the sensor geometry preparation and validates output masks."""
-    _, _, _, wsf, pekel = prepare_sensor_geom(file, dtm, 1)
-    validate_mask(pekel, "Sensor", valid_pixels=False)
-    validate_mask(wsf, "Sensor", valid_pixels=False)
+    for file, dtm in input_files:
+        _, _, _, out_wsf, out_pekel = prepare_sensor_geom(
+            main_config, wsf, pekel, output_dir, file, dtm, 1
+        )
+        validate_mask(out_pekel, "Sensor", ref_dir, valid_pixels=False)
+        validate_mask(out_wsf, "Sensor", ref_dir, valid_pixels=False)
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_pekel", predict_pekel)
-def test_validation_sensor_geom_pekel(file_pekel):
+def test_validation_sensor_geom_pekel(predict_pekels, ref_dir):
     """Tests the validation of Pekel masks generated from sensor geometry."""
-    validate_mask(file_pekel, "Sensor", valid_pixels=False)
+    for predict_pekel in predict_pekels:
+        validate_mask(predict_pekel, "Sensor", ref_dir, valid_pixels=False)
 
 
 @pytest.mark.validation
-@pytest.mark.parametrize("file_wsf", predict_wsf)
-def test_validation_sensor_geom_wsf(file_wsf):
+def test_validation_sensor_geom_wsf(predict_wsfs, ref_dir):
     """Tests the validation of WSF masks generated from sensor geometry."""
-    validate_mask(file_wsf, "Sensor", valid_pixels=False)
+    for predict_wsf in predict_wsfs:
+        validate_mask(predict_wsf, "Sensor", ref_dir, valid_pixels=False)

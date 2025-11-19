@@ -28,11 +28,3 @@ repos:
     language: system
     entry: pylint --rcfile=.pylintrc
     files: \.py$
-
-  - id: doc-build
-    name: Build Documentation
-    stages: [commit]
-    entry: make docs
-    language: system
-    files: ^(docs/.*|slum/.*)$
-    pass_filenames: False
