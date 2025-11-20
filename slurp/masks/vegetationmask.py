@@ -544,12 +544,13 @@ def clean_task(
     Post-processing : remove small holes/objects, apply binary dilation on low veg
     and filter with the NDVI of the fist vegetation cluster
 
-    :param list input_buffers: [final_seg, valid_stack]
+    :param list input_buffers: [final_seg, valid_stack, ndvi]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: final mask
     """
     im_classif = input_buffers[0][0]
+    valid_stack = input_buffers[1][0]
     im_ndvi = input_buffers[2][0]
 
     if params["remove_small_objects"]:
@@ -596,6 +597,8 @@ def clean_task(
         ),
         im_classif,
     )
+
+    im_classif[np.logical_not(valid_stack)] = NODATA_INT8
 
     return im_classif
 
