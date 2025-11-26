@@ -20,7 +20,6 @@
 
 """Tests for vegetationmask generation."""
 
-import glob
 import os
 import sys
 
@@ -97,7 +96,8 @@ def compute_vegetationmask(
 
     command = (
         f"vegetationmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
+        f"-vegetationmask {output_image} -valid {valid_stack} "
+        f"-ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.vegetationmask.main()
@@ -112,7 +112,8 @@ def compute_vegetationmask(
 def test_prepare_computation_and_validation_vegetationmask(
     input_files, main_config, output_dir, ref_dir
 ):
-    """Tests the full workflow of preparation, computation, and validation of vegetation mask for each input file."""
+    """Tests the full workflow of preparation, computation, and validation of
+    vegetation mask for each input file."""
     for input_file in input_files:
         valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(
             input_file, main_config, output_dir, 1

@@ -20,9 +20,9 @@
 
 """Brings together functions used by eoscale"""
 import copy
+import logging
 
 import numpy as np
-import logging
 
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 
@@ -31,6 +31,7 @@ logger = logging.getLogger("slurp")
 
 def concatenate_samples(output_scalars, chunk_output_scalars, tile):
     output_scalars.append(chunk_output_scalars[0])
+
 
 # Profiles
 def single_float_profile(input_profiles: list, map_params):

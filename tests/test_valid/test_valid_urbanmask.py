@@ -20,7 +20,6 @@
 
 """Tests for urbanmask generation."""
 
-import glob
 import os
 import sys
 
@@ -96,7 +95,8 @@ def compute_urbanmask(
         )
 
     command = (
-        f"urbanmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} -urbanmask {output_image} "
+        f"urbanmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-urbanmask {output_image} "
         f"-valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -wsf {wsf} -log_f"
     ).split()
     sys.argv = command
@@ -113,15 +113,18 @@ def compute_urbanmask(
 def test_prepare_computation_and_validation_urbanmask(
     input_files, ref_dir, main_config, output_dir, wsf
 ):
-    """Tests the full workflow of preparation, computation, and validation of urban mask for each input file."""
+    """Tests the full workflow of preparation, computation,
+    and validation of urban mask for each input file."""
     for input_file in input_files:
         valid_stack, ndvi, ndwi = prepare_urbanmask(
-            file=input_file, main_config=main_config, output_dir=output_dir, wsf=wsf, nb_workers=1
+            file=input_file,
+            main_config=main_config,
+            output_dir=output_dir,
+            wsf=wsf,
+            nb_workers=1,
         )
         validate_mask(valid_stack, "Prepare", ref_dir)
         validate_mask(ndvi, "Prepare", ref_dir)
         validate_mask(ndwi, "Prepare", ref_dir)
-        output_image = compute_urbanmask(
-            input_file, main_config, 1, ref_dir
-        )
+        output_image = compute_urbanmask(input_file, main_config, 1, ref_dir)
         validate_mask(output_image, "Urban", ref_dir, valid_pixels=False)

@@ -23,12 +23,12 @@ This script compute all files needed for masks calculation
 """
 
 import argparse
+import json
+import logging
 import time
 import traceback
-import json
 from os import makedirs, path
 from typing import List
-import logging
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -42,6 +42,7 @@ from slurp.tools import utils
 
 logger = logging.getLogger("slurp")
 
+
 def getarguments():
     """Parse command line arguments."""
 
@@ -54,7 +55,7 @@ def getarguments():
     )
     parser.add_argument(
         "-mode",
-        choices= ["all", "water", "vegetation" ],
+        choices=["all", "water", "vegetation"],
         dest="mode",
         default="all",
         help="Prepare for all maks, water only or vegetation only",
@@ -66,7 +67,8 @@ def getarguments():
         help="Recompute files even if exists",
     )
     parser.add_argument("-effective_used_config", type=str, help="")
-    parser.add_argument("-log_f",
+    parser.add_argument(
+        "-log_f",
         "--logs_to_file",
         action="store_true",
         help="Store all logs to a file, instead of stdout",
@@ -82,7 +84,10 @@ def getarguments():
         "-sensor_mode",
         type=bool,
         default=False,
-        help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)",
+        help=(
+            "True if the input image is in raw (sensor) geometry, "
+            "False if it is georeferenced (orthorectified)"
+        ),
     )
     group1.add_argument(
         "-dtm", help="Digital Terrain Model, used only in sensor mode"
@@ -122,10 +127,13 @@ def getarguments():
         "-extracted_pekel", help="Path to store the extracted Pekel file"
     )
     group3.add_argument("-hand", help="Path of the global HAND file")
-    group3.add_argument("-extracted_hand", help="Path to store the extracted HAND file")
+    group3.add_argument(
+        "-extracted_hand", help="Path to store the extracted HAND file"
+    )
     group3.add_argument("-wbm", help="Path of the Water Body Mask (WBM) file")
-    group3.add_argument("-extracted_wbm", help="Path to store the extracted WBM file")
-    
+    group3.add_argument(
+        "-extracted_wbm", help="Path to store the extracted WBM file"
+    )
 
     group4 = parser.add_argument_group(
         description="*** AUX FILES FOR URBAN MASK ***"
@@ -145,12 +153,16 @@ def getarguments():
         help="Radius for texture (std convolution) computation",
     )
 
-    # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    # Specific case where argparse (python 3.8).
+    # https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
     group5.add_argument(
         "--analyse_glcm",
         dest="analyse_glcm",
         action="store_true",
-        help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation",
+        help=(
+            "Use a global land cover map to calculate the optimal number of vegetation "
+            "clusters to use for mask computation"
+        ),
     )
     group5.add_argument(
         "--no_analyse_glcm",
@@ -349,7 +361,9 @@ def pekel_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.pekel and args.extracted_pekel:
-        if args.extracted_pekel is not None and (args.overwrite or not path.isfile(args.extracted_pekel)):
+        if args.extracted_pekel is not None and (
+            args.overwrite or not path.isfile(args.extracted_pekel)
+        ):
             makedirs(path.dirname(args.extracted_pekel), exist_ok=True)
             if args.pekel_method == "month":
                 file_pekel = path.join(
@@ -401,7 +415,9 @@ def hand_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
     if args.hand and args.extracted_hand:
-        if args.extracted_hand is not None and (args.overwrite or not path.isfile(args.extracted_hand)):
+        if args.extracted_hand is not None and (
+            args.overwrite or not path.isfile(args.extracted_hand)
+        ):
             makedirs(path.dirname(args.extracted_hand), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
@@ -434,7 +450,9 @@ def wsf_extraction(
     """
 
     if args.wsf and args.extracted_wsf:
-        if args.extracted_wsf is not None and (args.overwrite or not path.isfile(args.extracted_wsf)):
+        if args.extracted_wsf is not None and (
+            args.overwrite or not path.isfile(args.extracted_wsf)
+        ):
             makedirs(path.dirname(args.extracted_wsf), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
@@ -450,7 +468,7 @@ def wsf_extraction(
     else:
         logger.info("Pass WSF extraction")
 
-        
+
 def wbm_extraction(
     args: argparse.Namespace,
     grid_sensor,
@@ -467,7 +485,9 @@ def wbm_extraction(
     """
 
     if args.wbm and args.extracted_wbm and args.categorized_watermask:
-        if args.extracted_wbm is not None and (args.overwrite or not path.isfile(args.extracted_wbm)):
+        if args.extracted_wbm is not None and (
+            args.overwrite or not path.isfile(args.extracted_wbm)
+        ):
             makedirs(path.dirname(args.extracted_wbm), exist_ok=True)
             aux.aux_file_recovery(
                 args.file_vhr,
@@ -482,6 +502,7 @@ def wbm_extraction(
             logger.info("Not extracting WBM : the file already exists.")
     else:
         logger.info("Pass WBM extraction")
+
 
 def compute_texture(
     args: argparse.Namespace,
@@ -500,7 +521,9 @@ def compute_texture(
     valid stack image.
     """
     if args.texture_rad:
-        if args.file_texture is not None and (args.overwrite or not path.isfile(args.file_texture)):
+        if args.file_texture is not None and (
+            args.overwrite or not path.isfile(args.file_texture)
+        ):
             makedirs(path.dirname(args.file_texture), exist_ok=True)
             # take percentiles to avoid outliers that could affect texture computation
             # compute texture on NIR band
@@ -536,17 +559,15 @@ def valid_stack_process(args, eoscale_manager, key_vhr, profile):
     """
     Create and save a valid stack mask if it doesn't already exist or if overwrite is specified.
     """
-    if args.valid_stack is not None and (args.overwrite or not path.isfile(args.valid_stack)):
+    if args.valid_stack is not None and (
+        args.overwrite or not path.isfile(args.valid_stack)
+    ):
         valid_stack_key = create_valid_stack(
             args, eoscale_manager, key_vhr, profile
         )
-        eoscale_manager.write(
-            key=valid_stack_key[0], img_path=args.valid_stack
-        )
+        eoscale_manager.write(key=valid_stack_key[0], img_path=args.valid_stack)
     else:
-        logger.info(
-            "Not computing valid stack mask : the file already exists."
-        )
+        logger.info("Not computing valid stack mask : the file already exists.")
         valid_stack_key = [
             eoscale_manager.open_raster(raster_path=args.valid_stack)
         ]
@@ -556,9 +577,12 @@ def valid_stack_process(args, eoscale_manager, key_vhr, profile):
 def sensor_mode_process(args):
     """
     Processes the VHR image based on the specified mode. If the mode is not "vegetation",
-    it performs extractions for Pekel, Hand, and Water Body Mask (WBM). If the mode is set to "all",
-    it additionally extracts the WSF (World Settlement Footprint) data. The extraction is done using
-    the given grid and region-of-interest (ROI) computed from the image, DTM (Digital Terrain Model), and geoid data.
+    it performs extractions for Pekel, Hand, and Water Body Mask (WBM).
+    If the mode is set to "all",
+    it additionally extracts the WSF (World Settlement Footprint) data.
+    The extraction is done using
+    the given grid and region-of-interest (ROI) computed from the image,
+    DTM (Digital Terrain Model), and geoid data.
     """
     grid_sensor, grid_geo, all_coords, roi = (
         geometry.compute_interpolation_grid(
@@ -579,7 +603,7 @@ def sensor_mode_process(args):
         # Only urban mask ('all' masks mode) need WSF
         # WSF
         wsf_extraction(args, grid_sensor, grid_geo, all_coords, roi)
-        
+
 
 def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
     """
@@ -604,12 +628,44 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         json.dump(final_used_config, file_to_save, indent=4)
 
 
-def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_config: str, logs_to_file: bool, user_config: str,
-                  file_vhr: str, sensor_mode: bool, dtm: str, geoid_file: str, valid_stack: bool, cloud_mask: str,
-                  file_ndvi: str, file_ndwi: str, red: int, nir: int, green: int, pekel_method: str, pekel: str,
-                  pekel_obs: str, pekel_monthly_occurrence: str, extracted_pekel: str, hand: str, extracted_hand: str,
-                  wsf: str, extracted_wsf: str, wbm: str, extracted_wbm: str, file_texture: str, texture_rad: int, analyse_glcm: bool,
-                  land_cover_map: str, cropped_land_cover_map: bool, n_workers: int, tile_max_size: int, multiproc_context: str):
+def slurp_prepare(
+    main_config: str,
+    mode: str,
+    overwrite: bool,
+    effective_used_config: str,
+    logs_to_file: bool,
+    user_config: str,
+    file_vhr: str,
+    sensor_mode: bool,
+    dtm: str,
+    geoid_file: str,
+    valid_stack: bool,
+    cloud_mask: str,
+    file_ndvi: str,
+    file_ndwi: str,
+    red: int,
+    nir: int,
+    green: int,
+    pekel_method: str,
+    pekel: str,
+    pekel_obs: str,
+    pekel_monthly_occurrence: str,
+    extracted_pekel: str,
+    hand: str,
+    extracted_hand: str,
+    wsf: str,
+    extracted_wsf: str,
+    wbm: str,
+    extracted_wbm: str,
+    file_texture: str,
+    texture_rad: int,
+    analyse_glcm: bool,
+    land_cover_map: str,
+    cropped_land_cover_map: bool,
+    n_workers: int,
+    tile_max_size: int,
+    multiproc_context: str,
+):
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
@@ -625,7 +681,8 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
-        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        # If the parameter from the CLI is not None,
+        # we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
@@ -653,10 +710,14 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # Valid stack
-            valid_stack_key = valid_stack_process(args, eoscale_manager, key_vhr, profile)
+            valid_stack_key = valid_stack_process(
+                args, eoscale_manager, key_vhr, profile
+            )
 
             # NDVI
-            if args.file_ndvi is not None and (args.overwrite or not path.isfile(args.file_ndvi)):
+            if args.file_ndvi is not None and (
+                args.overwrite or not path.isfile(args.file_ndvi)
+            ):
                 ndvi_key = compute_ndvi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
@@ -665,7 +726,9 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
                 logger.info("Not computing NDVI : the file already exists.")
 
             # NDWI
-            if args.file_ndwi is not None and (args.overwrite or not path.isfile(args.file_ndwi)):
+            if args.file_ndwi is not None and (
+                args.overwrite or not path.isfile(args.file_ndwi)
+            ):
                 ndwi_key = compute_ndwi(
                     args, eoscale_manager, key_vhr, valid_stack_key
                 )
@@ -687,7 +750,9 @@ def slurp_prepare(main_config: str, mode: str, overwrite: bool, effective_used_c
             eoscale_manager._release_all()
 
             t1 = time.time()
-            logger.info("Total time (user)       :\t" + utils.convert_time(t1 - t0))
+            logger.info(
+                "Total time (user)       :\t" + utils.convert_time(t1 - t0)
+            )
 
         except FileNotFoundError as fnfe_exception:
             logger.error("FileNotFoundError", fnfe_exception)
@@ -715,6 +780,7 @@ def main():
     """
     args = getarguments()
     slurp_prepare(**args)
+
 
 if __name__ == "__main__":
     main()

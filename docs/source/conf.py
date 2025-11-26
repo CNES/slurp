@@ -22,9 +22,10 @@ import sys
 # The full version, including alpha/beta/rc tags
 from pkg_resources import get_distribution
 
+import docs.source.json_to_md as generate_md
+
 sys.path.insert(0, os.path.abspath("../.."))
 sys.setrecursionlimit(1500)
-import docs.source.json_to_md as generate_md
 
 # Generate the markdown table for MainConfig and UserConfig schemas
 generate_md.main()
@@ -40,7 +41,7 @@ author = "Y. TANGUY et al - CNES"
 try:
     version = get_distribution("slurp").version
     release = version
-except Exception as error:
+except Exception:
     print("WARNING: cannot find slurp version")
     version = "Unknown"
     release = version

@@ -43,7 +43,10 @@ def write_command_compute_watermask(
 def test_hand_strict(main_config, features_test_img, output_dir, ref_dir):
     """Tests the water mask computation with HAND strict filtering enabled.
     hand_strict: Use not(pekelxx) for other (no water) samples."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -hand_strict".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -hand_strict".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -53,7 +56,10 @@ def test_hand_strict_ci(
     main_config, features_test_img, output_dir, ref_dir, valid_stack
 ):
     """Run test_hand_strict with a specified valid_stack (for GithubCI)."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir, valid_stack)} -hand_strict".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir, valid_stack
+    )
+    command = f"{cmd} -hand_strict".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -65,7 +71,10 @@ def test_simple_ndwi_threshold(
     """Tests the water mask computation with a simple NDWI threshold enabled.
     simple_ndwi_threshold: Compute water mask as a simple NDWI threshold,
     useful in arid places where no water is known by Peckel"""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -simple_ndwi_threshold True ".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -simple_ndwi_threshold True".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -75,7 +84,10 @@ def test_simple_ndwi_threshold_ci(
     main_config, features_test_img, output_dir, ref_dir, valid_stack
 ):
     """Run test_simple_nwdi_threshold with specified valid_stack (for GithubCI)."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir, valid_stack)} -simple_ndwi_threshold True ".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir, valid_stack
+    )
+    command = f"{cmd} -simple_ndwi_threshold True".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -87,7 +99,10 @@ def test_samples_method(
 ):
     """Tests the water mask computation with different sample selection methods.
     samples_method: Select method for choosing learning samples"""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -samples_method {samples_method}".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -samples_method {samples_method}".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -141,7 +156,10 @@ def test_nb_samples(
 @pytest.mark.features
 def test_nb_samples_auto(main_config, features_test_img, output_dir, ref_dir):
     """Tests the water mask computation with automatic sample count selection."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -nb_samples_auto".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -nb_samples_auto".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -151,7 +169,10 @@ def test_pekel_filter(main_config, features_test_img, output_dir, ref_dir):
     """Tests the water mask computation with the Pekel filter disabled:
     Deactivate postprocess with pekel which only keeps surfaces already known by pekel.
     """
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -no_pekel_filter".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -no_pekel_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -161,7 +182,10 @@ def test_pekel_filter_ci(
     main_config, features_test_img, output_dir, ref_dir, valid_stack
 ):
     """Run test_pekel_filter with a specified valid_stack (for GithubCI)."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir, valid_stack)} -no_pekel_filter".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir, valid_stack
+    )
+    command = f"{cmd} -no_pekel_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -171,7 +195,10 @@ def test_hand_filter(main_config, features_test_img, output_dir, ref_dir):
     """Tests the water mask computation with HAND filtering enabled:
     Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict
     """
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir)} -hand_filter".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -hand_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()
 
@@ -181,6 +208,9 @@ def test_hand_filter_ci(
     main_config, features_test_img, output_dir, ref_dir, valid_stack
 ):
     """Run test_hand_filter with a specified valid_stack (for GithubCI)."""
-    command = f"{write_command_compute_watermask(1, main_config, features_test_img, output_dir, ref_dir, valid_stack)} -hand_filter".split()
+    cmd = write_command_compute_watermask(
+        1, main_config, features_test_img, output_dir, ref_dir, valid_stack
+    )
+    command = f"{cmd} -hand_filter".split()
     sys.argv = command
     slurp.masks.watermask.main()

@@ -21,14 +21,16 @@
 
 """Brings together the auxiliary files reading functions"""
 
+import logging
+
 import numpy as np
 import scipy
-import logging
 
 from slurp.prepare import geometry
 from slurp.tools.constant import NODATA_INT16
 
 logger = logging.getLogger("slurp")
+
 
 def aux_file_recovery(
     file_ref: str,
@@ -104,7 +106,9 @@ def texture_task(
 
     :param list input_buffers: [im_vhr, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys "nir", "texture_rad", "min_value" and "max_value"
+    :param dict params:
+    dictionary of arguments, must contain the keys "nir", "texture_rad",
+    "min_value" and "max_value"
     :returns: texture image
     """
     masked_band = np.ma.array(
