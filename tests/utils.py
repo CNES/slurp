@@ -24,8 +24,6 @@ import contextlib
 import glob
 import os
 
-import pytest
-
 
 def get_files_to_process(key, data_dir):
     all_input_folder = os.path.join(data_dir, "all")

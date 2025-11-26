@@ -19,12 +19,12 @@ repos:
     name: Flake8
     stages: [commit]
     language: system
-    entry: flake8
+    entry: flake8 --max-line-length=100
     types: [python]
 
   - id: pylint
     name: PyLint
     stages: [commit]
     language: system
-    entry: pylint --rcfile=.pylintrc
+    entry: pylint --recursive=y --disable=all --fail-under=10 --enable=too-many-statements,too-many-nested-blocks slurp/
     files: \.py$

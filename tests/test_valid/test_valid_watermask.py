@@ -90,7 +90,8 @@ def compute_watermask(
 
     command = (
         f"watermask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -pekel {pekel} -hand {hand} -log_f"
+        f"-watermask {output_image} -valid {valid_stack} -ndvi {ndvi} "
+        f"-ndwi {ndwi} -pekel {pekel} -hand {hand} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.watermask.main()
@@ -106,7 +107,8 @@ def compute_watermask(
 def test_prepare_computation_and_validation_watermask(
     input_files, main_config, output_dir, ref_dir, pekel, hand
 ):
-    """Tests the full workflow of preparation, computation, and validation of water mask for each input file."""
+    """Tests the full workflow of preparation, computation,
+    and validation of water mask for each input file."""
     for input_file in input_files:
         valid_stack, ndvi, ndwi = prepare_watermask(
             input_file, main_config, output_dir, pekel, hand, 1

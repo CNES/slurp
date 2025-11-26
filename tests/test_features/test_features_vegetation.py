@@ -56,7 +56,10 @@ def test_vegmask_max_value(main_config, features_test_img, output_dir, ref_dir):
     """Tests the vegetation mask computation with non-vegetation clusters enabled.
     non_veg_clusters: Labelize each 'non vegetation cluster' as 0, 1, 2 (..)
     instead of single label (0)"""
-    command = f"{write_command_compute_vegetationmask(1, main_config, features_test_img, output_dir, ref_dir)} -non_veg_clusters".split()
+    cmd = write_command_compute_vegetationmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -non_veg_clusters".split()
     sys.argv = command
     slurp.masks.vegetationmask.main()
 
@@ -67,7 +70,10 @@ def test_texture_mode(main_config, features_test_img, output_dir, ref_dir):
     texture_mode: Labelize vegetation with (yes) or without (no) distinction low/high, "
     f"or get all NB_CLUSTERS vegetation clusters without distinction low/high.
     """
-    command = f"{write_command_compute_vegetationmask(1, main_config, features_test_img, output_dir, ref_dir)} -texture_mode no".split()
+    cmd = write_command_compute_vegetationmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -texture_mode no".split()
     sys.argv = command
     slurp.masks.vegetationmask.main()
 
@@ -84,7 +90,8 @@ def test_percentile(
 ):
     """Tests the vegetation mask computation with different NDVI thresholds
     for vegetation and non-vegetation.
-    min_ndvi_veg: Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice).
+    min_ndvi_veg: Minimal mean NDVI value to consider a cluster as vegetation
+    (overload nb clusters choice).
     max_ndvi_noveg: Maximal mean NDVI value to consider a cluster as
     non-vegetation (overload nb clusters choice).
     """
@@ -128,10 +135,14 @@ def test_nb_clusters(
 
 @pytest.mark.features
 def test_max_low_veg(main_config, features_test_img, output_dir, ref_dir):
-    """Tests the vegetation mask computation with a specified maximum value for low vegetation clusters.
+    """Tests the vegetation mask computation with a specified maximum value
+    for low vegetation clusters.
     nb_clusters_low_veg: Nb of clusters considered as low vegetation(1-NB_CLUSTERS).
     """
-    command = f"{write_command_compute_vegetationmask(1, main_config, features_test_img, output_dir, ref_dir)} -nb_clusters_low_veg 3 ".split()
+    cmd = write_command_compute_vegetationmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -nb_clusters_low_veg 3".split()
     sys.argv = command
     slurp.masks.vegetationmask.main()
 
@@ -139,6 +150,9 @@ def test_max_low_veg(main_config, features_test_img, output_dir, ref_dir):
 @pytest.mark.features
 def test_debug(main_config, features_test_img, output_dir, ref_dir):
     """Tests the vegetation mask computation with debug mode enabled."""
-    command = f"{write_command_compute_vegetationmask(1, main_config, features_test_img, output_dir, ref_dir)} --debug".split()
+    cmd = write_command_compute_vegetationmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} --debug".split()
     sys.argv = command
     slurp.masks.vegetationmask.main()

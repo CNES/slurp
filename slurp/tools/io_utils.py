@@ -20,19 +20,17 @@
 
 """Brings together useful functions common to the different scripts"""
 import json
-
-import numpy as np
 import logging
+
 import rasterio as rio
-from slurp.tools.pydantic_class import load_config, MainConfig
 
 from slurp.tools.constant import COMPRESSION, DRIVER
+from slurp.tools.pydantic_class import MainConfig, load_config
 
 logger = logging.getLogger("slurp")
 
-def read_json(
-    main_config_file: str, keys: list
-) -> dict:
+
+def read_json(main_config_file: str, keys: list) -> dict:
     """
     Read JSON config files
 

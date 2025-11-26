@@ -60,7 +60,7 @@ UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 
 
 def apply_map(pred, map_centroids):
-    return np.array(list(map(lambda n: map_centroids[n], pred)))
+    return np.array([map_centroids[n] for n in pred])
 
 
 # Segmentation #
@@ -104,7 +104,8 @@ def segmentation_task(
     :returns: segments
     """
     # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
-    # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
+    # Warning : input_buffers[0] : the mask is not applied !
+    # But we only use NDVI mode (see compute_segmentation)
     segments = compute_segmentation(params, input_buffers[0], input_buffers[1])
 
     # minimum segment is 1, attribute 0 to no_data pixel
@@ -502,7 +503,8 @@ def build_stack(args, eoscale_manager):
 def closing(args, eoscale_manager, final_seg, key_valid_stack):
     """
     Performs morphological closing and other post-processing operations
-    (binary dilation, removal of small objects, and holes,...) in the segmented image if the texture mode is enabled.
+    (binary dilation, removal of small objects, and holes,...)
+    in the segmented image if the texture mode is enabled.
 
     Parameters
     ----------
@@ -558,7 +560,8 @@ def process_stats(
     )
     # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
     # stats[1] : nb pixels by segment   [ counter  ]
-    # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
+    # Once the sum of each primitive is computed,
+    # we compute the mean by dividing by the size of each segment
     np.seterr(divide="ignore", invalid="ignore")
     stats[0][:nb_polys] = stats[0][:nb_polys] / stats[1][:nb_polys]
     stats[0][nb_polys : 2 * nb_polys] = (
@@ -693,12 +696,18 @@ def getarguments():
     group3.add_argument(
         "-min_ndvi_veg",
         type=int,
-        help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)",
+        help=(
+            "Minimal mean NDVI to consider a cluster as vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
     group3.add_argument(
         "-max_ndvi_noveg",
         type=int,
-        help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)",
+        help=(
+            "Maximal mean NDVI to consider a cluster as non-vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
     group3.add_argument(
         "-non_veg_clusters",
@@ -713,7 +722,10 @@ def getarguments():
     group3.add_argument(
         "-max_texture_th",
         type=int,
-        help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)",
+        help=(
+            "Maximal texture value to consider a cluster as low vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
