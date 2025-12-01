@@ -1,49 +1,49 @@
 {
-  "input": {
-	"file_vhr": "absolute_path_to_image.tif",
-	"sensor_mode": false
-  },
-  "aux_layers": {
-      "file_cloud_gml": null,
-      "valid_stack": null,
-      "file_ndvi": "tests/out/ndvi_demo.tif",
-      "file_ndwi": "tests/out/ndwi_demo.tif",
-      "extracted_pekel": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_pekel_demo.tif",
-      "extracted_hand": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_hand_demo.tif",
-      "extracted_wsf":"/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_wsf_demo.tif",
-      "extracted_wbm":null,
-      "file_texture": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_texture_demo.tif",
-      "mnh": null
-  },
-  "masks": {
-      "watermask": null,
-      "urbanmask": null,
-      "vegetationmask": null,
-      "shadowmask": null,
-      "stackmask": null
-  },
-  "resources": {
-      "n_workers": 8,
-      "tile_max_size": 0,
-      "multiproc_context": "fork",
-      "save_mode": "none",
-      "n_jobs": 1,
-      "debug":false
-  },
-  "prepare": {
-      "red": 1,
-      "green": 2,
-      "nir": 4,
-      "cloud_mask": null,
-      "pekel_method": "all",
-      "pekel" : null,
-      "pekel_obs": null,
-      "hand" : null,
-      "wsf": null,
-      "texture_rad": 5,
-      "dtm":null,
-      "geoid_file":"/softs/projets/3d/geoids/egm96.grd",
-      "analyse_glcm": false,
+    "input": {
+        "file_vhr": "absolute_path_to_image.tif",
+        "sensor_mode": false
+    },
+    "aux_layers": {
+        "file_cloud_gml": null,
+        "valid_stack": null,
+        "file_ndvi": "tests/out/ndvi_demo.tif",
+        "file_ndwi": "tests/out/ndwi_demo.tif",
+        "extracted_pekel": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_pekel_demo.tif",
+        "extracted_hand": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_hand_demo.tif",
+        "extracted_wsf": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_wsf_demo.tif",
+        "extracted_wbm": null,
+        "file_texture": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Baseline/Prepare/ref_texture_demo.tif",
+        "mnh": null
+    },
+    "masks": {
+        "watermask": null,
+        "urbanmask": null,
+        "vegetationmask": null,
+        "shadowmask": null,
+        "stackmask": null
+    },
+    "resources": {
+        "n_workers": 8,
+        "tile_max_size": 0,
+        "multiproc_context": "fork",
+        "save_mode": "none",
+        "n_jobs": 1,
+        "debug": false
+    },
+    "prepare": {
+        "red": 1,
+        "green": 2,
+        "nir": 4,
+        "cloud_mask": null,
+        "pekel_method": "all",
+        "pekel": null,
+        "pekel_obs": null,
+        "hand": null,
+        "wsf": null,
+        "texture_rad": 5,
+        "dtm": null,
+        "geoid_file": "/softs/projets/3d/geoids/egm96.grd",
+        "analyse_glcm": false,
       "land_cover_map": "/work/CAMPUS/DATA/ESA_WORLDCOVER/ESA_WorldCover.vrt",
       "cropped_land_cover_map": false,
       "effective_used_config": "out/effective_used_config.json",

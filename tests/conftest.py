@@ -49,21 +49,67 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
-    config_file = config.getoption("config")
-    main_config = config.getoption("main_config")
+@pytest.fixture(scope="session")
+def config(request):
+    config_file = request.config.getoption("config")
+    m_config = request.config.getoption("main_config")
     current_dir = os.path.dirname(__file__)
     with open(os.path.join(current_dir, config_file)) as f:
         conf = json.load(f)
-        pytest.data_dir = conf["data_dir"]
-        pytest.sensor_geom_dir = conf["sensor_geom_dir"]
-        pytest.features_test_img = conf["features_test_img"]
-        pytest.output_dir = os.path.join(current_dir, conf["output_dir"])
-        pytest.ref_dir = conf["ref_dir"]
-        pytest.pekel = conf["pekel"]
-        pytest.hand = conf["hand"]
-        pytest.wsf = conf["wsf"]
-        pytest.valid_stack = conf["valid_stack"]
-    pytest.main_config = os.path.join(current_dir, main_config)
-    if not os.path.exists(pytest.output_dir):
-        os.makedirs(pytest.output_dir)
+        conf["main_config"] = os.path.join(current_dir, m_config)
+        if not os.path.exists(conf["output_dir"]):
+            os.makedirs(conf["output_dir"])
+        return conf
+
+
+# ------------------------
+# Individual fixtures for convenience
+# ------------------------
+@pytest.fixture
+def data_dir(config):
+    return config["data_dir"]
+
+
+@pytest.fixture
+def sensor_geom_dir(config):
+    return config["sensor_geom_dir"]
+
+
+@pytest.fixture
+def features_test_img(config):
+    return config["features_test_img"]
+
+
+@pytest.fixture
+def output_dir(config):
+    return config["output_dir"]
+
+
+@pytest.fixture
+def ref_dir(config):
+    return config["ref_dir"]
+
+
+@pytest.fixture
+def pekel(config):
+    return config["pekel"]
+
+
+@pytest.fixture
+def hand(config):
+    return config["hand"]
+
+
+@pytest.fixture
+def wsf(config):
+    return config["wsf"]
+
+
+@pytest.fixture
+def valid_stack(config):
+    return config["valid_stack"]
+
+
+@pytest.fixture
+def main_config(config):
+    return config["main_config"]

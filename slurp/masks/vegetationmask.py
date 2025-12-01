@@ -27,7 +27,6 @@ import logging
 import time
 import traceback
 from math import ceil, sqrt
-from os import makedirs, path, remove
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -725,6 +724,7 @@ def process_stats(
     # stats[1] : nb pixels by segment   [ counter  ]
     # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
     np.seterr(divide="ignore", invalid="ignore")
+
     stats[0][:nb_segments] = stats[0][:nb_segments] / stats[1][:nb_segments]
     stats[0][nb_segments : 2 * nb_segments] = (
         stats[0][nb_segments : 2 * nb_segments] / stats[1][:nb_segments]
