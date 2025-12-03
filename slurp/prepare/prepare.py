@@ -54,6 +54,9 @@ def getarguments():
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
+        "-d", "--debug", default=None, action="store_true", help="Debug flag"
+    )
+    parser.add_argument(
         "-mode",
         choices=["all", "water", "vegetation"],
         dest="mode",
@@ -170,7 +173,7 @@ def getarguments():
         action="store_false",
         help="Do not analyse global land cover map",
     )
-    group5.set_defaults(analyse_glcm=True)
+    group5.set_defaults(analyse_glcm=None)
 
     group5.add_argument(
         "-land_cover_map",
@@ -217,16 +220,23 @@ def add_cluster_vegetation_info(
     Returns:
         dict: The updated parameter dictionnary.
     """
-    nb_clusters_veg, nb_clusters_low_veg = analyse_glcm.compute_stats(
-        args.file_vhr,
-        args.land_cover_map,
-        args.cropped_land_cover_map,
-        args.sensor_mode,
+    nb_clusters_veg, nb_clusters_low_veg, veg, low_veg, high_veg, non_veg = (
+        analyse_glcm.compute_stats(
+            args.file_vhr,
+            args.land_cover_map,
+            args.cropped_land_cover_map,
+            args.sensor_mode,
+        )
     )
+    logger.info(f"veg proportion : {veg=} {low_veg=} {high_veg=} {non_veg=}")
     args_dict.update(
         {
             "nb_clusters_veg": nb_clusters_veg,
             "nb_clusters_low_veg": nb_clusters_low_veg,
+            "pct_veg": veg,
+            "pct_low_veg": low_veg,
+            "pct_high_veg": high_veg,
+            "pct_non_veg": non_veg,
         }
     )
     return args_dict
@@ -630,6 +640,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
 
 def slurp_prepare(
     main_config: str,
+    debug: bool,
     mode: str,
     overwrite: bool,
     effective_used_config: str,
@@ -677,7 +688,7 @@ def slurp_prepare(
 
     """
     # Read the JSON files
-    keys = ["input", "prepare", "aux_layers", "resources"]
+    keys = ["input", "prepare", "aux_layers", "vegetation", "resources"]
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
@@ -691,6 +702,9 @@ def slurp_prepare(
     logger.info(f"JSON data loaded: {main_config}")
     logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
+    if args.debug:
+        logger.handlers[0].setLevel(logging.DEBUG)
+    logger.debug(f"{argsdict=}")
 
     # Compute prepare data with eoscale
     with eom.EOContextManager(

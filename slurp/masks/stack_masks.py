@@ -32,6 +32,7 @@ import json
 import logging
 import time
 import traceback
+from os import path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -65,19 +66,40 @@ def watershed_regul_buildings(
     """
     # Compute mono image from RGB image
     # im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
-    im_mono = 0.3 * input_image[0] + 0.3 * input_image[1] + 0.3 * input_image[3]
+    if params["sobel_image"] == "ndvi":
+        im_mono = (input_image[3] - input_image[0]) / (
+            input_image[3] + input_image[0]
+        )
+    elif params["sobel_image"] == "nir":
+        im_mono = input_image[3]
+    else:
+        im_mono = (
+            0.29 * input_image[0]
+            + 0.58 * input_image[1]
+            + 0.114 * input_image[2]
+        )
     edges = sobel(im_mono)
 
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
     # We set markers by reverse order of confidence
     eroded_bare_ground = apply_morpho(
-        vegmask[0] == 11, "binary_erosion", params["building_erosion"]
+        vegmask[0] == 11, "binary_erosion", params["erosion_radius"]
     )
-    markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
+    if params["regul_type"] == "all":
+        markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
+    else:
+        markers[0][eroded_bare_ground] = params["value_classif_background"]
 
     ground_truth_eroded = apply_morpho(
-        wsf[0] == 255, "binary_erosion", params["building_erosion"]
+        wsf[0] == 255, "binary_erosion", params["erosion_radius"]
+    )
+
+    normalized_building_threshold = np.percentile(
+        urbanmask[0], params["building_threshold"]
+    )
+    logger.debug(
+        f"Normalized building threshold {normalized_building_threshold}"
     )
 
     # Bonus for pixels above ground truth
@@ -85,15 +107,15 @@ def watershed_regul_buildings(
     # Malus for pixels in shadow areas
     urbanmask[0][shadowmask[0] == 2] -= params["malus_shadow"]
     probable_buildings = np.logical_and(
-        ground_truth_eroded, urbanmask[0] > params["building_threshold"]
+        ground_truth_eroded, urbanmask[0] > normalized_building_threshold
     )
     probable_buildings = apply_morpho(
         probable_buildings, "binary_erosion", params["building_erosion"]
     )
-
+    # TODO : validate marker
     false_positive = np.logical_and(
         apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
-        urbanmask[0] > params["building_threshold"],
+        urbanmask[0] > normalized_building_threshold,
     )
 
     markers[0][probable_buildings] = params["value_classif_buildings"]
@@ -102,19 +124,27 @@ def watershed_regul_buildings(
     ]
 
     eroded_low_veg = apply_morpho(
-        vegmask[0] == 21, "binary_erosion", params["building_erosion"]
+        vegmask[0] == 21, "binary_erosion", params["erosion_radius"]
     )
-    markers[0][eroded_low_veg] = params["value_classif_low_veg"]
+    if params["regul_type"] == "all":
+        markers[0][eroded_low_veg] = params["value_classif_low_veg"]
+    else:
+        markers[0][eroded_low_veg] = params["value_classif_background"]
+
     # careful : vegetation mask has two values for high veg !
     eroded_high_veg = apply_morpho(
         np.logical_or(vegmask[0] == 23, vegmask[0] == 22),
         "binary_erosion",
-        params["building_erosion"],
+        params["erosion_radius"],
     )
-    markers[0][eroded_high_veg] = params["value_classif_high_veg"]
+
+    if params["regul_type"] == "all":
+        markers[0][eroded_high_veg] = params["value_classif_high_veg"]
+    else:
+        markers[0][eroded_high_veg] = params["value_classif_background"]
 
     eroded_shadow = apply_morpho(
-        shadowmask[0] == 2, "binary_erosion", params["building_erosion"]
+        shadowmask[0] == 2, "binary_erosion", params["erosion_radius"]
     )
     markers[0][eroded_shadow] = params["value_classif_background"]
 
@@ -125,7 +155,7 @@ def watershed_regul_buildings(
     return seg, markers
 
 
-def watershed_categorized_water(wbm, watermask, params):
+def infer_waterbodies_type(wbm, watermask, params):
     """
     Clean and apply watershed regulation for the watermask
 
@@ -135,8 +165,10 @@ def watershed_categorized_water(wbm, watermask, params):
     :return: categorized mask
     """
 
+    # Values from Copernicus WaterBodyMask
     SEA = 1
     LAKE = 2
+    # RIVER = 3 (not used)
 
     # 1st step : obtain a clean watermask
     nb_iter = 10
@@ -218,12 +250,20 @@ def post_process(
 
     # 1st channel is the class, 2nd is an estimation of height class,
     # 3rd the markers layer, for debug purpose
-    stack = np.zeros((3, input_image.shape[1], input_image.shape[2]))
+    stack = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+
+    # If "winter vegetation" is activated, medium "NDVI" but textured segments
+    # (classified as 12/13) by vegetation mask will be considered as high vegetation
+    if params["winter_vegetation"]:
+        mix_textured_veg = np.logical_or(vegmask[0] == 12, vegmask[0] == 13)
+        vegmask[0][mix_textured_veg] = 22
 
     # Improve buildings detection using a watershed / markers regularization
     seg, markers = watershed_regul_buildings(
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
+
+    logger.debug(f"{np.unique(seg)=}")
 
     clean_bare_ground = (
         morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
@@ -238,47 +278,46 @@ def post_process(
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
     stack[0][watermask[0] == 1] = params["value_classif_water"]
 
-    low_veg = seg == params["value_classif_low_veg"]
-    clean_low_veg = morpho_clean(low_veg, params) == 1
+    clean_low_veg = vegmask[0] == 21
     stack[0][clean_low_veg] = params["value_classif_low_veg"]
 
-    high_veg = seg == params["value_classif_high_veg"]
-    clean_high_veg = morpho_clean(high_veg, params) == 1
+    clean_high_veg = vegmask[0] == 22
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
-
-    # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
-
-    # Estimation of heigth
-    # Supposed to be low
-    stack[1][clean_bare_ground] = LOW
-    stack[1][low_veg] = LOW
-
-    # Supposed to be high
-    stack[1][clean_buildings] = HIGH
-    stack[1][high_veg] = HIGH
-
-    # No confidence in heigh
-    stack[1][watermask[0] == 1] = 0
-    stack[1][shadowmask[0] == 2] = 0
-
-    stack[1][np.logical_not(valid_stack[0])] = NODATA_INT8
 
     # Layer 2: watermask categorized
     if params["categorized_watermask"]:
         wbm = input_buffer[7]
-        categorized_watermask = watershed_categorized_water(
-            wbm, watermask, params
-        )
+        categorized_watermask = infer_waterbodies_type(wbm, watermask, params)
         stack[0] = np.where(
             categorized_watermask != 0, categorized_watermask, stack[0]
         )
 
-    # Markers
-    stack[2] = markers
-    stack[2][np.logical_not(valid_stack[0])] = NODATA_INT8
+    # Apply NODATA
+    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
 
-    return stack
+    height_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+
+    # Estimation of heigth
+    # Supposed to be low
+    height_layer[0][clean_bare_ground] = LOW
+    height_layer[0][clean_low_veg] = LOW
+
+    # Supposed to be high
+    height_layer[0][clean_buildings] = HIGH
+    height_layer[0][clean_high_veg] = HIGH
+
+    # No confidence in heigh
+    height_layer[0][watermask[0] == 1] = 0
+    height_layer[0][shadowmask[0] == 2] = 0
+
+    height_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+
+    markers_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+    # Markers
+    markers_layer[0] = markers
+    markers_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+
+    return [stack, height_layer, markers_layer]
 
 
 def getarguments():
@@ -323,6 +362,24 @@ def getarguments():
 
     group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
     group2.add_argument(
+        "-sobel_image",
+        type=str,
+        default="rgb",
+        choices=["rgb", "nir", "ndvi"],
+        help="Select layer on which compute sobel and perform watershed "
+        "regularization (default : rgb)",
+    )
+
+    group2.add_argument(
+        "-regul_type",
+        type=str,
+        default="all",
+        choices=["all", "building"],
+        help="Regularization type : all (building, vegetation, bare ground),"
+        " building (building only)",
+    )
+
+    group2.add_argument(
         "-building_threshold",
         type=int,
         help="Threshold to consider building as detected",
@@ -330,7 +387,12 @@ def getarguments():
     group2.add_argument(
         "-building_erosion",
         type=int,
-        help="Supposed buildings will be eroded by this size in the marker step",
+        help="Supposed buildings will be eroded by this radius in the marker step",
+    )
+    group2.add_argument(
+        "-erosion_radius",
+        type=int,
+        help="Other classes than buildings will be eroded by this radius in the marker step",
     )
     group2.add_argument(
         "-bonus_gt",
@@ -342,6 +404,13 @@ def getarguments():
         "-malus_shadow",
         type=int,
         help="Value of the malus for pixels in shadow, in the watershed regularization step",
+    )
+
+    group2.add_argument(
+        "-winter_vegetation",
+        action="store_true",
+        help="Consider textured 'mixed vegetation areas' as high vegetation "
+        "(to take into account trees with no leaves)",
     )
 
     group2.add_argument(
@@ -440,9 +509,13 @@ def slurp_stackmask(
     shadowmask: str,
     extracted_wsf: str,
     extracted_wbm: str,
+    sobel_image: str,
+    regul_type: str,
     building_threshold: int,
     building_erosion: int,
+    erosion_radius: int,
     bonus_gt: int,
+    winter_vegetation: bool,
     malus_shadow: int,
     stackmask: str,
     value_classif_low_veg: int,
@@ -481,6 +554,7 @@ def slurp_stackmask(
     logger.info("--" * 50)
     logger.info("SLURP - Stack masks\n")
     logger.info(f"JSON data loaded: {main_config}")
+
     args = argparse.Namespace(**argsdict)
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG)
@@ -540,6 +614,7 @@ def slurp_stackmask(
                 ]
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
+            logger.info("Before post process")
             final_mask = eoexe.n_images_to_m_images_filter(
                 inputs=inputs_final,
                 image_filter=post_process,
@@ -550,8 +625,26 @@ def slurp_stackmask(
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
             )
-
+            # 1st layer : stack mask
             eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
+
+            if args.debug:
+                # 2nd layer : mask of (supposed) ground areas / (supposed) structures
+                stackmask_filename = path.basename(args.stackmask)
+                height_mask = str.replace(
+                    args.stackmask,
+                    path.splitext(stackmask_filename)[0],
+                    path.splitext(stackmask_filename)[0] + "_height",
+                )
+                eoscale_manager.write(key=final_mask[1], img_path=height_mask)
+
+                # 3rd layer : mask of markers (debug purpose)
+                markers_mask = str.replace(
+                    args.stackmask,
+                    path.splitext(stackmask_filename)[0],
+                    path.splitext(stackmask_filename)[0] + "_markers",
+                )
+                eoscale_manager.write(key=final_mask[2], img_path=markers_mask)
 
             t1 = time.time()
             logger.info(

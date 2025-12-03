@@ -45,12 +45,14 @@ def prepare_vegetationmask(file, main_config, output_dir, nb_workers):
     texture = get_output_path(file, "texture", output_dir, remove=True)
 
     print(
-        f"slurp_prepare {main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+        f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi}"
+        f" -file_texture {texture} --analyse_glcm"
     )
     command = (
-        f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f"
+        f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
+        f"-file_texture {texture} -log_f --analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
@@ -95,7 +97,8 @@ def compute_vegetationmask(
         texture = get_aux_path(file, "texture", ref_dir)
 
     command = (
-        f"vegetationmask.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
+        f"vegetationmask.py out/effective_used_config.json "
+        f"-file_vhr {file} -n_workers {nb_workers} "
         f"-vegetationmask {output_image} -valid {valid_stack} "
         f"-ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()

@@ -224,6 +224,22 @@ class Vegetation(BaseModel):
             "(overrides nb-clusters choice)"
         ),
     )
+    pct_veg: float = Field(
+        ...,
+        description="Pourcentage of vegetation pixels in the global land cover map",
+    )
+    pct_low_veg: float = Field(
+        ...,
+        description="Pourcentage of low vegetation pixels in the global land cover map",
+    )
+    pct_high_veg: float = Field(
+        ...,
+        description="Pourcentage of high vegetation pixels in the global land cover map",
+    )
+    pct_non_veg: float = Field(
+        ...,
+        description="Pourcentage of non vegetation pixels in the global land cover map",
+    )
 
 
 class Water(BaseModel):
@@ -316,6 +332,10 @@ class Stack(BaseModel):
     building_erosion: int = Field(
         ...,
         description="Supposed buildings will be eroded by this size in the marker step",
+    )
+    erosion_radius: int = Field(
+        default=2,
+        description="Other classes than buildings will be eroded by this radius in the marker step",
     )
     bonus_gt: int = Field(
         ...,

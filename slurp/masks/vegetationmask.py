@@ -31,7 +31,6 @@ from math import ceil, sqrt
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
 import numpy as np
-import pandas as pd
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
 
@@ -179,181 +178,22 @@ def stats_concatenate(output_scalars, chunk_output_scalars, tile):
     output_scalars[1] += chunk_output_scalars[1]
 
 
-# Clustering #
-
-
-def apply_clustering(
-    params: dict, nb_polys: int, stats: np.ndarray
+def clustering_vegetation(
+    params: dict, nb_segments: int, stats: np.ndarray
 ) -> np.ndarray:
     """
-    Apply clustering with radiometrics and texture indexes
-
-    :param dict params: dictionary of arguments
-    :param int nb_polys: number of segments
+    Classify segments with a k-means clustering, based on NDVI/NDWI values
+    returns a list of segments with their cluster index (0..nb_clusters),
+    ordered by increasing mean NDVI value
+    :param dict params: arguments of the algorithm
+    :param int nb_segments: number of segment detected
     :param np.ndarray stats: sum of each primitive for each segment
-        stats[0:nb_polys] -> mean NDVI
-        stats[nb_polys:2*nb_polys] -> mean NDWI
-        stats[2*nb_polys:] -> mean Texture
+        stats[0:nb_segments] -> mean NDVI
+        stats[nb_segments:2*nb_segments] -> mean NDWI
+        stats[2*nb_segments:] -> mean Texture
 
-    :returns: [ sum of each primitive ; counter (nb pixels / seg) ]
-    """
-    # Note : the seed for random generator is fixed to obtain reproductible results
-    if params["debug"]:
-        logger.debug(f"K-Means on radiometric indices {nb_polys} elements")
-
-    kmeans_rad_indices, list_clusters, pred_veg = cluster_on_radiometry(
-        nb_polys, params, stats
-    )
-    map_centroid, nb_clusters_no_veg, nb_clusters_veg = classify_veg_indices(
-        kmeans_rad_indices, list_clusters, params
-    )
-
-    clustering = apply_map(pred_veg, map_centroid)
-
-    # Analysis texture
-    if params["texture_mode"] != "no":
-        mean_texture = stats[2 * nb_polys :]
-        texture_values = np.nan_to_num(
-            mean_texture[np.where(clustering >= UNDEFINED_VEG)]
-        )
-        threshold_max = np.percentile(texture_values, params["filter_texture"])
-        logger.debug("threshold_texture_max : %.2f", threshold_max)
-
-        # Clustering
-        data_textures = np.transpose(texture_values)
-        data_textures[data_textures > threshold_max] = threshold_max
-        if params["debug"]:
-            logger.debug(f"K-Means on texture : {len(data_textures)} elements")
-
-        kmeans_texture = KMeans(
-            n_clusters=NB_CLUSTERS,
-            init="k-means++",
-            n_init=5,
-            verbose=0,
-            random_state=712,
-        )
-        pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
-
-        if params["debug"]:
-            logger.debug("Clustering on texture index")
-            logger.debug("Clusters ordered by increasing texture values")
-            logger.debug(f"\n{np.sort(kmeans_texture.cluster_centers_,axis=0)}")
-
-        list_clusters = pd.DataFrame.from_records(
-            kmeans_texture.cluster_centers_, columns=["mean_texture"]
-        )
-        list_clusters_by_texture = list_clusters.sort_values(
-            by="mean_texture", ascending=True
-        ).index
-
-        # Attribute class
-        map_centroid = []
-        if params["texture_mode"] == "debug":
-            # Get all clusters
-            list_clusters_by_texture = list_clusters_by_texture.tolist()
-            for t in range(kmeans_texture.n_clusters):
-                map_centroid.append(list_clusters_by_texture.index(t))
-        else:
-            # Distinction veg class
-            nb_clusters_high_veg = int(kmeans_texture.n_clusters / 3)
-            if params["max_texture_th"]:
-                # Distinction veg class by threshold
-                params["nb_clusters_low_veg"] = int(
-                    list_clusters[
-                        list_clusters["mean_texture'"]
-                        < params["max_texture_th"]
-                    ].count()
-                )
-            if params["nb_clusters_low_veg"] >= 7:
-                nb_clusters_high_veg = (
-                    NB_CLUSTERS - params["nb_clusters_low_veg"]
-                )
-            for t in range(kmeans_texture.n_clusters):
-                if (
-                    t
-                    in list_clusters_by_texture[: params["nb_clusters_low_veg"]]
-                ):
-                    map_centroid.append(LOW_TEXTURE_CODE)
-                elif (
-                    t
-                    in list_clusters_by_texture[
-                        NB_CLUSTERS - nb_clusters_high_veg :
-                    ]
-                ):
-                    map_centroid.append(HIGH_TEXTURE_CODE)
-                else:
-                    map_centroid.append(MIDDLE_TEXTURE_CODE)
-
-        textures = np.zeros(nb_polys)
-        textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(
-            pred_texture, map_centroid
-        )
-
-        # Ex : 10 (undefined) + 3 (textured) -> 13
-        clustering = clustering + textures
-
-    return clustering
-
-
-def classify_veg_indices(kmeans_rad_indices, list_clusters, params):
-    """
-    Assign vegetation class codes to each cluster based on NDVI thresholds or proportions.
-    """
-    list_clusters_by_ndvi = list_clusters.sort_values(
-        by="ndvi", ascending=True
-    ).index
-    map_centroid = []
-    nb_clusters_no_veg = 0
-    nb_clusters_veg = 0
-    if params["min_ndvi_veg"]:
-        # Attribute veg class by threshold
-        for t in range(kmeans_rad_indices.n_clusters):
-            if list_clusters.iloc[t]["ndvi"] > float(params["min_ndvi_veg"]):
-                map_centroid.append(VEG_CODE)
-                nb_clusters_veg += 1
-            elif list_clusters.iloc[t]["ndvi"] < float(
-                params["max_ndvi_noveg"]
-            ):
-                if params["non_veg_clusters"]:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v)
-                else:
-                    map_centroid.append(NO_VEG_CODE)  # 0
-                nb_clusters_no_veg += 1
-            else:
-                map_centroid.append(UNDEFINED_VEG)
-
-    else:
-        # Attribute class by thirds
-        nb_clusters_no_veg = int(kmeans_rad_indices.n_clusters / 3)
-        if params["nb_clusters_veg"] >= 7:
-            nb_clusters_no_veg = NB_CLUSTERS - params["nb_clusters_veg"]
-            nb_clusters_veg = params["nb_clusters_veg"]
-
-        for t in range(kmeans_rad_indices.n_clusters):
-            if t in list_clusters_by_ndvi[:nb_clusters_no_veg]:
-                if params["non_veg_clusters"]:
-                    l_ndvi = list(list_clusters_by_ndvi)
-                    v = l_ndvi.index(t)
-                    map_centroid.append(v)
-                else:
-                    map_centroid.append(NO_VEG_CODE)  # 0
-            elif (
-                t
-                in list_clusters_by_ndvi[
-                    nb_clusters_no_veg : NB_CLUSTERS - params["nb_clusters_veg"]
-                ]
-            ):
-                map_centroid.append(UNDEFINED_VEG)  # 10
-            else:
-                map_centroid.append(VEG_CODE)  # 20
-    return map_centroid, nb_clusters_no_veg, nb_clusters_veg
-
-
-def cluster_on_radiometry(nb_polys, params, stats):
-    """
-    K-means clustering on NDVI and NDWI indices
+    returns [ array of segments, with their cluster index (ordered by NDVI value),
+    list of NDVI centroids values (used by one labeling method) ]
     """
     kmeans_rad_indices = KMeans(
         n_clusters=NB_CLUSTERS,
@@ -363,24 +203,324 @@ def cluster_on_radiometry(nb_polys, params, stats):
         random_state=712,
     )
     pred_veg = kmeans_rad_indices.fit_predict(
-        np.stack((stats[0:nb_polys], stats[nb_polys : 2 * nb_polys]), axis=1)
+        np.stack(
+            (stats[0:nb_segments], stats[nb_segments : 2 * nb_segments]), axis=1
+        )
     )
-    if params["debug"]:
-        logger.debug("Clustering on NDVI/NDWI indices")
-        logger.debug("Clusters ordered by increasing NDVI values (*1000)")
-        logger.debug(f"\n{np.sort(kmeans_rad_indices.cluster_centers_,axis=0)}")
-    list_clusters = pd.DataFrame.from_records(
-        kmeans_rad_indices.cluster_centers_, columns=["ndvi", "ndwi"]
-    )
-    return kmeans_rad_indices, list_clusters, pred_veg
+
+    ndvi_values = [v[0] for v in kmeans_rad_indices.cluster_centers_]
+    sorted_ndvi = np.sort(ndvi_values).tolist()
+
+    sorted_clusters = np.array([sorted_ndvi.index(v) for v in ndvi_values])
+    logger.debug(f"1st clustering : NDVI centroids : {sorted_ndvi}")
+    pred_veg_sorted = apply_map(pred_veg, sorted_clusters)
+
+    return pred_veg_sorted, sorted_ndvi
 
 
-# Finalize #
+def clustering_texture(
+    params: dict, nb_segments: int, stats: np.ndarray, clustering: np.ndarray
+) -> np.ndarray:
+    """
+    Classify segments with a k-means clustering, based on texture value.
+    Values are normalized before k-means step.
+    returns a list of segments with their cluster index (0..nb_clusters),
+    ordered by increasing mean texture value
+    :param dict params: arguments of the algorithm
+    :param int nb_segments: number of segment detected
+    :param np.ndarray stats: sum of each primitive for each segment
+        stats[0:nb_segments] -> mean NDVI
+        stats[nb_segments:2*nb_segments] -> mean NDWI
+        stats[2*nb_segments:] -> mean Texture
+    """
+    mean_texture = stats[2 * nb_segments :]
+    texture_values = np.nan_to_num(
+        mean_texture[np.where(clustering >= UNDEFINED_VEG)]
+    )
+
+    threshold_max = np.percentile(texture_values, params["filter_texture"])
+    data_textures = np.transpose(texture_values)
+    data_textures[data_textures > threshold_max] = threshold_max
+
+    kmeans_texture = KMeans(
+        n_clusters=NB_CLUSTERS,
+        init="k-means++",
+        n_init=5,
+        verbose=0,
+        random_state=712,
+    )
+    pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
+
+    texture_values = [v[0] for v in kmeans_texture.cluster_centers_]
+    sorted_texture = np.sort(texture_values).tolist()
+
+    sorted_clusters = np.array(
+        [sorted_texture.index(v) for v in texture_values]
+    )
+    logger.debug(f"2nd clustering : Texture centroids : {sorted_texture}")
+    textures = np.zeros(nb_segments).astype(np.uint8)
+    textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(
+        pred_texture, sorted_clusters
+    )
+    # textures = [ 0  0  0    8 8 8 7 8 7   1 3 2 3  1 1 .. ]
+    #              (nonveg)  (textured veg)  (smooth veg)
+    return textures, sorted_clusters
+
+
+def frac_veg_from_segments(segments, params: dict):
+    """
+    Estimate number of vegetation and non-vegetation clusters from a target ratio
+    and the repartition of areas in the previous clustering step.
+    Ratio can come from a global LandCover Map (ie : ESA WorldCover)
+
+    To improve computation time, ratio of areas are estimated by counting
+    segments (superpixels) instead of computing exact areas. SLIC segmentation
+    produces quite homogeneous segments so this is quite acceptable.
+    """
+
+    nb_segments = segments.shape[0]
+    # for each index of cluster from 8 (NB_CLUSTERS) to 0, compute ratio of segments over this index
+    ratios_surfaces = [
+        np.where(segments >= i)[0].shape[0] / nb_segments
+        for i in range(NB_CLUSTERS - 1, -1, -1)
+    ]
+
+    if params["labeling_strategy"] == "nearest":
+        takeClosest = lambda num, collection: collection.index(
+            min(collection, key=lambda x: abs(x - num))
+        )
+        index_cluster_veg = takeClosest(params["pct_veg"], ratios_surfaces)
+
+    else:
+        # lists of cluster that overestimate (resp underestimate) the vegetation ratio
+        clusters_over, clusters_under = [], []
+        for x in ratios_surfaces:
+            if x - params["pct_veg"] > 0:
+                clusters_over.append(x)
+            else:
+                clusters_under.append(x)
+
+        if params["labeling_strategy"] == "overestimate":
+            if clusters_over == []:
+                index_cluster_veg = NB_CLUSTERS - 1
+            else:
+                index_cluster_veg = ratios_surfaces.index(clusters_over[0])
+        else:
+            if clusters_under == []:
+                index_cluster_veg = 0
+            else:
+                index_cluster_veg = ratios_surfaces.index(clusters_under[-1])
+
+    ratios_surfaces_non_veg = [
+        np.where(segments <= i)[0].shape[0] / nb_segments
+        for i in range(NB_CLUSTERS)
+    ]
+
+    if params["labeling_strategy"] == "nearest":
+        takeClosest = lambda num, collection: collection.index(
+            min(collection, key=lambda x: abs(x - num))
+        )
+        index_cluster_no_veg = takeClosest(
+            params["pct_non_veg"], ratios_surfaces_non_veg
+        )
+    else:
+        # lists of cluster that overestimate (resp underestimate) the non-vegetation ratio
+        clusters_over, clusters_under = [], []
+        for x in ratios_surfaces_non_veg:
+            if x - params["pct_non_veg"] > 0:
+                clusters_over.append(x)
+            else:
+                clusters_under.append(x)
+
+        if params["labeling_strategy"] == "overestimate":
+            if clusters_over == []:
+                index_cluster_no_veg = NB_CLUSTERS - 1
+            else:
+                index_cluster_no_veg = ratios_surfaces_non_veg.index(
+                    clusters_over[0]
+                )
+        else:
+            if clusters_under == []:
+                index_cluster_no_veg = 0
+            else:
+                index_cluster_no_veg = ratios_surfaces_non_veg.index(
+                    clusters_under[-1]
+                )
+
+    nb_clusters_veg = min(index_cluster_veg + 1, NB_CLUSTERS)
+    nb_clusters_no_veg = min(index_cluster_no_veg + 1, NB_CLUSTERS)
+
+    logger.debug(
+        f"Compute clusters repartition to fit {100*params['pct_veg']}% "
+        f"veg and {100*params['pct_non_veg']}% non veg"
+    )
+    logger.debug(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")
+    logger.debug(
+        f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and "
+        f"{nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})"
+    )
+
+    return nb_clusters_veg, nb_clusters_no_veg
+
+
+def vegetation_labeling_with_LCM(params: dict, segments):
+    """
+    Label the segmentation with regards to the clustering step and to an external
+    Land Cover Map.
+    This methods tries to fix number of vegetation clusters to fit the approximative
+    proportion of vegetated areas thanks to the LCM class
+
+    """
+    nb_clusters_veg, nb_clusters_non_veg = frac_veg_from_segments(
+        segments, params
+    )
+
+    nb_clusters_mix = NB_CLUSTERS - nb_clusters_non_veg - nb_clusters_veg
+
+    map_centroid = []
+    for i in range(NB_CLUSTERS):
+        if i < nb_clusters_non_veg:
+            map_centroid.append(NO_VEG_CODE)
+        elif i < nb_clusters_non_veg + nb_clusters_mix:
+            map_centroid.append(UNDEFINED_VEG)
+        else:
+            map_centroid.append(VEG_CODE)
+
+    return apply_map(segments, map_centroid)
+
+
+def frac_low_high_veg_from_segments(
+    params: dict, segments_texture, segments_vegetation
+):
+    # 1. get number of segments with vegetation
+    nb_segments_veg = np.where(segments_vegetation >= VEG_CODE)[0].shape[0]
+
+    # 2. for each index of cluster from 8 (NB_CLUSTERS) to 0,
+    #    compute ratio of low veg
+    ratios_surfaces = [
+        np.where(
+            segments_texture[np.where(segments_vegetation >= VEG_CODE)] <= i
+        )[0].shape[0]
+        / nb_segments_veg
+        for i in range(NB_CLUSTERS)
+    ]
+
+    if params["labeling_strategy"] == "nearest":
+        # 3a. select index of the nearest cluster, in term of area covered
+        takeClosest = lambda num, collection: collection.index(
+            min(collection, key=lambda x: abs(x - num))
+        )
+        index_cluster = takeClosest(params["pct_low_veg"], ratios_surfaces)
+    else:
+        # lists of cluster that overestimate (resp underestimate) the non-vegetation ratio
+        clusters_over, clusters_under = [], []
+        for x in ratios_surfaces:
+            if x - params["pct_low_veg"] > 0:
+                clusters_over.append(x)
+            else:
+                clusters_under.append(x)
+        if params["labeling_strategy"] == "overestimate":
+            # 3b. select index of cluster that overestimate low veg
+            if clusters_over == []:
+                index_cluster = NB_CLUSTERS - 1
+            else:
+                index_cluster = ratios_surfaces.index(clusters_over[0])
+        else:
+            # 3b. select index of cluster that underestimate low veg
+            if clusters_under == []:
+                index_cluster = 0
+            else:
+                index_cluster = ratios_surfaces.index(clusters_under[-1])
+
+    nb_clusters_low_veg = min(index_cluster + 1, NB_CLUSTERS)
+    nb_clusters_high_veg = NB_CLUSTERS - nb_clusters_low_veg
+
+    logger.debug(
+        f"Compute clusters repartition to fit {100*params['pct_low_veg']}% low veg"
+    )
+    logger.debug(
+        f"{ratios_surfaces=} {nb_clusters_low_veg=} {nb_clusters_high_veg=}"
+    )
+
+    return nb_clusters_low_veg, nb_clusters_high_veg
+
+
+def texture_labeling_with_LCM(
+    params: dict, segments_texture, segments_vegetation
+):
+
+    nb_clusters_low_veg, nb_clusters_high_veg = frac_low_high_veg_from_segments(
+        params, segments_texture, segments_vegetation
+    )
+
+    map_centroid = []
+    for i in range(NB_CLUSTERS):
+        if i < nb_clusters_low_veg:
+            map_centroid.append(LOW_TEXTURE_CODE)
+        else:
+            map_centroid.append(HIGH_TEXTURE_CODE)
+
+    textures = np.zeros_like(segments_vegetation)
+    textures[np.where(segments_vegetation >= UNDEFINED_VEG)] = apply_map(
+        segments_texture[np.where(segments_vegetation >= UNDEFINED_VEG)],
+        map_centroid,
+    )
+
+    return textures
+
+
+def vegetation_labeling_with_rule_of_third(params: dict, segments: np.ndarray):
+    """
+    Label the segmentation with a simple rule of third : first three clusters are NON WATER,
+    then the next three are MIX AREA and the last three ones are VEGETATION
+    User can adjust this balance by fixing number of supposed vegetation cluster
+    """
+    index_max_cluster_non_veg = max(
+        int((NB_CLUSTERS - params["nb_clusters_veg"]) / 2), 1
+    )
+    index_max_cluster_mix = max((NB_CLUSTERS - params["nb_clusters_veg"]), 1)
+    map_centroid = []
+
+    for i in range(NB_CLUSTERS):
+        if i < index_max_cluster_non_veg:
+            map_centroid.append(NO_VEG_CODE)
+        elif i < index_max_cluster_mix:
+            map_centroid.append(UNDEFINED_VEG)
+        else:
+            map_centroid.append(VEG_CODE)
+
+    return apply_map(segments, map_centroid)
+
+
+def texture_labeling_with_rule_of_third(
+    params: dict, clusters_texture: np.ndarray, clusters_veg: np.ndarray
+):
+    """
+    Label the segmentation with a simple rule of third : first three clusters are NON WATER,
+    then the next three are MIX AREA and the last three ones are VEGETATION
+    User can adjust this balance by fixing number of supposed vegetation cluster
+    """
+    # Attribute class by thirds
+    index_max_cluster_low_veg = params["nb_clusters_low_veg"]
+    map_centroid = []
+    for i in range(NB_CLUSTERS):
+        if i < index_max_cluster_low_veg:
+            map_centroid.append(LOW_TEXTURE_CODE)
+        else:
+            map_centroid.append(HIGH_TEXTURE_CODE)
+
+    textures = np.zeros_like(clusters_veg)
+    textures[np.where(clusters_veg >= UNDEFINED_VEG)] = apply_map(
+        clusters_texture[np.where(clusters_veg >= UNDEFINED_VEG)], map_centroid
+    )
+
+    return textures
 
 
 def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     """
-    Finalize mask : for each pixel in input segmentation, return mean NDVI
+    Finalize mask : for each pixel in input segmentation,
+    return class (low / high vegetation, etc.)
 
     :param list input_buffers: [segments, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
@@ -402,14 +542,17 @@ def clean_task(
     input_buffers: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    Post-processing : apply closing on low veg
+    Post-processing : remove small holes/objects, apply binary dilation on low veg
+    and filter with the NDVI of the fist vegetation cluster
 
-    :param list input_buffers: [final_seg, valid_stack]
+    :param list input_buffers: [final_seg, valid_stack, ndvi]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: final mask
     """
     im_classif = input_buffers[0][0]
+    valid_stack = input_buffers[1][0]
+    im_ndvi = input_buffers[2][0]
 
     if params["remove_small_objects"]:
         high_veg_binary = np.where(im_classif > LOW_VEG_CLASS, True, False)
@@ -441,6 +584,22 @@ def clean_task(
         im_classif[
             np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)
         ] = LOW_VEG_CLASS
+
+    # Filter final mask with a NDVI threshold (1st cluster of vegetation)
+    im_classif = np.where(
+        im_classif == LOW_VEG_CLASS,
+        np.where(im_ndvi > params["min_ndvi_veg"], LOW_VEG_CLASS, 0),
+        im_classif,
+    )
+    im_classif = np.where(
+        im_classif > LOW_VEG_CLASS,
+        np.where(
+            im_ndvi > params["min_ndvi_veg"], VEG_CODE + MIDDLE_TEXTURE_CODE, 0
+        ),
+        im_classif,
+    )
+
+    im_classif[np.logical_not(valid_stack)] = NODATA_INT8
 
     return im_classif
 
@@ -500,7 +659,7 @@ def build_stack(args, eoscale_manager):
     return key_ndvi, key_ndwi, key_phr, key_texture, key_valid_stack
 
 
-def closing(args, eoscale_manager, final_seg, key_valid_stack):
+def postprocess(args, eoscale_manager, final_seg, key_valid_stack, key_ndvi):
     """
     Performs morphological closing and other post-processing operations
     (binary dilation, removal of small objects, and holes,...)
@@ -528,7 +687,7 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
             ceil(sqrt(args.remove_small_holes)),
         )
         final_seg = eoexe.n_images_to_m_images_filter(
-            inputs=[final_seg[0], key_valid_stack],
+            inputs=[final_seg[0], key_valid_stack, key_ndvi],
             image_filter=clean_task,
             filter_parameters=vars(args),
             generate_output_profiles=eo_utils.single_uint8_profile,
@@ -541,18 +700,24 @@ def closing(args, eoscale_manager, final_seg, key_valid_stack):
 
 
 def process_stats(
-    args, eoscale_manager, future_seg, key_ndvi, key_ndwi, key_texture, nb_polys
+    args,
+    eoscale_manager,
+    future_seg,
+    key_ndvi,
+    key_ndwi,
+    key_texture,
+    nb_segments,
 ):
     """
     Computes statistics (mean NDVI, NDWI, and texture) for each segmented region.
     Then, the statistics are processed to generate data for clustering or classification.
     """
-    params_stats = {"nb_lab": nb_polys}
+    params_stats = {"nb_lab": nb_segments}
     stats = eoexe.n_images_to_m_scalars(
         inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
         image_filter=compute_stats_image,
         filter_parameters=params_stats,
-        nb_output_scalars=nb_polys,
+        nb_output_scalars=nb_segments,
         context_manager=eoscale_manager,
         concatenate_filter=stats_concatenate,
         multiproc_context=args.multiproc_context,
@@ -563,12 +728,13 @@ def process_stats(
     # Once the sum of each primitive is computed,
     # we compute the mean by dividing by the size of each segment
     np.seterr(divide="ignore", invalid="ignore")
-    stats[0][:nb_polys] = stats[0][:nb_polys] / stats[1][:nb_polys]
-    stats[0][nb_polys : 2 * nb_polys] = (
-        stats[0][nb_polys : 2 * nb_polys] / stats[1][:nb_polys]
+
+    stats[0][:nb_segments] = stats[0][:nb_segments] / stats[1][:nb_segments]
+    stats[0][nb_segments : 2 * nb_segments] = (
+        stats[0][nb_segments : 2 * nb_segments] / stats[1][:nb_segments]
     )
-    stats[0][2 * nb_polys : 3 * nb_polys] = (
-        stats[0][2 * nb_polys : 3 * nb_polys] / stats[1][:nb_polys]
+    stats[0][2 * nb_segments : 3 * nb_segments] = (
+        stats[0][2 * nb_segments : 3 * nb_segments] / stats[1][:nb_segments]
     )
     # Replace NaN by 0. After clustering, NO_DATA values will be masked
     stats[0] = np.where(np.isnan(stats[0]), 0, stats[0])
@@ -727,6 +893,40 @@ def getarguments():
             "(overloads nb-clusters choice)"
         ),
     )
+    group3.add_argument(
+        "-autolabel",
+        action="store_true",
+        help="Automatic labeling method that will fit supposed ratios of vegetation "
+        "(non-vegetation) areas (as observed in a global LCM)",
+    )
+    group3.add_argument(
+        "-labeling_strategy",
+        choices=["nearest", "overestimate", "underestimate"],
+        dest="labeling_strategy",
+        default="nearest",
+        help="In case of automatic labeling, choose the cluster that gives the nearest ratio,"
+        " or that overestimage a little bit vegetation(resp underestimate)",
+    )
+    group3.add_argument(
+        "-pct_veg",
+        type=float,
+        help="Pourcentage of vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_low_veg",
+        type=float,
+        help="Pourcentage of low vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_high_veg",
+        type=float,
+        help="Pourcentage of high vegetation pixels in the global land cover map",
+    )
+    group3.add_argument(
+        "-pct_non_veg",
+        type=float,
+        help="Pourcentage of non vegetation pixels in the global land cover map",
+    )
 
     group4 = parser.add_argument_group(description="*** POST PROCESSING ***")
     group4.add_argument(
@@ -797,6 +997,12 @@ def slurp_vegetationmask(
     max_ndvi_noveg: int,
     non_veg_clusters: bool,
     nb_clusters_low_veg: int,
+    autolabel: bool,
+    labeling_strategy: str,
+    pct_veg: float,
+    pct_low_veg: float,
+    pct_high_veg: float,
+    pct_non_veg: float,
     max_texture_th: int,
     binary_dilation: int,
     remove_small_objects: int,
@@ -863,10 +1069,10 @@ def slurp_vegetationmask(
             # Stats #
 
             # Recover number total of segments
-            nb_polys = np.max(eoscale_manager.get_array(future_seg[0])[0])
+            nb_segments = np.max(eoscale_manager.get_array(future_seg[0])[0])
             if args.debug:
                 logger.debug(
-                    f"Number of different segments detected : {nb_polys}"
+                    f"Number of different segments detected : {nb_segments}"
                 )
 
             # Stats calculation
@@ -877,18 +1083,49 @@ def slurp_vegetationmask(
                 key_ndvi,
                 key_ndwi,
                 key_texture,
-                nb_polys,
+                nb_segments,
             )
 
             time_stats = time.time()
 
             # Clustering #
 
-            clusters = apply_clustering(vars(args), nb_polys, stats[0])
+            pred_veg, sorted_ndvi_centroids = clustering_vegetation(
+                vars(args), nb_segments, stats[0]
+            )
+            logger.debug(
+                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
+            )
+            if args.autolabel:
+                clusters_veg = vegetation_labeling_with_LCM(
+                    vars(args), pred_veg
+                )
+            else:
+                clusters_veg = vegetation_labeling_with_rule_of_third(
+                    vars(args), pred_veg
+                )
+
+            pred_texture, sorted_texture_centroids = clustering_texture(
+                vars(args), nb_segments, stats[0], clusters_veg
+            )
+            if args.autolabel:
+                clusters_low_high_veg = texture_labeling_with_LCM(
+                    vars(args), pred_texture, clusters_veg
+                )
+            else:
+                clusters_low_high_veg = texture_labeling_with_rule_of_third(
+                    vars(args), pred_texture, clusters_veg
+                )
+
+            # Sum the two clusterings
+            #     0    10   20 +
+            #  0/ 1         3
+            # --> 0 / 11, 13 / 21, 23
+            clusters = clusters_veg + clusters_low_high_veg
+
             time_cluster = time.time()
 
             # Finalize mask #
-
             final_seg = eoexe.n_images_to_m_images_filter(
                 inputs=[future_seg[0], key_valid_stack],
                 image_filter=finalize_task,
@@ -897,10 +1134,11 @@ def slurp_vegetationmask(
                 stable_margin=0,
                 context_manager=eoscale_manager,
                 multiproc_context=args.multiproc_context,
-                filter_desc="Finalize processing (Cython)...",
+                filter_desc="Finalize processing...",
             )
 
             if args.save_mode == "debug":
+                # Save intermediate masks
                 eoscale_manager.write(
                     key=final_seg[0],
                     img_path=args.vegetationmask.replace(
@@ -908,12 +1146,50 @@ def slurp_vegetationmask(
                     ),
                 )
 
+                # Save vegetation clusters
+                vegetation_clustering = eoexe.n_images_to_m_images_filter(
+                    inputs=[future_seg[0], key_valid_stack],
+                    image_filter=finalize_task,
+                    filter_parameters={"data": pred_veg},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    stable_margin=0,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Finalize processing...",
+                )
+                eoscale_manager.write(
+                    key=vegetation_clustering[0],
+                    img_path=args.vegetationmask.replace(
+                        ".tif", "_vegclusters.tif"
+                    ),
+                )
+                # Save texture clusters
+                texture_clustering = eoexe.n_images_to_m_images_filter(
+                    inputs=[future_seg[0], key_valid_stack],
+                    image_filter=finalize_task,
+                    filter_parameters={"data": pred_texture},
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    stable_margin=0,
+                    context_manager=eoscale_manager,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Finalize processing...",
+                )
+                eoscale_manager.write(
+                    key=texture_clustering[0],
+                    img_path=args.vegetationmask.replace(
+                        ".tif", "_textureclusters.tif"
+                    ),
+                )
+
             time_final = time.time()
 
-            # Closing #
-
-            final_seg = closing(
-                args, eoscale_manager, final_seg, key_valid_stack
+            # Post-process : delete small holes / objects, dilate low veg areas a little bit
+            # and filter output mask with the NDVI of the fist vegetation cluster
+            vars(args)["min_ndvi_veg"] = sorted_ndvi_centroids[
+                -args.nb_clusters_veg
+            ]
+            final_seg = postprocess(
+                args, eoscale_manager, final_seg, key_valid_stack, key_ndvi
             )
             time_closing = time.time()
 
