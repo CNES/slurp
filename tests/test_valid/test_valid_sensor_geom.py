@@ -26,9 +26,9 @@ import sys
 
 import pytest
 
+import slurp.prepare.prepare
 from tests.utils import get_output_path
 from tests.validation import validate_mask
-import slurp.prepare.prepare
 
 
 # Input images in sensor geometry
@@ -42,7 +42,7 @@ def input_files(input_images):
     DTMs = ["/work/datalake/static_aux/MNT/SRTM_30_hgt/N43E001.hgt"]
 
     # Create correct object for parametrize loop
-    return list(zip(input_images, DTMs))
+    return list(zip(input_images, DTMs, strict=False))
 
 
 # Images to validate
@@ -74,7 +74,8 @@ def prepare_sensor_geom(
     command = (
         f"prepare.py {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -pekel {pekel} "
-        f"-extracted_pekel {extracted_pekel} -extracted_wsf {extracted_wsf} -wsf {wsf} -sensor_mode True -dtm {dtm} "
+        f"-extracted_pekel {extracted_pekel} -extracted_wsf {extracted_wsf} -wsf {wsf} "
+        f"-sensor_mode True -dtm {dtm} "
         f"--no_analyse_glcm"
     ).split()
     sys.argv = command

@@ -19,7 +19,8 @@
 # limitations under the License.
 
 """
-Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation
+Use a global land cover map to calculate the better number of vegetation cluster
+to use for mask computation
 """
 
 import logging
@@ -34,7 +35,8 @@ logger = logging.getLogger("slurp")
 
 def get_advices(veg, low_veg, high_veg, nb_total):
     """
-    Returns adviced number of clusters for vegetation and high vegetation regarding ratio of these classes in the image
+    Returns adviced number of clusters for vegetation and high vegetation
+    regarding ratio of these classes in the image
 
     :param int veg: number of pixels corresponding to vegetation
     :param int low_veg: number of pixels corresponding to low vegetation
@@ -90,7 +92,8 @@ def compute_stats(
 
     :param str im: path to the input VHR image
     :param str map_lc: path to the land cover map
-    :param bool cropped: whether the land cover map only contains the ROI of the input image or is larger
+    :param bool cropped: whether the land cover map only contains the ROI of
+                         the input image or is larger
     :returns: number of clusters for vegetation and low vegetation,
               + proportion of pixels of  veg, low_veg, high_veg, non_veg
     """
@@ -98,7 +101,8 @@ def compute_stats(
         # get ROI before computing stats
         if sensor_mode:
             logger.error(
-                "ERROR : GLCM analysis not implemented for sensor mode yet. Returns default clustering values"
+                "ERROR : GLCM analysis not implemented for sensor mode yet. "
+                "Returns default clustering values"
             )
             return 3, 3
         data_map = geometry.get_extract_roi(map_lc, im)
@@ -123,7 +127,7 @@ def compute_stats(
     non_vegetation_classes = [70, 80]
     logger.debug("Count nb of pixels per class")
 
-    for v, c in zip(unique, counts):
+    for v, c in zip(unique, counts, strict=False):
         logger.debug(f"{v} : {c}")
         if v in vegetation_classes:
             veg += c

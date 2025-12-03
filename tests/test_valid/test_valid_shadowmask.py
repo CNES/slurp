@@ -20,7 +20,6 @@
 
 """Tests for shadowmask generation."""
 
-import glob
 import os
 import sys
 
@@ -79,11 +78,10 @@ def compute_shadowmask(
 def test_prepare_computation_and_validation_shadowmask(
     main_config, output_dir, ref_dir, input_files
 ):
-    """Tests the full workflow of preparation, computation, and validation of shadow mask for each input file."""
+    """Tests the full workflow of preparation, computation,
+    and validation of shadow mask for each input file."""
     for input_file in input_files:
-        valid_stack = prepare_shadowmask(
-            main_config, output_dir, input_file, 1
-        )
+        valid_stack = prepare_shadowmask(main_config, output_dir, input_file, 1)
         validate_mask(valid_stack, "Prepare", ref_dir)
         output_image = compute_shadowmask(
             main_config, output_dir, ref_dir, input_file, 1, valid_stack

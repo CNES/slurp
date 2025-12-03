@@ -87,7 +87,10 @@ def getarguments():
         "-sensor_mode",
         type=bool,
         default=False,
-        help="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)",
+        help=(
+            "True if the input image is in raw (sensor) geometry, "
+            "False if it is georeferenced (orthorectified)"
+        ),
     )
     group1.add_argument(
         "-dtm", help="Digital Terrain Model, used only in sensor mode"
@@ -153,12 +156,16 @@ def getarguments():
         help="Radius for texture (std convolution) computation",
     )
 
-    # Specific case where argparse (python 3.8). https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    # Specific case where argparse (python 3.8).
+    # https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
     group5.add_argument(
         "--analyse_glcm",
         dest="analyse_glcm",
         action="store_true",
-        help="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation",
+        help=(
+            "Use a global land cover map to calculate the optimal number of vegetation "
+            "clusters to use for mask computation"
+        ),
     )
     group5.add_argument(
         "--no_analyse_glcm",
@@ -580,9 +587,12 @@ def valid_stack_process(args, eoscale_manager, key_vhr, profile):
 def sensor_mode_process(args):
     """
     Processes the VHR image based on the specified mode. If the mode is not "vegetation",
-    it performs extractions for Pekel, Hand, and Water Body Mask (WBM). If the mode is set to "all",
-    it additionally extracts the WSF (World Settlement Footprint) data. The extraction is done using
-    the given grid and region-of-interest (ROI) computed from the image, DTM (Digital Terrain Model), and geoid data.
+    it performs extractions for Pekel, Hand, and Water Body Mask (WBM).
+    If the mode is set to "all",
+    it additionally extracts the WSF (World Settlement Footprint) data.
+    The extraction is done using
+    the given grid and region-of-interest (ROI) computed from the image,
+    DTM (Digital Terrain Model), and geoid data.
     """
     grid_sensor, grid_geo, all_coords, roi = (
         geometry.compute_interpolation_grid(
@@ -614,7 +624,6 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
         args (argparse.Namespace): args_dict instancied in Namespace object.
     """
 
-    print(f"DBG> before update_and_save {args=}")
     with open(args.main_config, "r", encoding="utf8") as json_file:
         final_used_config = json.load(json_file)
         if not isinstance(args_dict, dict):
@@ -683,7 +692,8 @@ def slurp_prepare(
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
-        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        # If the parameter from the CLI is not None,
+        # we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 

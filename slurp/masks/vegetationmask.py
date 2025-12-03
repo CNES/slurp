@@ -31,7 +31,6 @@ from math import ceil, sqrt
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
 import numpy as np
-import pandas as pd
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
 
@@ -60,7 +59,7 @@ UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 
 
 def apply_map(pred, map_centroids):
-    return np.array(list(map(lambda n: map_centroids[n], pred)))
+    return np.array([map_centroids[n] for n in pred])
 
 
 # Segmentation #
@@ -104,7 +103,8 @@ def segmentation_task(
     :returns: segments
     """
     # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
-    # Warning : input_buffers[0] : the mask is not applied ! But we only use NDVI mode (see compute_segmentation)
+    # Warning : input_buffers[0] : the mask is not applied !
+    # But we only use NDVI mode (see compute_segmentation)
     segments = compute_segmentation(params, input_buffers[0], input_buffers[1])
 
     # minimum segment is 1, attribute 0 to no_data pixel
@@ -183,7 +183,8 @@ def clustering_vegetation(
 ) -> np.ndarray:
     """
     Classify segments with a k-means clustering, based on NDVI/NDWI values
-    returns a list of segments with their cluster index (0..nb_clusters), ordered by increasing mean NDVI value
+    returns a list of segments with their cluster index (0..nb_clusters),
+    ordered by increasing mean NDVI value
     :param dict params: arguments of the algorithm
     :param int nb_segments: number of segment detected
     :param np.ndarray stats: sum of each primitive for each segment
@@ -221,8 +222,10 @@ def clustering_texture(
     params: dict, nb_segments: int, stats: np.ndarray, clustering: np.ndarray
 ) -> np.ndarray:
     """
-    Classify segments with a k-means clustering, based on texture value. Values are normalized before k-means step.
-    returns a list of segments with their cluster index (0..nb_clusters), ordered by increasing mean texture value
+    Classify segments with a k-means clustering, based on texture value.
+    Values are normalized before k-means step.
+    returns a list of segments with their cluster index (0..nb_clusters),
+    ordered by increasing mean texture value
     :param dict params: arguments of the algorithm
     :param int nb_segments: number of segment detected
     :param np.ndarray stats: sum of each primitive for each segment
@@ -266,12 +269,13 @@ def clustering_texture(
 
 def frac_veg_from_segments(segments, params: dict):
     """
-    Estimate number of vegetation and non-vegetation clusters from a target ratio and the repartition of
-    areas in the previous clustering step.
+    Estimate number of vegetation and non-vegetation clusters from a target ratio
+    and the repartition of areas in the previous clustering step.
     Ratio can come from a global LandCover Map (ie : ESA WorldCover)
-    To improve computation time, ratio of areas are estimated by counting segments (superpixels) instead
-    of computing exact areas. SLIC segmentation produces quite homogeneous segments so this is quite acceptable.
 
+    To improve computation time, ratio of areas are estimated by counting
+    segments (superpixels) instead of computing exact areas. SLIC segmentation
+    produces quite homogeneous segments so this is quite acceptable.
     """
 
     nb_segments = segments.shape[0]
@@ -347,11 +351,13 @@ def frac_veg_from_segments(segments, params: dict):
     nb_clusters_no_veg = min(index_cluster_no_veg + 1, NB_CLUSTERS)
 
     logger.debug(
-        f"Compute clusters repartition to fit {100*params['pct_veg']}% veg and {100*params['pct_non_veg']}% non veg"
+        f"Compute clusters repartition to fit {100*params['pct_veg']}% "
+        f"veg and {100*params['pct_non_veg']}% non veg"
     )
     logger.debug(f"{ratios_surfaces=}\n{ratios_surfaces_non_veg=}")
     logger.debug(
-        f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and {nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})"
+        f"{nb_clusters_veg=} ({ratios_surfaces[index_cluster_veg]=}) and "
+        f"{nb_clusters_no_veg=} ({ratios_surfaces_non_veg[index_cluster_no_veg]})"
     )
 
     return nb_clusters_veg, nb_clusters_no_veg
@@ -469,14 +475,10 @@ def vegetation_labeling_with_rule_of_third(params: dict, segments: np.ndarray):
     then the next three are MIX AREA and the last three ones are VEGETATION
     User can adjust this balance by fixing number of supposed vegetation cluster
     """
-    # Attribute class by thirds
-    nb_clusters_no_veg = NB_CLUSTERS / 3
-
     index_max_cluster_non_veg = max(
         int((NB_CLUSTERS - params["nb_clusters_veg"]) / 2), 1
     )
     index_max_cluster_mix = max((NB_CLUSTERS - params["nb_clusters_veg"]), 1)
-    index_max_cluster_veg = NB_CLUSTERS
     map_centroid = []
 
     for i in range(NB_CLUSTERS):
@@ -660,7 +662,8 @@ def build_stack(args, eoscale_manager):
 def postprocess(args, eoscale_manager, final_seg, key_valid_stack, key_ndvi):
     """
     Performs morphological closing and other post-processing operations
-    (binary dilation, removal of small objects, and holes,...) in the segmented image if the texture mode is enabled.
+    (binary dilation, removal of small objects, and holes,...)
+    in the segmented image if the texture mode is enabled.
 
     Parameters
     ----------
@@ -722,7 +725,8 @@ def process_stats(
     )
     # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
     # stats[1] : nb pixels by segment   [ counter  ]
-    # Once the sum of each primitive is computed, we compute the mean by dividing by the size of each segment
+    # Once the sum of each primitive is computed,
+    # we compute the mean by dividing by the size of each segment
     np.seterr(divide="ignore", invalid="ignore")
 
     stats[0][:nb_segments] = stats[0][:nb_segments] / stats[1][:nb_segments]
@@ -858,12 +862,18 @@ def getarguments():
     group3.add_argument(
         "-min_ndvi_veg",
         type=int,
-        help="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)",
+        help=(
+            "Minimal mean NDVI to consider a cluster as vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
     group3.add_argument(
         "-max_ndvi_noveg",
         type=int,
-        help="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)",
+        help=(
+            "Maximal mean NDVI to consider a cluster as non-vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
     group3.add_argument(
         "-non_veg_clusters",
@@ -878,19 +888,24 @@ def getarguments():
     group3.add_argument(
         "-max_texture_th",
         type=int,
-        help="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)",
+        help=(
+            "Maximal texture value to consider a cluster as low vegetation "
+            "(overloads nb-clusters choice)"
+        ),
     )
     group3.add_argument(
         "-autolabel",
         action="store_true",
-        help="Automatic labeling method that will fit supposed ratios of vegetation (non-vegetation) areas (as observed in a global LCM)",
+        help="Automatic labeling method that will fit supposed ratios of vegetation "
+        "(non-vegetation) areas (as observed in a global LCM)",
     )
     group3.add_argument(
         "-labeling_strategy",
         choices=["nearest", "overestimate", "underestimate"],
         dest="labeling_strategy",
         default="nearest",
-        help="In case of automatic labeling, choose the cluster that gives the nearest ratio, or that overestimage a little bit vegetation(resp underestimate)",
+        help="In case of automatic labeling, choose the cluster that gives the nearest ratio,"
+        " or that overestimage a little bit vegetation(resp underestimate)",
     )
     group3.add_argument(
         "-pct_veg",

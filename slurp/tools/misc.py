@@ -21,13 +21,14 @@
 
 """Brings together miscellaneous display functions"""
 import linecache
-import os
 import logging
+import os
 import tracemalloc
 
 import psutil
 
 logger = logging.getLogger("slurp")
+
 
 def display_top(snapshot, key_type="lineno", limit=10):
     """Print a snapshot of momentary used memory"""
@@ -62,4 +63,6 @@ def display_top(snapshot, key_type="lineno", limit=10):
 
 def display_mem(step):
     mem_used = psutil.Process().memory_info().rss / (1024 * 1024)
-    logger.info(">>>" + str(step) + "\t >>> Mem used : \t" + str(mem_used) + " Mb")
+    logger.info(
+        ">>>" + str(step) + "\t >>> Mem used : \t" + str(mem_used) + " Mb"
+    )

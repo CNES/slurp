@@ -18,7 +18,10 @@ class Resources(BaseModel):
     )
     n_jobs: int = Field(
         ...,
-        description="Nb of parallel jobs for Random Forest (1 is recommanded : use n_workers to optimize parallel computing)",
+        description=(
+            "Nb of parallel jobs for Random Forest "
+            "(1 recommended — use n_workers for parallel computing)"
+        ),
     )
     save_mode: str = Field(
         ..., description="Save all files (debug) or only output mask (none)"
@@ -34,7 +37,9 @@ class Prepare(BaseModel):
     )
     pekel_method: str = Field(
         ...,
-        description="Method for Pekel recovery : 'all' for global file and 'month' for monthly recovery",
+        description=(
+            "Pekel recovery method: 'all' for global file, 'month' for monthly recovery"
+        ),
     )
     pekel: Optional[str] = Field(
         ..., description="Path of the global Pekel (Global Surface Water) file"
@@ -45,7 +50,10 @@ class Prepare(BaseModel):
     )
     pekel_obs: Optional[str] = Field(
         None,
-        description="Month of the desired Pekel (Global Surface Water) file (pekel_method = month)",
+        description=(
+            "Month of the desired Pekel GSW file "
+            "(used when pekel_method = 'month')"
+        ),
     )
     hand: Optional[str] = Field(
         ...,
@@ -69,7 +77,10 @@ class Prepare(BaseModel):
     )
     analyse_glcm: bool = Field(
         ...,
-        description="Use a global land cover map to calculate the better number of vegetation cluster to use for mask computation",
+        description=(
+            "Use a global land cover map to estimate the best number of "
+            "vegetation clusters for mask computation"
+        ),
     )
     land_cover_map: str = Field(
         ...,
@@ -130,7 +141,10 @@ class Urban(BaseModel):
     )
     vegmask_min_value: Optional[int] = Field(
         default=None,
-        description="Vegetation min value for vegetated areas : all pixels with lower value will be predicted",
+        description=(
+            "Vegetation minimum value: pixels below this value will be "
+            "classified as vegetated"
+        ),
     )
     veg_binary_dilation: int = Field(
         ...,
@@ -161,7 +175,10 @@ class Urban(BaseModel):
 class Vegetation(BaseModel):
     texture_mode: str = Field(
         ...,
-        description="Labelize vegetation with (yes) or without (no) distinction low/high, or get all vegetation clusters without distinction low/high (debug)",
+        description=(
+            "Label vegetation with or without low/high distinction "
+            "('yes', 'no', or 'debug' for all clusters)"
+        ),
     )
     filter_texture: int = Field(
         ..., description="Percentile for texture (between 1 and 99)"
@@ -177,15 +194,24 @@ class Vegetation(BaseModel):
     )
     min_ndvi_veg: Optional[float] = Field(
         None,
-        description="Minimal mean NDVI value to consider a cluster as vegetation (overload nb clusters choice)",
+        description=(
+            "Minimal mean NDVI to consider a cluster as vegetation "
+            "(overrides nb-clusters choice)"
+        ),
     )
     max_ndvi_noveg: Optional[float] = Field(
         None,
-        description="Maximal mean NDVI value to consider a cluster as non-vegetation (overload nb clusters choice)",
+        description=(
+            "Maximal mean NDVI to consider a cluster as non-vegetation "
+            "(overrides nb-clusters choice)"
+        ),
     )
     non_veg_clusters: Optional[List[int]] = Field(
         None,
-        description="Labelize each 'non vegetation cluster' as 0, 1, 2 (..) instead of single label (0)",
+        description=(
+            "Label each 'non-vegetation cluster' as 0, 1, 2, etc., "
+            "instead of a single label (0)"
+        ),
     )
     nb_clusters_low_veg: int = Field(
         ...,
@@ -193,7 +219,10 @@ class Vegetation(BaseModel):
     )
     max_texture_th: Optional[float] = Field(
         None,
-        description="Maximal texture value to consider a cluster as low vegetation (overload nb clusters choice)",
+        description=(
+            "Maximal texture value to consider a cluster as low vegetation "
+            "(overrides nb-clusters choice)"
+        ),
     )
     pct_veg: float = Field(
         ...,
@@ -230,7 +259,10 @@ class Water(BaseModel):
     )
     simple_ndwi_threshold: bool = Field(
         ...,
-        description="Compute water mask as a simple NDWI threshold - useful in arid places where no water is known by Peckel",
+        description=(
+            "Compute water mask using a simple NDWI threshold "
+            "- useful in arid areas with no water known from Pekel"
+        ),
     )
     ndwi_threshold: float = Field(
         ..., description="Threshold used when Pekel is empty in the area"
@@ -254,7 +286,10 @@ class Water(BaseModel):
     )
     smart_area_pct: int = Field(
         ...,
-        description="For smart method, importance of area for selecting number of samples in each water surface",
+        description=(
+            "For smart method, weight of area when selecting the number of samples "
+            "for each water surface"
+        ),
     )
     smart_minimum: int = Field(
         ...,
@@ -262,7 +297,10 @@ class Water(BaseModel):
     )
     grid_spacing: int = Field(
         ...,
-        description="For grid method, select samples on a regular grid (40 pixels seems to be a good value)",
+        description=(
+            "For grid method, select samples on a regular grid "
+            "(40 pixels is a recommended value)"
+        ),
     )
     max_depth: int = Field(..., description="Max depth of trees")
     nb_estimators: int = Field(
@@ -270,11 +308,17 @@ class Water(BaseModel):
     )
     no_pekel_filter: bool = Field(
         ...,
-        description="Deactivate postprocess with pekel which only keeps surfaces already known by pekel",
+        description=(
+            "Deactivate Pekel postprocessing, which keeps only surfaces already "
+            "known by Pekel"
+        ),
     )
     hand_filter: bool = Field(
         ...,
-        description="Postprocess with Hand (set to 0 when hand > thresh), incompatible with hand_strict",
+        description=(
+            "Postprocess with Hand (set to 0 when hand > threshold), "
+            "incompatible with hand_strict"
+        ),
     )
     value_classif: int = Field(
         ..., description="Output classification value (default is 1)"
@@ -295,11 +339,16 @@ class Stack(BaseModel):
     )
     bonus_gt: int = Field(
         ...,
-        description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)",
+        description=(
+            "Bonus for pixels covered by GT in the watershed regularization step "
+            "(e.g., +30 to improve discrimination between buildings and background)"
+        ),
     )
     malus_shadow: int = Field(
         ...,
-        description="Value of the malus for pixels in shadow, in the watershed regularization step",
+        description=(
+            "Malus value for pixels in shadow during the watershed regularization step"
+        ),
     )
     value_classif_low_veg: Optional[int] = Field(
         default=1, description="Output classification value for low vegetation"
@@ -343,7 +392,10 @@ class Stack(BaseModel):
     )
     categorized_watermask: Optional[bool] = Field(
         default=False,
-        description="If true, stack_mask will infer water body category (lake, river, sea, unknown) from a general water body mask",
+        description=(
+            "If true, stack_mask will infer water body category "
+            "(lake, river, sea, unknown) from a general water body mask"
+        ),
     )
     minimal_size_water_area: Optional[int] = Field(
         default=10000, description="Minimal area (in pixels) of water bodies"
@@ -353,19 +405,34 @@ class Stack(BaseModel):
 class Masks(BaseModel):
     watermask: Optional[str] = Field(
         ...,
-        description="For watermask computation: Output classification filename. For stackmask: Water mask to stack. Otherwise, if given, output mask will exclude water areas",
+        description=(
+            "For watermask computation: output classification filename. "
+            "For stackmask: water mask to stack. Otherwise, output mask will "
+            "exclude water areas if given"
+        ),
     )
     urbanmask: Optional[str] = Field(
         ...,
-        description="For urbanmask computation: Output classification filename. For stackmask: Vegetation mask to stack.",
+        description=(
+            "For urbanmask computation: output classification filename. "
+            "For stackmask: vegetation mask to stack."
+        ),
     )
     vegetationmask: Optional[str] = Field(
         ...,
-        description="For vegetationmask computation : Output classification filename. For stackmask: Vegetation mask to stack. Otherwise, if given, output mask will exclude vegetation areas",
+        description=(
+            "For vegetationmask computation: output classification filename. "
+            "For stackmask: vegetation mask to stack. Otherwise, output mask will "
+            "exclude vegetation areas if given"
+        ),
     )
     shadowmask: Optional[str] = Field(
         ...,
-        description="For shadowmask computation : Output classification filename. For stackmask: Shadow mask to stack. Otherwise, if given, big shadow areas will be marked as background",
+        description=(
+            "For shadowmask computation: output classification filename. "
+            "For stackmask: shadow mask to stack. Otherwise, large shadow areas "
+            "will be marked as background if given"
+        ),
     )
     stackmask: Optional[str] = Field(
         ..., description="Output classification filename"
@@ -408,7 +475,10 @@ class Input(BaseModel):
     )
     sensor_mode: bool = Field(
         ...,
-        description="True if input image is in its raw (sensor) geometry, False if input image is georeferenced (orthorectification)",
+        description=(
+            "True if input image is in raw (sensor) geometry, "
+            "False if it is georeferenced (orthorectified)"
+        ),
     )
 
 

@@ -44,7 +44,10 @@ def test_absolute_threshold(
     main_config, features_test_img, output_dir, ref_dir
 ):
     """Tests the shadow mask computation with absolute thresholding enabled."""
-    command = f"{write_command_compute_shadowmask(1, main_config, features_test_img, output_dir, ref_dir)} -absolute_threshold 10.0".split()
+    cmd = write_command_compute_shadowmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -absolute_threshold 10.0".split()
     sys.argv = command
     slurp.masks.shadowmask.main()
 
@@ -72,7 +75,10 @@ def test_percentile(
     """Tests the shadow mask computation with different percentile values.
     The percentile value is used to cut histogram and estimate shadow threshold
     """
-    command = f"{write_command_compute_shadowmask(1, main_config, features_test_img, output_dir, ref_dir)} -percentile {percentile}".split()
+    cmd = write_command_compute_shadowmask(
+        1, main_config, features_test_img, output_dir, ref_dir
+    )
+    command = f"{cmd} -percentile {percentile}".split()
     sys.argv = command
     slurp.masks.shadowmask.main()
 

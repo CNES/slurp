@@ -20,7 +20,6 @@
 
 """Tests for vegetationmask generation."""
 
-import glob
 import os
 import sys
 
@@ -47,11 +46,13 @@ def prepare_vegetationmask(file, main_config, output_dir, nb_workers):
 
     print(
         f"slurp_prepare {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} --analyse_glcm"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi}"
+        f" -file_texture {texture} --analyse_glcm"
     )
     command = (
         f"prepare.py {pytest.main_config} -file_vhr {file} -n_workers {nb_workers} "
-        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} -log_f --analyse_glcm"
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} "
+        f"-file_texture {texture} -log_f --analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()
@@ -96,8 +97,10 @@ def compute_vegetationmask(
         texture = get_aux_path(file, "texture", ref_dir)
 
     command = (
-        f"vegetationmask.py out/effective_used_config.json -file_vhr {file} -n_workers {nb_workers} "
-        f"-vegetationmask {output_image} -valid {valid_stack} -ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
+        f"vegetationmask.py out/effective_used_config.json "
+        f"-file_vhr {file} -n_workers {nb_workers} "
+        f"-vegetationmask {output_image} -valid {valid_stack} "
+        f"-ndvi {ndvi} -ndwi {ndwi} -texture {texture} -log_f"
     ).split()
     sys.argv = command
     slurp.masks.vegetationmask.main()
@@ -112,7 +115,8 @@ def compute_vegetationmask(
 def test_prepare_computation_and_validation_vegetationmask(
     input_files, main_config, output_dir, ref_dir
 ):
-    """Tests the full workflow of preparation, computation, and validation of vegetation mask for each input file."""
+    """Tests the full workflow of preparation, computation, and validation of
+    vegetation mask for each input file."""
     for input_file in input_files:
         valid_stack, ndvi, ndwi, texture = prepare_vegetationmask(
             input_file, main_config, output_dir, 1

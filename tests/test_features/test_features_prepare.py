@@ -9,10 +9,9 @@
 
 import json
 import os
-import sys
-import shutil
-import subprocess
 import random
+import shutil
+import sys
 
 import pytest
 
@@ -33,7 +32,10 @@ def write_command_compute_prepare(
     ndwi = get_output_path(features_test_img, "ndwi", output_dir)
     texture = get_output_path(features_test_img, "texture", output_dir)
 
-    return f"prepare.py {main_config} -file_vhr {features_test_img} -n_workers {nb_workers} -valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
+    return (
+        f"prepare.py {main_config} -file_vhr {features_test_img} -n_workers {nb_workers} "
+        f"-valid {valid_stack} -file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture} "
+    )
 
 
 @pytest.mark.features
@@ -41,13 +43,18 @@ def test_absolute_analyse_glcm(main_config, features_test_img, output_dir):
     """Tests the prepare module with glcm analysis enabled
     glcm: Use a global land cover map to calculate the better number of
     vegetation cluster to use for mask computation"""
-    command = f"{write_command_compute_prepare(1, main_config, features_test_img, output_dir)}--analyse_glcm".split()
+    cmd = write_command_compute_prepare(
+        1, main_config, features_test_img, output_dir
+    )
+    command = f"{cmd} --analyse_glcm".split()
     sys.argv = command
     slurp.prepare.prepare.main()
 
 
 @pytest.mark.ci
-def test_absolute_analyse_glcm_ci(main_config, features_test_img, valid_stack, output_dir):
+def test_absolute_analyse_glcm_ci(
+    main_config, features_test_img, valid_stack, output_dir
+):
     """Run the test_absolute_analyse_glcm with a specified valid_stack (for GithubCI)."""
     command = (
         write_command_compute_prepare(
@@ -68,7 +75,9 @@ def test_prepare_update_config(main_config, features_test_img, output_dir):
     possible_size = [128, 256, 512, 1024, 2048, 4096, 8192]
     i = random.randint(0, len(possible_size) - 1)
     command = (
-        write_command_compute_prepare(1, main_config, features_test_img, output_dir)
+        write_command_compute_prepare(
+            1, main_config, features_test_img, output_dir
+        )
         + "-tile_max_size "
         + str(possible_size[i])
     )

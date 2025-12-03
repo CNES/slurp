@@ -30,24 +30,20 @@ Final mask values
 import argparse
 import json
 import logging
-import pathlib
 import time
 import traceback
-from os import makedirs, path, remove
+from os import path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
 import numpy as np
-import rasterio
-from rasterio import features
 from skimage import segmentation
 from skimage.filters import sobel
 from skimage.measure import label, regionprops
-from skimage.util import map_array
 
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 logger = logging.getLogger("slurp")
@@ -82,7 +78,6 @@ def watershed_regul_buildings(
             + 0.58 * input_image[1]
             + 0.114 * input_image[2]
         )
-        # _mono = (            0.3 * input_image[0] + 0.3 * input_image[1] + 0.3 * input_image[3]        )
     edges = sobel(im_mono)
 
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
@@ -170,9 +165,10 @@ def infer_waterbodies_type(wbm, watermask, params):
     :return: categorized mask
     """
 
+    # Values from Copernicus WaterBodyMask
     SEA = 1
     LAKE = 2
-    RIVER = 3
+    # RIVER = 3 (not used)
 
     # 1st step : obtain a clean watermask
     nb_iter = 10
@@ -239,8 +235,10 @@ def post_process(
     input_buffer: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask, key_wsf [, key_wbm ]
-    0          1              2              3             4              5               6       [ 7 ]
+    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask,
+    0          1              2              3             4              5
+    key_wsf [, key_wbm ]
+    6       [ 7 ]
     """
     input_image = input_buffer[0]
     valid_stack = input_buffer[1]
@@ -250,11 +248,12 @@ def post_process(
     shadowmask = input_buffer[5]
     wsf = input_buffer[6]
 
-    # 1st channel is the class, 2nd is an estimation of height class, 3rd the markers layer, for debug purpose
+    # 1st channel is the class, 2nd is an estimation of height class,
+    # 3rd the markers layer, for debug purpose
     stack = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
-    # If "winter vegetation" is activated, medium "NDVI" but textured segments (classified as 12/13)
-    # by vegetation mask will be considered as high vegetation
+    # If "winter vegetation" is activated, medium "NDVI" but textured segments
+    # (classified as 12/13) by vegetation mask will be considered as high vegetation
     if params["winter_vegetation"]:
         mix_textured_veg = np.logical_or(vegmask[0] == 12, vegmask[0] == 13)
         vegmask[0][mix_textured_veg] = 22
@@ -284,11 +283,6 @@ def post_process(
 
     clean_high_veg = vegmask[0] == 22
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
-
-    # Apply sieve on final mask
-    # seg_final = np.zeros_like(seg).astype(rasterio.int16)
-    # features.sieve(stack[0].astype(rasterio.int16), 250, out=seg_final, mask=np.where(stack[0]==0,True,False), connectivity=4)
-    # stack[0] = seg_final
 
     # Layer 2: watermask categorized
     if params["categorized_watermask"]:
@@ -372,7 +366,8 @@ def getarguments():
         type=str,
         default="rgb",
         choices=["rgb", "nir", "ndvi"],
-        help="Select layer on which compute sobel and perform watershed regularization (default : rgb)",
+        help="Select layer on which compute sobel and perform watershed "
+        "regularization (default : rgb)",
     )
 
     group2.add_argument(
@@ -380,7 +375,8 @@ def getarguments():
         type=str,
         default="all",
         choices=["all", "building"],
-        help="Regularization type : all (building, vegetation, bare ground), building (building only)",
+        help="Regularization type : all (building, vegetation, bare ground),"
+        " building (building only)",
     )
 
     group2.add_argument(
@@ -409,11 +405,14 @@ def getarguments():
         type=int,
         help="Value of the malus for pixels in shadow, in the watershed regularization step",
     )
+
     group2.add_argument(
         "-winter_vegetation",
         action="store_true",
-        help="Consider textured 'mixed vegetation areas' as high vegetation (to take into account trees with no leaves)",
+        help="Consider textured 'mixed vegetation areas' as high vegetation "
+        "(to take into account trees with no leaves)",
     )
+
     group2.add_argument(
         "-categorized_watermask",
         type=bool,
