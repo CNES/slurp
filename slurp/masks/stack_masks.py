@@ -38,6 +38,8 @@ from os import makedirs, path, remove
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
 import numpy as np
+import rasterio
+from rasterio import features
 from skimage import segmentation
 from skimage.filters import sobel
 from skimage.measure import label, regionprops
@@ -76,20 +78,26 @@ def watershed_regul_buildings(
         im_mono = input_image[3]
     else:
         im_mono = (
-            0.3 * input_image[0] + 0.3 * input_image[1] + 0.3 * input_image[3]
+            0.29 * input_image[0]
+            + 0.58 * input_image[1]
+            + 0.114 * input_image[2]
         )
+        # _mono = (            0.3 * input_image[0] + 0.3 * input_image[1] + 0.3 * input_image[3]        )
     edges = sobel(im_mono)
 
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
     # We set markers by reverse order of confidence
     eroded_bare_ground = apply_morpho(
-        vegmask[0] == 11, "binary_erosion", params["building_erosion"]
+        vegmask[0] == 11, "binary_erosion", params["erosion_radius"]
     )
-    markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
+    if params["regul_type"] == "all":
+        markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
+    else:
+        markers[0][eroded_bare_ground] = params["value_classif_background"]
 
     ground_truth_eroded = apply_morpho(
-        wsf[0] == 255, "binary_erosion", params["building_erosion"]
+        wsf[0] == 255, "binary_erosion", params["erosion_radius"]
     )
 
     normalized_building_threshold = np.percentile(
@@ -121,19 +129,27 @@ def watershed_regul_buildings(
     ]
 
     eroded_low_veg = apply_morpho(
-        vegmask[0] == 21, "binary_erosion", params["building_erosion"]
+        vegmask[0] == 21, "binary_erosion", params["erosion_radius"]
     )
-    markers[0][eroded_low_veg] = params["value_classif_background"]
+    if params["regul_type"] == "all":
+        markers[0][eroded_low_veg] = params["value_classif_low_veg"]
+    else:
+        markers[0][eroded_low_veg] = params["value_classif_background"]
+
     # careful : vegetation mask has two values for high veg !
     eroded_high_veg = apply_morpho(
         np.logical_or(vegmask[0] == 23, vegmask[0] == 22),
         "binary_erosion",
-        params["building_erosion"],
+        params["erosion_radius"],
     )
-    markers[0][eroded_high_veg] = params["value_classif_background"]
+
+    if params["regul_type"] == "all":
+        markers[0][eroded_high_veg] = params["value_classif_high_veg"]
+    else:
+        markers[0][eroded_high_veg] = params["value_classif_background"]
 
     eroded_shadow = apply_morpho(
-        shadowmask[0] == 2, "binary_erosion", params["building_erosion"]
+        shadowmask[0] == 2, "binary_erosion", params["erosion_radius"]
     )
     markers[0][eroded_shadow] = params["value_classif_background"]
 
@@ -144,7 +160,7 @@ def watershed_regul_buildings(
     return seg, markers
 
 
-def watershed_categorized_water(wbm, watermask, params):
+def infer_waterbodies_type(wbm, watermask, params):
     """
     Clean and apply watershed regulation for the watermask
 
@@ -263,20 +279,21 @@ def post_process(
     # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
     stack[0][watermask[0] == 1] = params["value_classif_water"]
 
-    clean_low_veg = vegmask[0] == 21  # seg == params["value_classif_low_veg"]
-    # clean_low_veg = morpho_clean(low_veg, params) == 1
+    clean_low_veg = vegmask[0] == 21
     stack[0][clean_low_veg] = params["value_classif_low_veg"]
 
-    clean_high_veg = vegmask[0] == 22  # seg == params["value_classif_high_veg"]
-    # clean_high_veg = morpho_clean(high_veg, params) == 1
+    clean_high_veg = vegmask[0] == 22
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
+
+    # Apply sieve on final mask
+    # seg_final = np.zeros_like(seg).astype(rasterio.int16)
+    # features.sieve(stack[0].astype(rasterio.int16), 250, out=seg_final, mask=np.where(stack[0]==0,True,False), connectivity=4)
+    # stack[0] = seg_final
 
     # Layer 2: watermask categorized
     if params["categorized_watermask"]:
         wbm = input_buffer[7]
-        categorized_watermask = watershed_categorized_water(
-            wbm, watermask, params
-        )
+        categorized_watermask = infer_waterbodies_type(wbm, watermask, params)
         stack[0] = np.where(
             categorized_watermask != 0, categorized_watermask, stack[0]
         )
@@ -359,6 +376,14 @@ def getarguments():
     )
 
     group2.add_argument(
+        "-regul_type",
+        type=str,
+        default="all",
+        choices=["all", "building"],
+        help="Regularization type : all (building, vegetation, bare ground), building (building only)",
+    )
+
+    group2.add_argument(
         "-building_threshold",
         type=int,
         help="Threshold to consider building as detected",
@@ -366,7 +391,12 @@ def getarguments():
     group2.add_argument(
         "-building_erosion",
         type=int,
-        help="Supposed buildings will be eroded by this size in the marker step",
+        help="Supposed buildings will be eroded by this radius in the marker step",
+    )
+    group2.add_argument(
+        "-erosion_radius",
+        type=int,
+        help="Other classes than buildings will be eroded by this radius in the marker step",
     )
     group2.add_argument(
         "-bonus_gt",
@@ -481,8 +511,10 @@ def slurp_stackmask(
     extracted_wsf: str,
     extracted_wbm: str,
     sobel_image: str,
+    regul_type: str,
     building_threshold: int,
     building_erosion: int,
+    erosion_radius: int,
     bonus_gt: int,
     winter_vegetation: bool,
     malus_shadow: int,

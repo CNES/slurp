@@ -289,6 +289,10 @@ class Stack(BaseModel):
         ...,
         description="Supposed buildings will be eroded by this size in the marker step",
     )
+    erosion_radius: int = Field(
+        default=2,
+        description="Other classes than buildings will be eroded by this radius in the marker step",
+    )
     bonus_gt: int = Field(
         ...,
         description="Bonus for pixels covered by GT, in the watershed regularization step (ex : +30 to improve discrimination between building and background)",
