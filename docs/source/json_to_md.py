@@ -1,6 +1,8 @@
-from typing import get_args, get_origin, List, Union
+from typing import List, Union, get_args, get_origin
+
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
 from slurp.tools.pydantic_class import MainConfig
 
 
@@ -35,15 +37,37 @@ def extract_field_info(model_class, prefix="", indent=0):
         description = model_field.description or ""
         status = "Mandatory" if model_field.is_required() else "Optional"
 
-        display_name = f"{'&nbsp;&nbsp;' * indent}**{field_name}**" if indent == 0 else f"{'&nbsp;&nbsp;' * indent}{field_name}"
+        display_name = (
+            f"{'&nbsp;&nbsp;' * indent}**{field_name}**"
+            if indent == 0
+            else f"{'&nbsp;&nbsp;' * indent}{field_name}"
+        )
 
-        # Nested Pydantic model
+        # Get default value
+        if model_field.default is not None:
+            default = repr(model_field.default)
+        elif model_field.default_factory is not None:
+            default = "<factory>"
+        elif model_field.is_required():
+            default = ""
+        else:
+            default = "None"
+
+        # Append default to type string
+        type_str = format_type(field_type)
+        if default != "PydanticUndefined":
+            type_str += f" (Default {default})"
+
+        # Handle nested models
         if isinstance(field_type, type) and issubclass(field_type, BaseModel):
             table_data.append([display_name, "", "", description, status])
-            table_data.extend(extract_field_info(field_type, prefix=full_field_name, indent=indent + 1))
-
+            table_data.extend(
+                extract_field_info(
+                    field_type, prefix=full_field_name, indent=indent + 1
+                )
+            )
         else:
-            table_data.append(["", display_name, format_type(field_type), description, status])
+            table_data.append(["", display_name, type_str, description, status])
 
     return table_data
 
@@ -51,7 +75,16 @@ def extract_field_info(model_class, prefix="", indent=0):
 # Generate and save Markdown table
 def generate_markdown_table(config_class, output_path):
     table_data = extract_field_info(config_class)
-    df = pd.DataFrame(table_data, columns=["Field Group", "Field Name", "Expected Type", "Description", "Status"])
+    df = pd.DataFrame(
+        table_data,
+        columns=[
+            "Field Group",
+            "Field Name",
+            "Expected Type",
+            "Description",
+            "Status",
+        ],
+    )
     markdown_str = df.to_markdown(index=False)
     with open(output_path, "w") as f:
         f.write(markdown_str)
@@ -63,4 +96,3 @@ def main() -> None:
     Main function that generates Markdown tables for MainConfig and UserConfig schemas.
     """
     generate_markdown_table(MainConfig, "main_config_descr.md")
-

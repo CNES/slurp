@@ -2,27 +2,11 @@
 CLI Usage
 =========
 
-By default, a fake command line is deployed with argparse:
-
-To use it:
-
-.. code-block:: console
-
-    $ slurp -h
-    
-
-To use slurp in a project:
-
-.. code-block:: python
-
-    import slurp
-
-
 SLURP uses some global data, such as Global Surface Water (Pekel) for
 water detection or World Settlement Footprint (WSF) for building
 detection.
 
-Data preparation can be achieved with Orfeo ToolBox or other tools, in
+Data preparation can be achieved with Orfeo ToolBox or other tools (for more information, please refer to `SLURP's tutorial <tutorial.html>`_ page), in
 order to bring all necessary data in the same projection. You can either
 build your mask step by step, or use a batch script to launch and build
 the final mask automatically.
@@ -31,15 +15,15 @@ the final mask automatically.
 
     <table>
       <tr>
-        <td style="text-align:center;"><img src="_static/images/example_step0_PHR_image.png" alt="Initial VHR image" width="89%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step1_watermask.png" alt="Water mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step2_vegetationmask.png" alt="Vegetation mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step3_shadowmask.png" alt="Shadow mask" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step4_urbanproba.png" alt="Urban probability" width="80%"></td>
-        <td style="text-align:center;"><img src="_static/images/example_step5_stack_regul.png" alt="Final mask" width="80%"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step0_PHR_image.png" alt="Initial VHR image"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step1_watermask.png" alt="Water mask"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step2_vegetationmask.png" alt="Vegetation mask"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step3_shadowmask.png" alt="Shadow mask"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step4_urbanproba.png" alt="Urban probability"></td>
+        <td style="text-align:center; width:150px;"><img src="_static/images/example_step5_stack_regul.png" alt="Final mask"></td>
       </tr>
       <tr>
-        <td style="text-align:center;"><b>Bring your own VHR 4 bands (R/G/B/NIR) image</b></td>
+        <td style="text-align:center;"><b>Bring your own VHR 4 bands<br>(R/G/B/NIR) image</b></td>
         <td style="text-align:center;"><b>Learn 'Pekel' water occurrence</b></td>
         <td style="text-align:center;"><b>Detect low/high vegetation</b></td>
         <td style="text-align:center;"><b>Detect shadows (avoid water confusion)</b></td>
@@ -49,53 +33,30 @@ the final mask automatically.
     </table>
 
 
-
-Getting Started
----------------
-
-Once your environment has been set up, you can run SLURP.
-
-A tutorial (with and without OTB) is available :
-`Tutorial.md <Tutorial.md>`__.
-
-Use SLURP on TREX
------------------
-
-On TREX, you can directly use SLURP by sourcing the following
-environment.
-
-.. code-block:: console
-
-   source /work/CAMPUS/users/tanguyy/PLUTO/slurp_demo/init_slurp.sh
-
-This will load OTB 9.0 and all Python dependencies
-
-You can also use a shell script with SLURM to launch different masks
-algorithms on your images.
-
-.. code-block:: console
-
-   sbatch --export="PHR_IM=/work/scratch/tanguyy/public/RemyMartin/PHR_image_uint16.tif,OUTPUT_DIR=/work/scratch/tanguyy/public/RemyMartin/,CLUSTERS_VEG=4,CLUSTERS_LOW_VEG=2" /softs/projets/pluto/demo_slurp/compute_all_masks.pbs
-
-Two scripts (to calculate all the masks and the scores) are available in
-conf/ directory.
-
+Once your environment has been set up, you can run SLURP. A `tutorial <tutorial.html>`_ is available.
 
 Log Display Options
 -------------------
 
 By default, logs are displayed in the console.
 
-When the CLI argument `--logs_to_file` is specified,
-logs will instead be saved to the file `logs/out_logs.log` located in your current working directory.
+When the CLI argument ``--logs_to_file`` is specified,
+logs will instead be saved to the file ``logs/out_logs.log`` located in your current working directory.
 
 Data preparation
 ----------------
 
 Each mask needs some auxiliary files. They must be on the same
 projection, resolution and bounding box of the VHR input image to enable
-mask computation. You can generate this data yourself or use the prepare
-script available in SLURP.
+mask computation. You can generate this data yourself or use the `prepare
+script <https://github.com/CNES/slurp/tree/main/scripts>`_ available in SLURP.
+
+.. warning::
+
+    Depending on which computation you want to perform, you may need to install OTB on
+    your system.
+
+    Please refer to the provided `tutorial <tutorial.html>`_ to know if additional steps are required.
 
 The prepare script enables :
 
@@ -106,12 +67,9 @@ The prepare script enables :
     - Extraction of WSF file
     - Computation of texture file with a convolution
 
-It requires an OTB installation.
-
 **To run the script**
 
-1. Configure the JSON file. A template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file. A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers, resources and prepare blocs inside the JSON
    file.
 3. Run the command :
@@ -144,8 +102,7 @@ post-processed to clean artefacts.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file : A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources, post_process and water blocs.
 3. Run the command :
@@ -177,8 +134,7 @@ texture denotes for low vegetation).
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file : A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources and vegetation blocs.
 3. Run the command :
@@ -208,8 +164,7 @@ probability” layer ([0..100]) that can be used by the stack algorithm.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file : A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources and urban blocs.
 3. Run the command :
@@ -239,8 +194,7 @@ in the regularization step.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file : A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks blocs inside the JSON file. To go
    further you can modify resources, post_process and shadow blocs.
 3. Run the command :
@@ -272,8 +226,7 @@ gradient image, thus regularizing buildings shapes.
 
 **To compute the mask**
 
-1. Configure the JSON file : a template is available at
-   conf/main_config.json with default values.
+1. Configure the JSON file : A template is available `here <https://github.com/CNES/slurp/blob/main/conf/main_config.json>`_ with default values.
 2. Update input, aux_layers and masks element inside the JSON file. To
    go further you can modify resources, post_process and stack blocs.
 3. Run the command :
@@ -310,7 +263,7 @@ masks with ``pytest -m computation`` or validate them with
 two last modes require OTB installation.
 
 You can change the default configuration for the tests by modifying the
-JSON file “tests/config_tests”.
+`test configuration <https://github.com/CNES/slurp/blob/main/tests/config_tests.json>`_ JSON file.
 
 Documentation
 -------------

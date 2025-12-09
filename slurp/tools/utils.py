@@ -20,14 +20,13 @@
 
 """Brings together some useful functions"""
 
+import json
+import logging.config
 import os
 import time
-import pathlib
-import json
-from os import makedirs, path, remove
 from importlib.resources import files
+from os import makedirs, path, remove
 
-import logging.config
 import numpy as np
 import psutil
 
@@ -36,7 +35,21 @@ from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
 
-def setup_logging(config_file : str):
+
+def store_arglist(parser):
+    """
+    Stores the list of argument names from the CLI parser into a JSON file.
+    This file is then used to overwrite the main configuration file parameters.
+    """
+    arglist = []
+    for arg in parser._actions:
+        if arg.dest not in ["help"]:
+            arglist.append(arg.dest)
+    with open("args_list.json", "w") as f:
+        json.dump(arglist, f)
+
+
+def setup_logging(config_file: str):
     with open(config_file) as f_in:
         config = json.load(f_in)
 
@@ -44,15 +57,14 @@ def setup_logging(config_file : str):
 
 
 def parse_args(keys, logs_to_file, main_config):
-    '''
+    """
     Parse command line arguments.
     Setup logging with a configuration file based on logs_to_file option value.
-    '''
-    argsdict = io_utils.read_json(
-        main_config, keys)
+    """
+    argsdict = io_utils.read_json(main_config, keys)
 
     # Read the list back from the JSON file
-    with open("args_list.json", 'r') as f:
+    with open("args_list.json", "r") as f:
         cli_params = json.load(f)
     remove("args_list.json")
 

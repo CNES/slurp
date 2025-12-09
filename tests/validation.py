@@ -23,7 +23,6 @@
 import os
 
 import numpy as np
-import pytest
 import rasterio as rio
 
 
@@ -53,9 +52,9 @@ def compare_datasets(ds_new_mask, ds_ref_mask):
     )
 
 
-def validate_mask(new_file, key, valid_pixels=True):
+def validate_mask(new_file, key, ref_dir, valid_pixels=True):
     filename = os.path.basename(new_file)
-    ref_file = os.path.join(pytest.ref_dir, key, "ref_" + filename)
+    ref_file = os.path.join(ref_dir, key, "ref_" + filename)
     assert os.path.exists(ref_file), f"The file {ref_file} doesn't exist"
 
     ds_ref_mask = rio.open(ref_file)
@@ -68,9 +67,11 @@ def validate_mask(new_file, key, valid_pixels=True):
     if valid_pixels:
         nb_pix_different = np.sum(ds_new_mask.read(1) != ds_ref_mask.read(1))
         nb_pix_total = ds_ref_mask.shape[0] * ds_ref_mask.shape[1]
+        ratio = nb_pix_different / nb_pix_total
+        percent = 100 * ratio
         assert (
-            nb_pix_different / nb_pix_total < 0.4
-        ), f"{nb_pix_different} pixels are different (> 40%) : {100*nb_pix_different/nb_pix_total} %"
+            ratio < 0.4
+        ), f"{nb_pix_different} pixels are different (> 40%) : {percent:.2f} %"
 
     ds_new_mask.close()
     ds_ref_mask.close()

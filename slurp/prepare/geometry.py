@@ -23,13 +23,13 @@ Brings together the geometry functions using OTB features, to project images int
 georeferenced geometry (with superimpose) or Shareloc, to project images into sensor geometry
 """
 
+import logging
 import time
 
 import bindings_cpp
 import numpy as np
-import logging
-import rasterio as rio
 import rasterio
+import rasterio as rio
 from rasterio.warp import transform_bounds
 from rasterio.windows import from_bounds
 from shareloc.dtm_reader import dtm_reader
@@ -37,13 +37,12 @@ from shareloc.geofunctions.localization import Localization
 from shareloc.geomodels import GeoModel
 from shareloc.image import Image
 
-
 logger = logging.getLogger("slurp")
 
 
 def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
     """
-    Extract ROI 
+    Extract ROI
 
     :param str file_in: path to the image to crop
     :param str file_ref: path to the input reference image
@@ -77,7 +76,7 @@ def get_extract_roi(file_in: str, file_ref: str) -> np.ndarray:
 
 def compute_dtm_footprint(geom_model, sensor_image, data_img):
     """
-    Compute DTM footprint from supposed sensor_image footprint 
+    Compute DTM footprint from supposed sensor_image footprint
     to load only a portion of the global DTM.
 
     Load Shareloc direct loc function force shareloc to use north for
@@ -276,7 +275,8 @@ def compute_interpolation_grid(sensor_image, dtm_file, geoid_file, step=30):
 
     roi = [min_lat, min_lon, max_lat, max_lon]
 
-    #  grid in sensor (every n step), grid in lon/lat (every n step), grid of every pixel in sensor, roi to load on external data
+    # grid in sensor (every n step), grid in lon/lat (every n step),
+    # grid of every pixel in sensor, roi to load on external data
     return grid_positions, (coords_lon, coords_lat), all_coords, roi
 
 

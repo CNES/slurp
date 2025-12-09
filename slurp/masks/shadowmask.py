@@ -24,12 +24,11 @@ This script computes a shadow mask
 """
 
 import argparse
+import json
+import logging
 import time
 import traceback
-import logging
-import pathlib
-import json
-from os import makedirs, path, remove
+from os import path
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -37,10 +36,53 @@ import numpy as np
 
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import io_utils, utils
+from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
 
 logger = logging.getLogger("slurp")
+
+
+def compute_thresholds(
+    absolute_threshold, local_phr, nodata, percentile, th_rgb, th_nir
+):
+    """
+    Compute thresholds for each band in the provided PHR image.
+    If `absolute_threshold` is provided, the function will use the
+    specified value as the threshold for all bands. If not, it calculates thresholds based on the
+    specified percentile for each band, with different thresholds for RGB bands and NIR band.
+    """
+    if absolute_threshold is False:
+        # Compute threshold for each band
+        th_bands = np.zeros(4)
+        for cpt in range(3):
+            min_band = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                percentile,
+            )
+            max_percentile = np.percentile(
+                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                100 - percentile,
+            )
+            th_bands[cpt] = min_band + th_rgb * (max_percentile - min_band)
+
+        cpt = 3
+        min_band = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            percentile,
+        )
+        max_percentile = np.percentile(
+            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            100 - percentile,
+        )
+        th_bands[cpt] = min_band + th_nir * (max_percentile - min_band)
+    else:
+        # Use an absolute threshold instead of relative threshold
+        # Useful when using calibrated images
+        th_bands = np.zeros(4)
+        for i in range(4):
+            th_bands[i] = absolute_threshold
+    return th_bands
+
 
 def compute_shadowmask(
     input_buffers: list, input_profiles: list, params: dict
@@ -97,12 +139,15 @@ def getarguments() -> dict:
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
-    parser.add_argument("-log_f",
-                        "--logs_to_file",
-                        action="store_true",
-                        help="Store all logs to a file, instead of stdout",
-                        )
-    parser.add_argument("-d", "--debug", default=None, action="store_true", help="Debug flag")
+    parser.add_argument(
+        "-log_f",
+        "--logs_to_file",
+        action="store_true",
+        help="Store all logs to a file, instead of stdout",
+    )
+    parser.add_argument(
+        "-d", "--debug", default=None, action="store_true", help="Debug flag"
+    )
 
     group1 = parser.add_argument_group(description="*** INPUT FILES ***")
     group1.add_argument(
@@ -166,15 +211,31 @@ def getarguments() -> dict:
         if arg.dest not in ["help"]:
             arglist.append(arg.dest)
 
-    with open("args_list.json", 'w') as f:
+    with open("args_list.json", "w") as f:
         json.dump(arglist, f)
 
     return vars(args)
 
 
-def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_config : str, file_vhr : str, valid_stack : bool, watermask : str, th_rgb : int,
-                    th_nir : int, absolute_threshold : bool, percentile : float, binary_opening : int,
-                    remove_small_objects : int, shadowmask : str, n_workers : int, tile_max_size : int, multiproc_context : str):
+def slurp_shadowmask(
+    main_config: str,
+    logs_to_file: bool,
+    debug: bool,
+    user_config: str,
+    file_vhr: str,
+    valid_stack: bool,
+    watermask: str,
+    th_rgb: int,
+    th_nir: int,
+    absolute_threshold: bool,
+    percentile: float,
+    binary_opening: int,
+    remove_small_objects: int,
+    shadowmask: str,
+    n_workers: int,
+    tile_max_size: int,
+    multiproc_context: str,
+):
     """
     Main API to compute shadow mask.
     """
@@ -202,14 +263,14 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_c
     args = argparse.Namespace(**argsdict)
 
     if args.debug:
-        logger.handlers[0].setLevel(logging.DEBUG) 
-    logger.debug(f"{argsdict=}")   
+        logger.handlers[0].setLevel(logging.DEBUG)
+    logger.debug(f"{argsdict=}")
 
     # Mask calculation
     with eom.EOContextManager(
-            nb_workers=args.n_workers,
-            tile_mode=True,
-            tile_max_size=args.tile_max_size,
+        nb_workers=args.n_workers,
+        tile_mode=True,
+        tile_max_size=args.tile_max_size,
     ) as eoscale_manager:
         try:
 
@@ -223,40 +284,14 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_c
                 raster_path=args.valid_stack
             )
 
-            if args.absolute_threshold is False:
-                # Compute threshold for each band
-                th_bands = np.zeros(4)
-                for cpt in range(3):
-                    min_band = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        args.percentile,
-                    )
-                    max_percentile = np.percentile(
-                        local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                        100 - args.percentile,
-                    )
-                    th_bands[cpt] = min_band + args.th_rgb * (
-                            max_percentile - min_band
-                    )
-
-                cpt = 3
-                min_band = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    args.percentile,
-                )
-                max_percentile = np.percentile(
-                    local_phr[cpt][np.where(local_phr[cpt] != nodata)],
-                    100 - args.percentile,
-                )
-                th_bands[cpt] = min_band + args.th_nir * (
-                        max_percentile - min_band
-                )
-            else:
-                # Use an absolute threshold instead of relative threshold
-                # Useful when using calibrated images
-                th_bands = np.zeros(4)
-                for i in range(4):
-                    th_bands[i] = args.absolute_threshold
+            th_bands = compute_thresholds(
+                args.absolute_threshold,
+                local_phr,
+                nodata,
+                args.percentile,
+                args.th_rgb,
+                args.th_nir,
+            )
 
             params = {
                 "thresholds": th_bands,
@@ -313,6 +348,7 @@ def slurp_shadowmask(main_config : str, logs_to_file : bool, debug: bool, user_c
             logger.error("oups...", exception)
             traceback.print_exc()
 
+
 def main():
     """
     Main function to run the shadow mask computation.
@@ -320,6 +356,7 @@ def main():
     """
     args = getarguments()
     slurp_shadowmask(**args)
+
 
 if __name__ == "__main__":
     main()
