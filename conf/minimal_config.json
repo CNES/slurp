@@ -1,0 +1,16 @@
+{
+    "input": {
+        "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/all/demo.tif"
+    },
+    "prepare": {},
+    "aux_layers":{},
+    "vegetation":{},
+    "resources": {},
+    "masks":{},
+    "post_process" :{},
+    "shadows" :{},
+    "urban" :{},
+    "water" :{},
+    "stack" :{}
+    
+}
