@@ -214,20 +214,20 @@ class Vegetation(BaseModel):
         description="Maximal texture value to consider a cluster as low vegetation "
         "(overload nb clusters choice)",
     )
-    pct_veg: float = Field(
-        ...,
+    pct_veg: Optional[float] = Field(
+        default=0.0,
         description="Pourcentage of vegetation pixels in the global land cover map",
     )
-    pct_low_veg: float = Field(
-        ...,
+    pct_low_veg: Optional[float] = Field(
+        default=0.0,
         description="Pourcentage of low vegetation pixels in the global land cover map",
     )
-    pct_high_veg: float = Field(
-        ...,
+    pct_high_veg: Optional[float] = Field(
+        default=0.0,
         description="Pourcentage of high vegetation pixels in the global land cover map",
     )
-    pct_non_veg: float = Field(
-        ...,
+    pct_non_veg: Optional[float] = Field(
+        default=0.0,
         description="Pourcentage of non vegetation pixels in the global land cover map",
     )
 
