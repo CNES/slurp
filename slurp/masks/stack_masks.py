@@ -231,6 +231,100 @@ def infer_waterbodies_type(wbm, watermask, params):
     return categorized_watermask
 
 
+def count_regions(mask):
+    if mask.shape[2] * mask.shape[1] != 0:
+        label_image = label(mask)
+        regions = regionprops(label_image)
+        nb_reg = len(regions)
+        # print(f"DBG count_regions in region of shape {mask.shape} : {nb_reg} regions")
+    else:
+        nb_reg = 0
+
+    return nb_reg
+
+
+def concat_seg(previous_result, output_algo_computer, tile):
+    """
+    Concatenates several segmentation and fix classes for shapes that overlap
+    tiles frontiers
+    previous_result : main result (already computed)
+    output_algo_computer : current computation (will update main result)
+    tile : coords of output_algo_computer in main result
+
+    nominal way to do it :
+    previous_result[0][:, tile.start_y : tile.end_y + 1,
+                          tile.start_x : tile.end_x + 1]
+              = output_algo_computer[0][:, :, :]
+    """
+    # shift_value = 999 # to differenciate neighbour values
+
+    proportion_covered_by_tile = (
+        output_algo_computer[0].shape[1] * output_algo_computer[0].shape[2]
+    ) / (previous_result[0].shape[1] * previous_result[0].shape[2])
+    print(
+        f"DBG> {proportion_covered_by_tile} % emprise {tile=} {output_algo_computer[0].shape=}"
+    )
+    top_recov_zone = output_algo_computer[0][
+        :,
+        tile.start_y - tile.top_margin + 1 : tile.start_y,
+        tile.start_x : tile.end_x + 1,
+    ]
+    bottom_recov_zone = output_algo_computer[0][
+        :,
+        tile.end_y : tile.end_y + tile.bottom_margin,
+        tile.start_x : tile.end_x + 1,
+    ]
+
+    nb_reg = count_regions(top_recov_zone)
+    #    print(f"DBG> {nb_reg} in top recov zone {top_recov_zone.shape}")
+    nb_reg = count_regions(bottom_recov_zone)
+    # print(f"DBG> {nb_reg} in bottom recov zone {bottom_recov_zone.shape}")
+
+    # ["start_x", "start_y", "end_x", "end_y", "top_margin", "right_margin", "left_margin", "bottom_margin"])
+
+    eoexe.default_reduce(previous_result, output_algo_computer, tile)
+    # TODO : zone de recouvrement ?
+
+    """
+    temp_mask = np.zeros_like(previous_result)
+    temp_mask[0][:, tile.start_y : tile.end_y + 1, 
+                   tile.start_x : tile.end_x + 1] = output_algo_computer[0][:, :, :]
+
+    labels_main = label(previous_result[0])
+    regions_main = regionprops(labels_main)
+    
+    labels_res = label(temp_mask[0])
+    regions_res = regionprops(labels_res)
+
+    list_label_main = np.unique_values(labels_main)
+    list_label_res =  np.unique_values(labels_res)
+
+    print(f"DBG> {list_label_res=}")
+    print(f"DBG> {list_label_main=}")
+        
+    
+    for l1 in list_label_main:
+        l1_dilate = apply_morpho(labels_main==l1,"binary_dilation",1)
+        val_r1 = previous_result[0][label_im==l1][0]
+
+        for l2 in list_label_res:
+            l2_dilate = apply_morpho(labels_res==l2,"binary_dilation",1)
+            val_r2 = temp_mask[0][label_res==l2][0]
+            
+            if val_r1 != val_r2:
+                if np.any(np.logical_and(l1_dilate, l2_dilate)):
+                    print("r1 et r2 se touchent et ont des classes différentes")
+                    if val_r1 ==  params["value_classif_sea"] and val_r2 == params["value_classif_water"]:
+                        temp_mask[0][np.where(labels_res==l2)]=params["value_classif_sea"]
+                    elif val_r2  ==  params["value_classif_sea"] and val_r1 == params["value_classif_water"]:
+                        previous_result[0][np.where(labels_main==l1)]=params["value_classif_sea"]
+                else:
+                    print("régions séparées")
+        
+    previous_result[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1] = temp_mask[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1]
+    """
+
+
 def post_process(
     input_buffer: list, input_profiles: list, params: dict
 ) -> np.ndarray:
@@ -262,7 +356,6 @@ def post_process(
     seg, markers = watershed_regul_buildings(
         input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
     )
-
     logger.debug(f"{np.unique(seg)=}")
 
     clean_bare_ground = (
@@ -620,8 +713,9 @@ def slurp_stackmask(
                 image_filter=post_process,
                 filter_parameters=vars(args),
                 generate_output_profiles=eo_utils.three_uint8_profile,
-                stable_margin=200,
+                stable_margin=30,
                 context_manager=eoscale_manager,
+                concatenate_filter=concat_seg,
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
             )

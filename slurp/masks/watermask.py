@@ -383,11 +383,9 @@ def post_process(
     # Filter for final classification
     if not params["no_pekel_filter"]:
         mask = np.zeros(buffer_shape, dtype=bool)
-        if not params["no_pekel_filter"]:  # filter with pekel0
-            mask = np.zeros(buffer_shape, dtype=bool)
-            mask = np.logical_or(
-                mask, input_buffer[2][0]
-            )  # problème de mask_pekel0 if "not defined"
+        mask = np.logical_or(
+            mask, input_buffer[2][0]
+        )  # problème de mask_pekel0 if "not defined"
         im_classif = mask_filter(input_buffer[0], mask)
     else:
         im_classif = input_buffer[0]
@@ -399,6 +397,14 @@ def post_process(
             "binary_closing",
             params["binary_closing"],
         ).astype(np.uint8)
+
+    if params["binary_opening"]:
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool),
+            "binary_opening",
+            params["binary_opening"],
+        ).astype(np.uint8)
+
     if params["area_closing"]:
         im_classif[0, :, :] = apply_morpho(
             im_classif[0, :, :], "area_closing", params["area_closing"]
@@ -408,6 +414,13 @@ def post_process(
             im_classif[0, :, :].astype(bool),
             "remove_small_holes",
             params["remove_small_holes"],
+        ).astype(np.uint8)
+
+    if params["remove_small_objects"]:
+        im_classif[0, :, :] = apply_morpho(
+            im_classif[0, :, :].astype(bool),
+            "remove_small_objects",
+            params["remove_small_objects"],
         ).astype(np.uint8)
 
     # Add nodata in im_classif
@@ -887,6 +900,9 @@ def getarguments():
         "-binary_closing", type=int, help="Size of disk structuring element"
     )
     group4.add_argument(
+        "-binary_opening", type=int, help="Size of disk structuring element"
+    )
+    group4.add_argument(
         "-area_closing",
         type=int,
         help="Area closing removes all dark structures",
@@ -895,6 +911,12 @@ def getarguments():
         "-remove_small_holes",
         type=int,
         help="The maximum area, in pixels, of a contiguous hole that will be filled",
+    )
+
+    group4.add_argument(
+        "-remove_small_objects",
+        type=int,
+        help="The minimum area, in pixels, of a water body to be kept",
     )
 
     group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
@@ -963,8 +985,10 @@ def slurp_watermask(
     no_pekel_filter: bool,
     hand_filter: bool,
     binary_closing: int,
+    binary_opening: int,
     area_closing: int,
     remove_small_holes: int,
+    remove_small_objects: int,
     watermask: str,
     value_classif: int,
     n_workers: int,
