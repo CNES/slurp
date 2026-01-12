@@ -32,6 +32,7 @@ import json
 import logging
 import time
 import traceback
+import uuid
 from os import path
 
 import eoscale.eo_executors as eoexe
@@ -43,7 +44,7 @@ from skimage.measure import label, regionprops
 
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
-from slurp.tools import utils
+from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 logger = logging.getLogger("slurp")
@@ -168,7 +169,10 @@ def infer_waterbodies_type(wbm, watermask, params):
     # Values from Copernicus WaterBodyMask
     SEA = 1
     LAKE = 2
-    # RIVER = 3 (not used)
+    # RIVER = 3 (not used) TODO : check if we need to keep this parameter
+
+    # TODO : maybe this function should be applied to the whole mask, to avoid
+    # tiling effects
 
     # 1st step : obtain a clean watermask
     nb_iter = 10
@@ -256,8 +260,14 @@ def concat_seg(previous_result, output_algo_computer, tile):
                           tile.start_x : tile.end_x + 1]
               = output_algo_computer[0][:, :, :]
     """
-    # shift_value = 999 # to differenciate neighbour values
+    # TODO : replace this function by a finalize function that attribute a single class
+    # to neighboured water bodies (only separated by the tile frontier)
 
+    previous_result[0][
+        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
+    ] = output_algo_computer[0][:, :, :]
+
+    """
     proportion_covered_by_tile = (
         output_algo_computer[0].shape[1] * output_algo_computer[0].shape[2]
     ) / (previous_result[0].shape[1] * previous_result[0].shape[2])
@@ -280,19 +290,19 @@ def concat_seg(previous_result, output_algo_computer, tile):
     nb_reg = count_regions(bottom_recov_zone)
     # print(f"DBG> {nb_reg} in bottom recov zone {bottom_recov_zone.shape}")
 
-    # ["start_x", "start_y", "end_x", "end_y", "top_margin", "right_margin", "left_margin", "bottom_margin"])
+    # ["start_x", "start_y", "end_x", "end_y", "top_margin", "right_margin",
+        "left_margin", "bottom_margin"])
 
     eoexe.default_reduce(previous_result, output_algo_computer, tile)
     # TODO : zone de recouvrement ?
 
-    """
     temp_mask = np.zeros_like(previous_result)
     temp_mask[0][:, tile.start_y : tile.end_y + 1, 
                    tile.start_x : tile.end_x + 1] = output_algo_computer[0][:, :, :]
 
     labels_main = label(previous_result[0])
     regions_main = regionprops(labels_main)
-    
+
     labels_res = label(temp_mask[0])
     regions_res = regionprops(labels_res)
 
@@ -301,8 +311,8 @@ def concat_seg(previous_result, output_algo_computer, tile):
 
     print(f"DBG> {list_label_res=}")
     print(f"DBG> {list_label_main=}")
-        
-    
+
+
     for l1 in list_label_main:
         l1_dilate = apply_morpho(labels_main==l1,"binary_dilation",1)
         val_r1 = previous_result[0][label_im==l1][0]
@@ -314,14 +324,17 @@ def concat_seg(previous_result, output_algo_computer, tile):
             if val_r1 != val_r2:
                 if np.any(np.logical_and(l1_dilate, l2_dilate)):
                     print("r1 et r2 se touchent et ont des classes différentes")
-                    if val_r1 ==  params["value_classif_sea"] and val_r2 == params["value_classif_water"]:
+                    if val_r1 ==  params["value_classif_sea"] and
+    val_r2 == params["value_classif_water"]:
                         temp_mask[0][np.where(labels_res==l2)]=params["value_classif_sea"]
-                    elif val_r2  ==  params["value_classif_sea"] and val_r1 == params["value_classif_water"]:
+                    elif val_r2  ==  params["value_classif_sea"] 
+and val_r1 == params["value_classif_water"]:
                         previous_result[0][np.where(labels_main==l1)]=params["value_classif_sea"]
                 else:
                     print("régions séparées")
-        
-    previous_result[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1] = temp_mask[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1]
+
+    previous_result[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1] 
+= temp_mask[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1]
     """
 
 
@@ -409,6 +422,12 @@ def post_process(
     # Markers
     markers_layer[0] = markers
     markers_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+
+    if params["debug"]:
+        prefix = str(uuid.uuid4())
+        io_utils.save_image(
+            stack[0], params["stackmask"].replace(".tif", f"{prefix}.tif")
+        )
 
     return [stack, height_layer, markers_layer]
 
@@ -713,7 +732,7 @@ def slurp_stackmask(
                 image_filter=post_process,
                 filter_parameters=vars(args),
                 generate_output_profiles=eo_utils.three_uint8_profile,
-                stable_margin=30,
+                stable_margin=100,  # TODO : add a stability margin parameter ?
                 context_manager=eoscale_manager,
                 concatenate_filter=concat_seg,
                 multiproc_context=args.multiproc_context,
