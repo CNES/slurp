@@ -177,6 +177,8 @@ def infer_waterbodies_type(wbm, watermask, params):
     # 1st step : obtain a clean watermask
     nb_iter = 10
     for _ in range(nb_iter):
+        # TODO : ne sert à rien : il faut faire clean=watermask
+        # puis  clean = morpho(clean) pour 1 à 10
         clean_watermask = apply_morpho(
             watermask[0] == 1, "binary_opening", params["binary_opening"]
         )
@@ -194,6 +196,9 @@ def infer_waterbodies_type(wbm, watermask, params):
     regions = regionprops(label_image)
 
     # create an empty binary mask for each category of water
+
+    # TODO : optimize : we dont need 3 temporary masks here
+
     sea_mask = np.zeros(label_image.shape)
     lake_mask = np.zeros(label_image.shape)
     river_mask = np.zeros(label_image.shape)
@@ -389,14 +394,6 @@ def post_process(
 
     clean_high_veg = vegmask[0] == 22
     stack[0][clean_high_veg] = params["value_classif_high_veg"]
-
-    # Layer 2: watermask categorized
-    if params["categorized_watermask"]:
-        wbm = input_buffer[7]
-        categorized_watermask = infer_waterbodies_type(wbm, watermask, params)
-        stack[0] = np.where(
-            categorized_watermask != 0, categorized_watermask, stack[0]
-        )
 
     # Apply NODATA
     stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
@@ -727,7 +724,7 @@ def slurp_stackmask(
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
             logger.info("Before post process")
-            final_mask = eoexe.n_images_to_m_images_filter(
+            key_final_mask = eoexe.n_images_to_m_images_filter(
                 inputs=inputs_final,
                 image_filter=post_process,
                 filter_parameters=vars(args),
@@ -738,8 +735,30 @@ def slurp_stackmask(
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
             )
+
             # 1st layer : stack mask
-            eoscale_manager.write(key=final_mask[0], img_path=args.stackmask)
+            if args.categorized_watermask:
+                wbm = eoscale_manager.get_array(key_wbm)  # input_buffer[7]
+                watermask = eoscale_manager.get_array(key_watermask)
+                categorized_watermask = infer_waterbodies_type(
+                    wbm, watermask, vars(args)
+                )
+                print(f"DBG> {wbm.shape=}")
+                stack = eoscale_manager.get_array(key_final_mask[0])
+                stack[0] = np.where(
+                    categorized_watermask != 0, categorized_watermask, stack[0]
+                )
+                profile_stack = eoscale_manager.get_profile(key_final_mask[0])
+                io_utils.save_image(
+                    stack[0],
+                    args.stackmask,
+                    crs=profile_stack["crs"],
+                    transform=profile_stack["transform"],
+                )
+            else:
+                eoscale_manager.write(
+                    key=key_final_mask[0], img_path=args.stackmask
+                )
 
             if args.debug:
                 # 2nd layer : mask of (supposed) ground areas / (supposed) structures
@@ -749,7 +768,9 @@ def slurp_stackmask(
                     path.splitext(stackmask_filename)[0],
                     path.splitext(stackmask_filename)[0] + "_height",
                 )
-                eoscale_manager.write(key=final_mask[1], img_path=height_mask)
+                eoscale_manager.write(
+                    key=key_final_mask[1], img_path=height_mask
+                )
 
                 # 3rd layer : mask of markers (debug purpose)
                 markers_mask = str.replace(
@@ -757,7 +778,9 @@ def slurp_stackmask(
                     path.splitext(stackmask_filename)[0],
                     path.splitext(stackmask_filename)[0] + "_markers",
                 )
-                eoscale_manager.write(key=final_mask[2], img_path=markers_mask)
+                eoscale_manager.write(
+                    key=key_final_mask[2], img_path=markers_mask
+                )
 
             t1 = time.time()
             logger.info(
