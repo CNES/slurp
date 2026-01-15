@@ -23,6 +23,7 @@
 
 import numpy as np
 
+
 def compute_valid_stack_clouds(
     input_buffers: list, input_profiles: list, args: dict
 ) -> np.ndarray:
@@ -38,6 +39,10 @@ def compute_valid_stack_clouds(
         # 0 where image is valid, invalid for other values
         valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, 0)
     else:
-        valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, np.where(input_buffers[1] != 0, 2, 0))
+        valid_mask = np.where(
+            input_buffers[0][0] == args["nodata"],
+            1,
+            np.where(input_buffers[1] != 0, 2, 0),
+        )
 
     return valid_mask

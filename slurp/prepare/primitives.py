@@ -48,7 +48,7 @@ def compute_ndxi(
         + np.float32(input_buffer[0][params["im_b2"] - 1])
     )
     im_ndxi[np.logical_or(im_ndxi < -1000.0, im_ndxi > 1000.0)] = np.nan
-    im_ndxi[np.where(input_buffer[1][0]!=0)] = np.nan
+    im_ndxi[np.where(input_buffer[1][0] != 0)] = np.nan
     np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
     im_ndxi = np.int16(im_ndxi)
 
@@ -112,6 +112,6 @@ def texture_task(
         params["min_value"],
         params["max_value"],
     )
-    texture = np.where(input_buffers[1]!=0, NODATA_INT16, texture)
+    texture = np.where(input_buffers[1] != 0, NODATA_INT16, texture)
 
     return texture

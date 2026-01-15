@@ -60,4 +60,3 @@ def aux_file_recovery(
         all_coords,
         roi,
     )
-
