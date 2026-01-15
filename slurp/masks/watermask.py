@@ -99,25 +99,28 @@ def compute_hand_mask(
     return mask_hand
 
 
-def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
+def get_random_indexes_from_masks(
+    nb_samples: int, mask_1: np.ndarray, mask_2: np.ndarray
+):
     """
     Get random valid indexes from masks.
-    Mask 1 is a validity mask
+    :param int nb_samples : number of indices to count
+    :param np.ndarray Mask 1 is a validity mask - shape (height, width)
+    :param np.ndarray Mask 2 is the reference data mask - shape (height, width)
     """
     np.random.seed(712)  # reproductible results
     rows_idxs = []
     cols_idxs = []
 
-    if nb_indexes != 0:
+    if nb_samples != 0:
         nb_idxs = 0
 
         height = mask_1.shape[0]
         width = mask_1.shape[1]
 
-        while nb_idxs < nb_indexes:
+        while nb_idxs < nb_samples:
             row = np.random.randint(0, height)
             col = np.random.randint(0, width)
-
             if mask_1[row, col] and mask_2[row, col]:
                 rows_idxs.append(row)
                 cols_idxs.append(col)
@@ -126,19 +129,21 @@ def get_random_indexes_from_masks(nb_indexes, mask_1, mask_2):
     return rows_idxs, cols_idxs
 
 
-def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
+def get_grid_indexes_from_mask(
+    nb_samples: int, valid_mask: np.ndarray, mask_ground_truth: np.ndarray
+):
     """
     Retrieve row and columns indices selected on the valid pixel of the image
 
     :param int nb_samples: number of samples selected
-    :param boolean numpy array valid_mask :
-    :param boolean numpy array mask_ground_truth :
+    :param boolean numpy array valid_mask : shape (height, width)
+    :param boolean numpy array mask_ground_truth :  shape (height, width)
     :return: tuple of list , row indices and columns indices
     """
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(
         np.uint8
     )
-    _, rows, cols = np.where(valid_samples)
+    rows, cols = np.where(valid_samples)
 
     if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
@@ -156,30 +161,30 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     return s_rows, s_cols
 
 
-def get_smart_indexes_from_mask(nb_indexes, pct_area, minimum, mask):
+def get_smart_indexes_from_mask(nb_samples, pct_area, minimum, mask):
     """
     Retrieve row and columns indices selected on the valid pixel of the image
 
-    :param int nb_indexes: number of samples selected
+    :param int nb_samples: number of samples selected
     :param int pct_area: importance of area for selecting number of samples in each water surface
     :param int minimum: minimum number of samples in each water surface
-    :param boolean numpy array mask:
+    :param boolean numpy array mask: validity mask (shape (height, width))
     :return: tuple of list , row indices and columns indices
 
     """
     rows_idxs = []
     cols_idxs = []
 
-    if nb_indexes != 0:
+    if nb_samples != 0:
         img_labels, nb_labels = label(mask, return_num=True)
         props = regionprops(img_labels)
         mask_area = float(np.sum(mask))
 
         # number of samples for each label/prop
-        n1_indexes = int((1.0 - pct_area / 100.0) * nb_indexes / nb_labels)
+        n1_indexes = int((1.0 - pct_area / 100.0) * nb_samples / nb_labels)
 
         # number of samples to distribute to each label/prop
-        n2_indexes = pct_area / 100.0 * nb_indexes / mask_area
+        n2_indexes = pct_area / 100.0 * nb_samples / mask_area
 
         for prop in props:
             n3_indexes = n1_indexes + int(n2_indexes * prop.area)
@@ -216,21 +221,31 @@ def build_samples(
     :param dict params: dictionary of arguments
     :returns: Retrieve number of pixels for each class
     """
+    # Pixels are valid water pixels if is known in Pekel, above NDWI threshold
+    # and not masked in the input image (NO_DATA, clouds, etc.)
+    #
+    # Input validity mask has shape (1, heigth, width) to be consistent
+    # with other raster data (channel, heigth, width)
+    # But we propagate a simple boolean mask (heigth, width)
+    validity_mask = (input_buffer[0] == 0)[0]
     valid_water_pixels = np.logical_and(
         input_buffer[2], input_buffer[5] > params["ndwi_threshold"]
     )
+    valid_water_pixels = np.logical_and(valid_water_pixels, validity_mask)
 
-    nb_water_subset = np.count_nonzero(
-        np.logical_and(valid_water_pixels, input_buffer[0])
-    )
+    nb_water_subset = np.count_nonzero(valid_water_pixels)
 
     # valid pixels for 'other' (every thing but water) : valid mask + hand > 0
     # This criteria should be reconsidered
     # (ie : think of a relative threshold to select samples not too far from water)
     nb_valid_pix_other = np.count_nonzero(
-        np.logical_and(input_buffer[0], input_buffer[1])
+        np.logical_and(validity_mask, input_buffer[1])
     )
     nb_other_subset = nb_valid_pix_other
+
+    logger.debug(
+        f"DBG> {nb_water_subset=} {nb_other_subset=} {params['nb_valid_water_pixels']=}"
+    )
 
     # Ratio of pixel class compare to the full image ratio
     water_ratio = nb_water_subset / params["nb_valid_water_pixels"]
@@ -247,11 +262,11 @@ def build_samples(
     # Pekel samples
     if params["samples_method"] == "random":
         rows_pekel, cols_pekel = get_random_indexes_from_masks(
-            nb_water_subsamples, input_buffer[0][0], input_buffer[2][0]
+            nb_water_subsamples, validity_mask, input_buffer[2][0]
         )
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
+            nb_other_subsamples, validity_mask, input_buffer[1][0]
         )
 
     elif params["samples_method"] == "smart":
@@ -259,21 +274,21 @@ def build_samples(
             nb_water_subsamples,
             params["smart_area_pct"],
             params["smart_minimum"],
-            np.logical_and(input_buffer[2][0], input_buffer[0][0]),
+            np.logical_and(input_buffer[2][0], validity_mask),
         )
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
+            nb_other_subsamples, validity_mask, input_buffer[1][0]
         )
 
     elif params["samples_method"] == "grid":
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(
-            nb_water_subsamples, input_buffer[0], valid_water_pixels[0]
+            nb_water_subsamples, validity_mask, valid_water_pixels[0]
         )
 
         # Hand samples, always random (currently)
         rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, input_buffer[0][0], input_buffer[1][0]
+            nb_other_subsamples, validity_mask, input_buffer[1][0]
         )
 
     else:
@@ -306,15 +321,13 @@ def rf_prediction(
     :returns: predicted mask
     """
     im_stack = np.concatenate((input_buffer[1:]), axis=0)
-    valid_mask = input_buffer[0].astype(bool)
-    buffer_to_predict = np.transpose(im_stack[:, valid_mask[0].astype(bool)])
+    valid_mask = np.logical_not(input_buffer[0][0])
+    buffer_to_predict = np.transpose(im_stack[:, valid_mask])
 
     classifier = params["classifier"]
-    prediction = np.zeros(valid_mask[0].shape, dtype=np.uint8)
+    prediction = np.zeros(im_stack[0].shape, dtype=np.uint8)
     if buffer_to_predict.shape[0] > 0:  # not only NO DATA
-        prediction[valid_mask[0].astype(bool)] = classifier.predict(
-            buffer_to_predict
-        )
+        prediction[valid_mask] = classifier.predict(buffer_to_predict)
 
     utils.display_mem_usage(
         params["debug"],
@@ -411,11 +424,11 @@ def post_process(
         ).astype(np.uint8)
 
     # Add nodata in im_classif
-    im_classif[np.logical_not(input_buffer[3])] = NODATA_INT8
+    im_classif[np.where(input_buffer[3] != 0)] = NODATA_INT8
     im_classif[im_classif == 1] = params["value_classif"]
 
     im_predict = input_buffer[0]
-    im_predict[np.logical_not(input_buffer[3])] = NODATA_INT8
+    im_predict[np.where(input_buffer[3] != 0)] = NODATA_INT8
     im_predict[im_predict == 1] = params["value_classif"]
 
     return [im_predict, im_classif]
@@ -619,10 +632,14 @@ def nominal_case_predict(
     ]
     # Sample selection
     valid_stack = eoscale_manager.get_array(key_valid_stack)
-    nb_valid_pixels = np.count_nonzero(valid_stack)
+    nb_valid_pixels = len(
+        np.where(valid_stack == 0)[0]
+    )  # np."count_zero"(valid_stack)
+
     args.nb_valid_water_pixels = np.count_nonzero(
-        np.logical_and(local_mask_pekel, valid_stack)
+        np.logical_and(local_mask_pekel, valid_stack == 0)
     )
+
     args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
     input_for_samples = [
         key_valid_stack,
