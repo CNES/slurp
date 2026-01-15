@@ -111,7 +111,7 @@ def compute_mask_threshold(
     :returns: computed mask
     """
     mask = np.where(input_buffers[0][0] > params["threshold"], 1, 0)
-    mask = np.where(input_buffers[1][0] != 1, NODATA_INT8, mask)
+    mask[np.where(input_buffers[1][0] != 0)] = NODATA_INT8
 
     return mask
 

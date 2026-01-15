@@ -23,26 +23,8 @@
 
 import numpy as np
 
-
-def compute_valid_stack(
-    input_buffer: list, input_profiles: list, args: dict
-) -> np.ndarray:
-    """
-    Calculation of the valid pixels of a given image
-
-    :param list input_buffer: VHR input image [im_vhr]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_mask (boolean numpy array, True = valid data, False = no data)
-    """
-    valid_mask = np.logical_and.reduce(
-        input_buffer[0] != args["nodata"], axis=0
-    )
-    return valid_mask
-
-
 def compute_valid_stack_clouds(
-    input_buffer: list, input_profiles: list, args: dict
+    input_buffers: list, input_profiles: list, args: dict
 ) -> np.ndarray:
     """
     Calculation of the valid pixels of a given image with a cloud mask
@@ -50,10 +32,12 @@ def compute_valid_stack_clouds(
     :param list input_buffer: VHR input image [im_vhr, mask_cloud]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_mask (boolean numpy array, True = valid data, False = no data)
+    :returns: valid_mask (numpy array, 0 : valid, 1 : NODATA, 2 : Clouds)
     """
-    valid_phr = np.logical_and.reduce(input_buffer[0] != args["nodata"], axis=0)
-    no_cloud = input_buffer[1] == 0
-    valid_mask = np.logical_and(valid_phr, no_cloud)
+    if len(input_buffers) == 1:
+        # 0 where image is valid, invalid for other values
+        valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, 0)
+    else:
+        valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, np.where(input_buffers[1] != 0, 2, 0))
 
     return valid_mask

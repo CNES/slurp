@@ -93,7 +93,7 @@ def compute_shadowmask(
     :param list input_buffers: 0 -> image, 1 -> valid_stack, 2 -> watermask
     :param list input_profiles: image profiles (not used but necessary for eoscale)
     :param dict params: must contain the keys "thresholds", "binary_opening" and "small_objects"
-    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
+    :returns: valid_mask (int numpy array, 0: no shadows, 1: small shadows, 2: big shadows, + NODATA)
     """
     raw_shadow_mask = np.zeros(input_buffers[0][0].shape, dtype=int)
     raw_shadow_mask.fill(1)
@@ -126,7 +126,7 @@ def compute_shadowmask(
     final_shadow_mask += raw_shadow_mask
 
     # apply NO_DATA mask
-    final_shadow_mask[np.logical_not(input_buffers[1][0])] = NODATA_INT8
+    final_shadow_mask = np.where(input_buffers[1][0]==0,final_shadow_mask,NODATA_INT8)
 
     return final_shadow_mask
 
