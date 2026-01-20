@@ -67,7 +67,7 @@ def apply_vegetationmask(
     non_veg_dilated = apply_morpho(
         non_veg[0], "binary_dilation", params["veg_binary_dilation"]
     )
-    valid_stack = np.logical_and(input_buffer[0], [non_veg_dilated])
+    valid_stack = np.logical_and(input_buffer[0] == 0, [non_veg_dilated])
 
     return valid_stack
 
@@ -83,9 +83,7 @@ def apply_watermask(
     :param dict params: dictionary of arguments (not used but necessary for eoscale)
     :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
     """
-    valid_stack = np.logical_and(
-        input_buffer[0], np.where(input_buffer[1] == 0, True, False)
-    )
+    valid_stack = np.logical_and(input_buffer[0] == 0, input_buffer[1] == 0)
 
     return valid_stack
 
@@ -95,14 +93,14 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
     Recover of row and columns indices selected on the valid pixel of the image
 
     :param int nb_samples:
-    :param boolean numpy array valid_mask :
-    :param boolean numpy array mask_ground_truth :
+    :param boolean numpy array valid_mask :  shape (height, width)
+    :param boolean numpy array mask_ground_truth :  shape (height, width)
     :return: tuple of list , row indices and columns indices
     """
     valid_samples = np.logical_and(mask_ground_truth, valid_mask).astype(
         np.uint8
     )
-    _, rows, cols = np.where(valid_samples)
+    rows, cols = np.where(valid_samples)
 
     if 1 <= nb_samples <= len(rows):
         # np.arange(0, len(rows) -1, ...) : to be sure to exclude index len(rows)
@@ -130,6 +128,7 @@ def build_samples(
     """
     # Beware that WSF ground truth contains 0 (non building), 255 (building)
     # but sometimes 1 (invalid pixels ?)
+    validity_mask = (input_buffer[0] == 0)[0]
     mask_building_before_erosion = np.where(
         input_buffer[1] == params["value_classif"], True, False
     )
@@ -144,10 +143,10 @@ def build_samples(
 
     # Retrieve number of pixels for each class
     nb_built_subset = np.count_nonzero(
-        np.logical_and(mask_building, input_buffer[0])
+        np.logical_and(mask_building, validity_mask)
     )
     nb_other_subset = np.count_nonzero(
-        np.logical_and(mask_non_building, input_buffer[0])
+        np.logical_and(mask_non_building, validity_mask)
     )
     # Ratio of pixel class compare to the full image ratio
     urban_ratio = nb_built_subset / params["nb_valid_built_pixels"]
@@ -161,18 +160,18 @@ def build_samples(
     if nb_urban_subsamples > 0:
         # Building samples
         rows_b, cols_b = get_grid_indexes_from_mask(
-            nb_urban_subsamples, input_buffer[0][0], mask_building
+            nb_urban_subsamples, validity_mask, mask_building[0]
         )
 
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(
-                nb_other_subsamples, input_buffer[0][0], mask_non_building
+                nb_other_subsamples, validity_mask, mask_non_building[0]
             )
     else:
 
         if nb_other_subsamples > 0:
             rows_nob, cols_nob = get_grid_indexes_from_mask(
-                nb_other_subsamples, input_buffer[0][0], mask_non_building
+                nb_other_subsamples, validity_mask, mask_non_building[0]
             )
 
     rows = np.concatenate((rows_b, rows_nob))
@@ -200,8 +199,9 @@ def rf_prediction(
     :returns: predicted mask (proba)
     """
     im_stack = np.concatenate((input_buffer[2:]), axis=0)
-    nodata_mask = (1 - input_buffer[0]).astype(bool)
-    valid_mask = input_buffer[1].astype(bool)
+    nodata_mask = input_buffer[0] != 0
+    valid_mask = input_buffer[1] == 0
+
     buffer_to_predict = np.transpose(im_stack[:, valid_mask[0]])
     # buffer_to_predict are non NODATA pixels, defined by all the primitives
     # (R-G-B-NIR-NDVI-NDWI-[+ features]
@@ -213,20 +213,19 @@ def rf_prediction(
         res_classif = classifier.classes_.take(np.argmax(proba, axis=1), axis=0)
         res_classif[res_classif == 255] = 1
 
-        prediction = np.zeros(valid_mask.shape)
-        prediction[0][valid_mask[0]] = res_classif
-        prediction[0][nodata_mask[0]] = NODATA_INT8
+        prediction = np.zeros(valid_mask[0].shape)
+        prediction[valid_mask[0]] = res_classif
+        prediction[nodata_mask[0]] = NODATA_INT8
 
-        proba_buildings = np.zeros(valid_mask.shape)
-        proba_buildings[0][valid_mask[0]] = (
+        proba_buildings = np.zeros(valid_mask[0].shape)
+        proba_buildings[valid_mask[0]] = (
             100 * proba[:, 1]
         )  # Proba for class 1 (buildings)
-        proba_buildings[0][nodata_mask[0]] = NODATA_INT8
-
+        proba_buildings[nodata_mask[0]] = NODATA_INT8
     else:
         # corner case : only NO_DATA !
-        prediction = np.full(valid_mask.shape, NODATA_INT8)
-        proba_buildings = np.full(valid_mask.shape, NODATA_INT8)
+        prediction = np.full(valid_mask[0].shape, NODATA_INT8)
+        proba_buildings = np.full(valid_mask[0].shape, NODATA_INT8)
 
     return [proba_buildings, prediction]
 
@@ -338,7 +337,7 @@ def nominal_case_urbanmask(
 
         key_predict = eoexe.n_images_to_m_images_filter(
             inputs=[key_original_valid_stack],
-            image_filter=add_nodata,
+            image_filter=fill_constant_mask,
             filter_parameters={"fill_value": 0},
             generate_output_profiles=eo_utils.single_uint8_profile,
             context_manager=eoscale_manager,
@@ -508,7 +507,7 @@ def samples_train_and_predict(
     return time_random_forest
 
 
-def add_nodata(
+def fill_constant_mask(
     input_buffer: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
@@ -519,9 +518,10 @@ def add_nodata(
     :param dict params: dictionary of arguments
     :returns: updated predicted mask (proba)
     """
-    nodata_mask = (1 - input_buffer[0]).astype(bool)
-    proba_buildings = np.full(nodata_mask.shape, params["fill_value"])
-    proba_buildings[nodata_mask] = NODATA_INT8
+
+    proba_buildings = np.where(
+        input_buffer[0] == 0, params["fill_value"], NODATA_INT8
+    )
 
     return proba_buildings
 
@@ -752,9 +752,11 @@ def slurp_urbanmask(
             ]
 
             # Calculation of valid pixels
-            nb_valid_pixels = np.count_nonzero(valid_stack)
+            nb_valid_pixels = len(
+                np.where(valid_stack == 0)[0]
+            )  # np.count_nonzero(valid_stack)
             args.nb_valid_built_pixels = np.count_nonzero(
-                np.logical_and(local_gt, valid_stack)
+                np.logical_and(local_gt, valid_stack == 0)
             )
             args.nb_valid_other_pixels = (
                 nb_valid_pixels - args.nb_valid_built_pixels
@@ -791,7 +793,7 @@ def slurp_urbanmask(
 
                 key_predict = eoexe.n_images_to_m_images_filter(
                     inputs=[key_original_valid_stack],
-                    image_filter=add_nodata,
+                    image_filter=fill_constant_mask,
                     filter_parameters={"fill_value": 100},
                     generate_output_profiles=eo_utils.single_uint8_profile,
                     context_manager=eoscale_manager,
@@ -812,7 +814,7 @@ def slurp_urbanmask(
 
                 key_predict = eoexe.n_images_to_m_images_filter(
                     inputs=[key_original_valid_stack],
-                    image_filter=add_nodata,
+                    image_filter=fill_constant_mask,
                     filter_parameters={"fill_value": 0},
                     generate_output_profiles=eo_utils.single_uint8_profile,
                     context_manager=eoscale_manager,
