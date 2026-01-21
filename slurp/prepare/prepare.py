@@ -485,7 +485,7 @@ def wbm_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
 
-    if args.wbm and args.extracted_wbm and args.categorized_watermask:
+    if args.wbm and args.extracted_wbm:
         if args.extracted_wbm is not None and (
             args.overwrite or not path.isfile(args.extracted_wbm)
         ):
