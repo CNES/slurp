@@ -7,5 +7,8 @@
     "pekel": "tests/inputs/out/pekel.tif",
     "hand": "tests/inputs/hand.tif",
     "wsf": "tests/inputs/wsf.tif",
-    "valid_stack": "tests/inputs/out/valid_stack.tif"
+    "valid_stack": "tests/inputs/out/valid_stack.tif",
+    "ndwi": "tests/inputs/out/ndwi.tif",
+    "ndvi": "tests/inputs/out/ndvi.tif",
+    "texture": "tests/inputs/out/texture.tif"
 }

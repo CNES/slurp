@@ -293,7 +293,7 @@ def post_process(
         )
 
     # Apply NODATA
-    stack[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+    stack[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
 
     height_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
@@ -310,12 +310,12 @@ def post_process(
     height_layer[0][watermask[0] == 1] = 0
     height_layer[0][shadowmask[0] == 2] = 0
 
-    height_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+    height_layer[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
 
     markers_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
     # Markers
     markers_layer[0] = markers
-    markers_layer[0][np.logical_not(valid_stack[0])] = NODATA_INT8
+    markers_layer[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
 
     return [stack, height_layer, markers_layer]
 
@@ -547,7 +547,8 @@ def slurp_stackmask(
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
-        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
+        # If the parameter from the CLI is not None,
+        # we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 

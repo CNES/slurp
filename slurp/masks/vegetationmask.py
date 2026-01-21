@@ -39,7 +39,7 @@ import stats as ts
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import eoscale_utils as eo_utils
 from slurp.tools import utils
-from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
+from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8
 
 logger = logging.getLogger("slurp")
 
@@ -108,8 +108,8 @@ def segmentation_task(
     segments = compute_segmentation(params, input_buffers[0], input_buffers[1])
 
     # minimum segment is 1, attribute 0 to no_data pixel
-    segments[np.logical_not(input_buffers[2])] = 0
-    segments[np.where(input_buffers[1] == NODATA_INT16)] = 0
+    # valid_stack contains valid pixels (0) and invalid pixels (any other value)
+    segments = np.where(input_buffers[2] == 0, segments, 0)
 
     return segments
 
@@ -533,7 +533,7 @@ def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     final_mask = ts_stats.finalize(input_buffers[0], clustering)
 
     # Add nodata in final_mask (input_buffers[1] : valid mask)
-    final_mask[np.logical_not(input_buffers[1][0])] = NODATA_INT8
+    final_mask = np.where(input_buffers[1][0] == 0, final_mask, NODATA_INT8)
 
     return final_mask
 
@@ -599,7 +599,7 @@ def clean_task(
         im_classif,
     )
 
-    im_classif[np.logical_not(valid_stack)] = NODATA_INT8
+    im_classif = np.where(valid_stack == 0, im_classif, NODATA_INT8)
 
     return im_classif
 

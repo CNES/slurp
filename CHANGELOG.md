@@ -12,7 +12,7 @@ A new section Unreleased is opened then for next dev phase.
 	- Add possibility to use a nearly void config files : almost all config files shall be initiated with default values #14
 
 ### Changed
-	- Change convention for validity mask : 0 values shall stand for "valid" pixels, and other values shall stand for user specified reasons (ex : 1 for NO_DATA in input VHR image, 2 for clouds, etc.)
+	- Change convention for validity mask : 0 values shall stand for "valid" pixels, and other values shall stand for user specified reasons (ex : 1 for NO_DATA in input VHR image, 2 for clouds, etc.) --> see #32
 
 ### Fixed
 	- fix precommit (#26)
