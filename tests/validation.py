@@ -60,6 +60,9 @@ def validate_mask(new_file, key, ref_dir, valid_pixels=True):
     ds_ref_mask = rio.open(ref_file)
     ds_new_mask = rio.open(new_file)
 
+    print(f"Validate and compare {new_file=} to reference {ref_file=}")
+    print(f"echo 'update ref'; cp {new_file=} {ref_file=}")
+
     # Dataset comparison
     compare_datasets(ds_new_mask, ds_ref_mask)
 
