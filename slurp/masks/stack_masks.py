@@ -744,7 +744,6 @@ def slurp_stackmask(
                 categorized_watermask = infer_waterbodies_type(
                     wbm, watermask, vars(args)
                 )
-                print(f"DBG> {wbm.shape=}")
                 stack = eoscale_manager.get_array(key_final_mask[0])
                 stack[0] = np.where(
                     categorized_watermask != 0, categorized_watermask, stack[0]
