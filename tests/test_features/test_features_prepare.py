@@ -38,6 +38,18 @@ def write_command_compute_prepare(
     )
 
 
+def write_command_compute_prepare_all(
+    nb_workers, main_config, features_test_img, output_dir, ndvi, ndwi, texture
+):
+    """Builds a command string to run the prepare module with
+    specified worker count"""
+
+    return (
+        f"prepare.py {main_config} -file_vhr {features_test_img} -n_workers {nb_workers} "
+        f"-file_ndvi {ndvi} -file_ndwi {ndwi} -file_texture {texture}"
+    )
+
+
 @pytest.mark.features
 def test_absolute_analyse_glcm(main_config, features_test_img, output_dir):
     """Tests the prepare module with glcm analysis enabled
@@ -52,15 +64,33 @@ def test_absolute_analyse_glcm(main_config, features_test_img, output_dir):
 
 
 @pytest.mark.ci
-def test_absolute_analyse_glcm_ci(
+def test_prepare_no_analyse_glcm_ci(
     main_config, features_test_img, valid_stack, output_dir
 ):
-    """Run the test_absolute_analyse_glcm with a specified valid_stack (for GithubCI)."""
+    """Run test on prepare step with a specified valid_stack (for GithubCI)."""
     command = (
         write_command_compute_prepare(
             1, main_config, features_test_img, output_dir, valid_stack
         )
-        + "--no_analyse_glcm"
+        + " --no_analyse_glcm"
+    ).split()
+    sys.argv = command
+    slurp.prepare.prepare.main()
+
+
+@pytest.mark.ci
+def test_prepare_all_ci(
+    main_config, features_test_img, valid_stack, output_dir, ndvi, ndwi, texture
+):
+    """
+    Run test on prepare step with void config : will compute primitives
+    and valid_stack (for GithubCI).
+    """
+    command = (
+        write_command_compute_prepare_all(
+            1, main_config, features_test_img, output_dir, ndvi, ndwi, texture
+        )
+        + " --no_analyse_glcm"
     ).split()
     sys.argv = command
     slurp.prepare.prepare.main()

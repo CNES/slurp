@@ -8,7 +8,7 @@
 
   },
   "aux_layers": {
-    "valid_stack": null,
+    "valid_stack": "tests/inputs/valid_stack.tif",
     "file_ndvi": "tests/inputs/ndvi.tif",
     "file_ndwi": "tests/inputs/ndwi.tif",
     "extracted_pekel": "tests/inputs/pekel.tif",
@@ -38,7 +38,7 @@
     "red": 1,
     "green": 2,
     "nir": 4,
-    "cloud_mask": null,
+    "cloud_mask": "tests/inputs/fake_cloud.tif",
     "pekel_method": "all",
     "pekel": null,
     "pekel_obs": null,

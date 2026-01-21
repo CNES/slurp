@@ -113,3 +113,18 @@ def valid_stack(config):
 @pytest.fixture
 def main_config(config):
     return config["main_config"]
+
+
+@pytest.fixture
+def ndvi(config):
+    return config["ndvi"]
+
+
+@pytest.fixture
+def ndwi(config):
+    return config["ndwi"]
+
+
+@pytest.fixture
+def texture(config):
+    return config["texture"]

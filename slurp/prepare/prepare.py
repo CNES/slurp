@@ -263,31 +263,22 @@ def create_valid_stack(
         list of VirtualPath to the filtered output images
     """
     makedirs(path.dirname(args.valid_stack), exist_ok=True)
+    input_keys = [key_vhr]
     if args.cloud_mask:
         key_cloud_mask = eoscale_manager.open_raster(
-            raster_path=args.cloud_mask
-        )
-        valid_stack_key = eoexe.n_images_to_m_images_filter(
-            inputs=[key_vhr, key_cloud_mask],
-            image_filter=validity.compute_valid_stack_clouds,
-            filter_parameters={"nodata": profile["nodata"]},
-            generate_output_profiles=eo_utils.single_uint8_1b_profile,
-            stable_margin=0,
-            context_manager=eoscale_manager,
-            multiproc_context=args.multiproc_context,
-            filter_desc="Valid stack processing...",
-        )
-    else:
-        valid_stack_key = eoexe.n_images_to_m_images_filter(
-            inputs=[key_vhr],
-            image_filter=validity.compute_valid_stack,
-            filter_parameters={"nodata": profile["nodata"]},
-            generate_output_profiles=eo_utils.single_uint8_1b_profile,
-            stable_margin=0,
-            context_manager=eoscale_manager,
-            multiproc_context=args.multiproc_context,
-            filter_desc="Valid stack processing...",
-        )
+            raster_path=args.cloud_mask)
+        input_keys = [key_vhr, key_cloud_mask]
+
+    valid_stack_key = eoexe.n_images_to_m_images_filter(
+        inputs=input_keys,
+        image_filter=validity.compute_valid_stack_clouds,
+        filter_parameters={"nodata": profile["nodata"]},
+        generate_output_profiles=eo_utils.single_uint8_profile,
+        stable_margin=0,
+        context_manager=eoscale_manager,
+        multiproc_context=args.multiproc_context,
+        filter_desc="Valid stack processing...",
+    )
     return valid_stack_key
 
 
@@ -494,7 +485,7 @@ def wbm_extraction(
         args (argparse.Namespace): Namespace object of arguments.
     """
 
-    if args.wbm and args.extracted_wbm and args.categorized_watermask:
+    if args.wbm and args.extracted_wbm:
         if args.extracted_wbm is not None and (
             args.overwrite or not path.isfile(args.extracted_wbm)
         ):
@@ -537,9 +528,12 @@ def compute_texture(
             makedirs(path.dirname(args.file_texture), exist_ok=True)
             # take percentiles to avoid outliers that could affect texture computation
             # compute texture on NIR band
-            percentiles = np.percentile(
-                eoscale_manager.get_array(key_vhr)[args.nir - 1], [2, 98]
-            )
+            image_vhr = eoscale_manager.get_array(key_vhr)
+            valid_stack = eoscale_manager.get_array(valid_stack_key[0])
+            percentiles = np.percentile(image_vhr[args.nir - 1][np.where(valid_stack[0]==0)], [2, 98])
+            del image_vhr
+            del valid_stack
+
             params = {
                 "nir": args.nir,
                 "texture_rad": args.texture_rad,
@@ -548,7 +542,7 @@ def compute_texture(
             }
             key_texture = eoexe.n_images_to_m_images_filter(
                 inputs=[key_vhr, valid_stack_key[0]],
-                image_filter=aux.texture_task,
+                image_filter=primitives.texture_task,
                 filter_parameters=params,
                 generate_output_profiles=eo_utils.single_uint16_profile,
                 stable_margin=args.texture_rad,

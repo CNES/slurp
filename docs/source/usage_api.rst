@@ -16,7 +16,7 @@ Then, you can import it in your Python scripts or notebooks.
 
 .. code-block:: python
 
-   import slurp-masks as slurp
+   import slurp
 
 Data preparation
 ----------------
