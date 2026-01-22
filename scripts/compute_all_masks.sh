@@ -35,6 +35,8 @@ echo "Launch SLURP from `pwd`"
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt -out "out/pekel.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/CAMPUS/etudes/Masques_CO3D/Data/WBM/wbm.vrt -out "out/wbm.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+
 
 # Prepare
 slurp_prepare ${CONF} -file_vhr ${VHR_IM} ${OPT_PREPARE}

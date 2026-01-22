@@ -52,7 +52,7 @@
 	    "land_cover_map": "/work/CAMPUS/DATA/ESA_WORLDCOVER/ESA_WorldCover.vrt",
             "cropped_land_cover_map": false,
 	    "effective_used_config": "out/effective_used_config.json",
-	    "wbm":"/path/to/the/wbm/wbm.tif"
+	    "wbm":"/work/CAMPUS/etudes/Masques_CO3D/Data/WBM/wbm.vrt"
 	},
 
   "post_process":
@@ -149,6 +149,6 @@
 	"minimal_size_water_area": 10000,
 	"binary_closing":0,
 	"binary_opening":0,
-      "categorized_watermask": false
+      "categorized_watermask": true
     }
 }

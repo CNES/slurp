@@ -57,9 +57,13 @@ def compute_stackmask(
         f"slurp_stackmasks {main_config} -file_vhr {file} -n_workers {nb_workers} "
         f"-stackmask {output_image} "
         f"-vegetationmask {vegetationmask} -watermask {watermask} "
-        f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} -log_f"
-    ).split()
-    sys.argv = command
+        f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} -log_f "
+    )
+    if os.path.exists(os.path.join(masks_folder, "wbm.tif")):
+        wbm = os.path.join(masks_folder, "wbm.tif")
+        command = command + f"-wbm {wbm} --categorized_watermask"
+
+    sys.argv = command.split()
     slurp.masks.stack_masks.main()
 
     assert os.path.exists(
@@ -97,7 +101,7 @@ def test_computation_stackmask_ci(
 
 
 @pytest.mark.validation
-def test_computation_and_validation_stackask(
+def test_computation_and_validation_stackmask(
     input_files, main_config, output_dir, data_dir, ref_dir
 ):
     """Tests both computation and validation of stack mask for each input file."""

@@ -13,11 +13,12 @@ A new section Unreleased is opened then for next dev phase.
 
 ### Changed
 	- Change convention for validity mask : 0 values shall stand for "valid" pixels, and other values shall stand for user specified reasons (ex : 1 for NO_DATA in input VHR image, 2 for clouds, etc.) --> see #32
+	- Modification in waterbodies categorization algorithm : the option is now --categorized_watermask or --no_categorized_watermask. The algorithm works now fine even when some waterbodies partially intersect WBM (PR #38; issue #33)
 
 ### Fixed
 	- fix precommit (#26)
 	- fix sphinx doc tests (#25)
-	- improve water bodies categorization to fix #33 : the idea is to analyse all categorized water detections and merge neighboured areas that have been separated by tiling.
+
 
 ## 0.0.4 First Official Release (2025-09-25)
 
