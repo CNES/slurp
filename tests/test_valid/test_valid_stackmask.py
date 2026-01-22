@@ -61,7 +61,7 @@ def compute_stackmask(
     )
     if os.path.exists(os.path.join(masks_folder, "wbm.tif")):
         wbm = os.path.join(masks_folder, "wbm.tif")
-        command = command + f"-wbm {wbm} -categorized_watermask true"
+        command = command + f"-wbm {wbm} --categorized_watermask"
 
     sys.argv = command.split()
     slurp.masks.stack_masks.main()

@@ -32,7 +32,6 @@ import json
 import logging
 import time
 import traceback
-import uuid
 from os import path
 
 import eoscale.eo_executors as eoexe
@@ -40,7 +39,7 @@ import eoscale.manager as eom
 import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
-from skimage.measure import label, regionprops
+from skimage.measure import label
 
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import eoscale_utils as eo_utils
@@ -48,6 +47,11 @@ from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 logger = logging.getLogger("slurp")
+
+# Values from Copernicus WaterBodyMask
+SEA = 1
+LAKE = 2
+RIVER = 3
 
 
 def watershed_regul_buildings(
@@ -165,182 +169,65 @@ def infer_waterbodies_type(wbm, watermask, params):
     :param dict params: dictionary of arguments
     :return: categorized mask
     """
-
-    # Values from Copernicus WaterBodyMask
-    SEA = 1
-    LAKE = 2
-    # RIVER = 3 (not used) TODO : check if we need to keep this parameter
-
-    # TODO : maybe this function should be applied to the whole mask, to avoid
-    # tiling effects
-
-    # 1st step : obtain a clean watermask
-    nb_iter = 10
+    nb_iter = 2
+    clean_watermask = watermask[0] == 1
     for _ in range(nb_iter):
-        # TODO : ne sert à rien : il faut faire clean=watermask
-        # puis  clean = morpho(clean) pour 1 à 10
-        clean_watermask = apply_morpho(
-            watermask[0] == 1, "binary_opening", params["binary_opening"]
-        )
+        clean_watermask = apply_morpho(clean_watermask, "binary_opening", 2)
+
     # remove small objects in order to reduce the segmentation
     watermask_remove = apply_morpho(
-        clean_watermask == 1,
+        clean_watermask,
         "remove_small_objects",
+        params["minimal_size_water_area"],
+    )
+
+    watermask_remove = apply_morpho(
+        watermask_remove,
+        "remove_small_holes",
         params["minimal_size_water_area"],
     )
 
     # 2nd step: segmentation
     # label image regions
     label_image = label(watermask_remove)
-    # each instance is defined by a region
-    regions = regionprops(label_image)
-
-    # create an empty binary mask for each category of water
-
-    # TODO : optimize : we dont need 3 temporary masks here
-
-    sea_mask = np.zeros(label_image.shape)
-    lake_mask = np.zeros(label_image.shape)
-    river_mask = np.zeros(label_image.shape)
-
-    # instantiate each binary mask
-    for region in regions:
-        # take the center of each region
-        coords = np.round(region.centroid).astype(int)
-        # and apply the label of the WBM
-        if wbm[0, coords[0], coords[1]] == SEA:
-            sea_mask = np.where(
-                label_image == region.label, sea_mask + 1, sea_mask
-            )
-        elif wbm[0, coords[0], coords[1]] == LAKE:
-            lake_mask = np.where(
-                label_image == region.label, lake_mask + 1, lake_mask
-            )
-        # river and regions not in the WBM are considered as river
-        else:
-            river_mask = np.where(
-                label_image == region.label, river_mask + 1, river_mask
-            )
-
-    # combined the binary masks into a stack mask
-    categorized_watermask = np.where(
-        sea_mask,
-        sea_mask * params["value_classif_sea"],
-        np.where(
-            lake_mask,
-            lake_mask * params["value_classif_lake"],
-            np.where(
-                river_mask,
-                river_mask * params["value_classif_river"],
-                watermask_remove,
-            ),
-        ),
+    logger.debug(
+        f"Infer waterbodies type --> {len(np.unique(label_image))} water bodies found"
     )
+
+    categorized_watermask = np.zeros_like(label_image)
+
+    list_classes = {
+        SEA: params["value_classif_sea"],
+        LAKE: params["value_classif_lake"],
+        RIVER: params["value_classif_river"],
+        0: 0,  # params["value_classif_water"]
+    }
+    # loop on all water bodies
+    val_uniques = np.unique(label_image)
+    for val in val_uniques:
+        mask_val = label_image == val
+        # values from WBM covered by value 'val' in label_image
+        if 1 in watermask_remove[mask_val]:
+            # water body
+            sub_set_wbm = wbm[0][mask_val]
+            kind_waterbodies = np.unique(sub_set_wbm)
+            # We select water body type by priority order
+            # sea > lake > river > (other) water
+            main_wb = choose_wb(kind_waterbodies)
+            categorized_watermask[mask_val] = list_classes[main_wb]
 
     return categorized_watermask
 
 
-def count_regions(mask):
-    if mask.shape[2] * mask.shape[1] != 0:
-        label_image = label(mask)
-        regions = regionprops(label_image)
-        nb_reg = len(regions)
-        # print(f"DBG count_regions in region of shape {mask.shape} : {nb_reg} regions")
+def choose_wb(kind_waterbodies):
+    if SEA in kind_waterbodies:
+        return SEA
+    elif LAKE in kind_waterbodies:
+        return LAKE
+    elif RIVER in kind_waterbodies:
+        return RIVER
     else:
-        nb_reg = 0
-
-    return nb_reg
-
-
-def concat_seg(previous_result, output_algo_computer, tile):
-    """
-    Concatenates several segmentation and fix classes for shapes that overlap
-    tiles frontiers
-    previous_result : main result (already computed)
-    output_algo_computer : current computation (will update main result)
-    tile : coords of output_algo_computer in main result
-
-    nominal way to do it :
-    previous_result[0][:, tile.start_y : tile.end_y + 1,
-                          tile.start_x : tile.end_x + 1]
-              = output_algo_computer[0][:, :, :]
-    """
-    # TODO : replace this function by a finalize function that attribute a single class
-    # to neighboured water bodies (only separated by the tile frontier)
-
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = output_algo_computer[0][:, :, :]
-
-    """
-    proportion_covered_by_tile = (
-        output_algo_computer[0].shape[1] * output_algo_computer[0].shape[2]
-    ) / (previous_result[0].shape[1] * previous_result[0].shape[2])
-    print(
-        f"DBG> {proportion_covered_by_tile} % emprise {tile=} {output_algo_computer[0].shape=}"
-    )
-    top_recov_zone = output_algo_computer[0][
-        :,
-        tile.start_y - tile.top_margin + 1 : tile.start_y,
-        tile.start_x : tile.end_x + 1,
-    ]
-    bottom_recov_zone = output_algo_computer[0][
-        :,
-        tile.end_y : tile.end_y + tile.bottom_margin,
-        tile.start_x : tile.end_x + 1,
-    ]
-
-    nb_reg = count_regions(top_recov_zone)
-    #    print(f"DBG> {nb_reg} in top recov zone {top_recov_zone.shape}")
-    nb_reg = count_regions(bottom_recov_zone)
-    # print(f"DBG> {nb_reg} in bottom recov zone {bottom_recov_zone.shape}")
-
-    # ["start_x", "start_y", "end_x", "end_y", "top_margin", "right_margin",
-        "left_margin", "bottom_margin"])
-
-    eoexe.default_reduce(previous_result, output_algo_computer, tile)
-    # TODO : zone de recouvrement ?
-
-    temp_mask = np.zeros_like(previous_result)
-    temp_mask[0][:, tile.start_y : tile.end_y + 1, 
-                   tile.start_x : tile.end_x + 1] = output_algo_computer[0][:, :, :]
-
-    labels_main = label(previous_result[0])
-    regions_main = regionprops(labels_main)
-
-    labels_res = label(temp_mask[0])
-    regions_res = regionprops(labels_res)
-
-    list_label_main = np.unique_values(labels_main)
-    list_label_res =  np.unique_values(labels_res)
-
-    print(f"DBG> {list_label_res=}")
-    print(f"DBG> {list_label_main=}")
-
-
-    for l1 in list_label_main:
-        l1_dilate = apply_morpho(labels_main==l1,"binary_dilation",1)
-        val_r1 = previous_result[0][label_im==l1][0]
-
-        for l2 in list_label_res:
-            l2_dilate = apply_morpho(labels_res==l2,"binary_dilation",1)
-            val_r2 = temp_mask[0][label_res==l2][0]
-            
-            if val_r1 != val_r2:
-                if np.any(np.logical_and(l1_dilate, l2_dilate)):
-                    print("r1 et r2 se touchent et ont des classes différentes")
-                    if val_r1 ==  params["value_classif_sea"] and
-    val_r2 == params["value_classif_water"]:
-                        temp_mask[0][np.where(labels_res==l2)]=params["value_classif_sea"]
-                    elif val_r2  ==  params["value_classif_sea"] 
-and val_r1 == params["value_classif_water"]:
-                        previous_result[0][np.where(labels_main==l1)]=params["value_classif_sea"]
-                else:
-                    print("régions séparées")
-
-    previous_result[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1] 
-= temp_mask[0][:, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1]
-    """
+        return 0
 
 
 def post_process(
@@ -419,12 +306,6 @@ def post_process(
     # Markers
     markers_layer[0] = markers
     markers_layer[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
-
-    if params["debug"]:
-        prefix = str(uuid.uuid4())
-        io_utils.save_image(
-            stack[0], params["stackmask"].replace(".tif", f"{prefix}.tif")
-        )
 
     return [stack, height_layer, markers_layer]
 
@@ -523,9 +404,16 @@ def getarguments():
     )
 
     group2.add_argument(
-        "-categorized_watermask",
-        type=bool,
-        help="If true, compute a categorized watermask based on the WBM file",
+        "--categorized_watermask",
+        dest="categorized_watermask",
+        action="store_true",
+        help="Compute a categorized watermask based on the WBM file",
+    )
+    group2.add_argument(
+        "--no_categorized_watermask",
+        dest="categorized_watermask",
+        action="store_false",
+        help="Don't compute the categorize watermask",
     )
 
     group2.add_argument(
@@ -698,30 +586,15 @@ def slurp_stackmask(
             key_validstack = eoscale_manager.open_raster(
                 raster_path=args.valid_stack
             )
-            if args.categorized_watermask:
-                key_wbm = eoscale_manager.open_raster(
-                    raster_path=args.extracted_wbm
-                )
-                inputs_final = [
-                    key_image,
-                    key_validstack,
-                    key_watermask,
-                    key_vegmask,
-                    key_urbanmask,
-                    key_shadowmask,
-                    key_wsf,
-                    key_wbm,
-                ]
-            else:
-                inputs_final = [
-                    key_image,
-                    key_validstack,
-                    key_watermask,
-                    key_vegmask,
-                    key_urbanmask,
-                    key_shadowmask,
-                    key_wsf,
-                ]
+            inputs_final = [
+                key_image,
+                key_validstack,
+                key_watermask,
+                key_vegmask,
+                key_urbanmask,
+                key_shadowmask,
+                key_wsf,
+            ]
             args.nodata_vhr = 0  # TODO : get nodata value from image profile
 
             logger.info("Before post process")
@@ -732,13 +605,16 @@ def slurp_stackmask(
                 generate_output_profiles=eo_utils.three_uint8_profile,
                 stable_margin=100,  # TODO : add a stability margin parameter ?
                 context_manager=eoscale_manager,
-                concatenate_filter=concat_seg,
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
             )
 
             # 1st layer : stack mask
+            logger.debug(f"{args.categorized_watermask=}")
             if args.categorized_watermask:
+                key_wbm = eoscale_manager.open_raster(
+                    raster_path=args.extracted_wbm
+                )
                 wbm = eoscale_manager.get_array(key_wbm)  # input_buffer[7]
                 watermask = eoscale_manager.get_array(key_watermask)
                 categorized_watermask = infer_waterbodies_type(
