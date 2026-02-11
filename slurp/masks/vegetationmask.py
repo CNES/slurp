@@ -65,9 +65,7 @@ def apply_map(pred, map_centroids):
 # Segmentation #
 
 
-def compute_segmentation(
-    params: dict, ndvi: np.ndarray
-) -> np.ndarray:
+def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     """
     Compute segmentation with SLIC
 
@@ -82,7 +80,7 @@ def compute_segmentation(
         logger.debug(f"Taille de segments : 0 !!  attention, risque de div par zero {ndvi.shape=}")
     """
     nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
-        
+
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)
     res_seg = slic(
@@ -110,8 +108,8 @@ def segmentation_task(
     # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
     # Warning : input_buffers[0] : the mask is not applied !
     # But we only use NDVI mode (see compute_segmentation)
-    nb_val_zero = len(np.where(input_buffers[1]==0)[0])
-    if (nb_val_zero == 0): 
+    nb_val_zero = len(np.where(input_buffers[1] == 0)[0])
+    if nb_val_zero == 0:
         # The input image is only NODATA !!
         # We don't compute segmentation
         logger.debug(f"DBG> Tile is full of NODATA -> don't compute seg")
@@ -121,7 +119,7 @@ def segmentation_task(
         # minimum segment is 1, attribute 0 to no_data pixel
         # valid_stack contains valid pixels (0) and invalid pixels (any other value)
         segments = np.where(input_buffers[1] == 0, segments, 0)
-        
+
     return segments
 
 
@@ -133,9 +131,9 @@ def concat_seg(previous_result, output_algo_computer, tile):
     # prevents from computing a map with several identical labels !!
     num_seg = np.max(previous_result[0])
 
-    #logger.debug(f"print DBG> {np.max(output_algo_computer)=} {len(np.unique(output_algo_computer))=}")
-    #logger.debug(f"print DBG> {np.max(previous_result)=} {len(np.unique(previous_result))=}")
-    
+    # logger.debug(f"print DBG> {np.max(output_algo_computer)=} {len(np.unique(output_algo_computer))=}")
+    # logger.debug(f"print DBG> {np.max(previous_result)=} {len(np.unique(previous_result))=}")
+
     previous_result[0][
         :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
     ] = (output_algo_computer[0][:, :, :] + num_seg)
@@ -164,7 +162,7 @@ def compute_stats_image(
     :returns: [ sum of each primitive ; counter (nb pixels / seg) ]
     """
     ts_stats = ts.PyStats()
-    nb_primitives = 3 # NDVI, NDWI, Texture
+    nb_primitives = 3  # NDVI, NDWI, Texture
 
     # input_buffer : list of (one band, rows, cols) images
     # [:,0,:,:] -> transform in an array (3bands, rows, cols)
@@ -193,7 +191,10 @@ def stats_concatenate(output_scalars, chunk_output_scalars, tile):
 
 
 def clustering_vegetation(
-        params: dict, size_result: int, stats: np.ndarray, mask_valid_indices: np.ndarray
+    params: dict,
+    size_result: int,
+    stats: np.ndarray,
+    mask_valid_indices: np.ndarray,
 ) -> np.ndarray:
     """
     Classify segments with a k-means clustering, based on NDVI/NDWI values
@@ -230,15 +231,20 @@ def clustering_vegetation(
     sorted_ndvi = np.sort(ndvi_values).tolist()
 
     sorted_clusters = np.array([sorted_ndvi.index(v) for v in ndvi_values])
-    logger.debug(f"1st clustering : NDVI centroids : {sorted_ndvi} {sorted_clusters=}")
+    logger.debug(
+        f"1st clustering : NDVI centroids : {sorted_ndvi} {sorted_clusters=}"
+    )
     pred_veg_sorted = apply_map(pred_veg, sorted_clusters)
 
     return pred_veg_sorted, sorted_ndvi
 
 
 def clustering_texture(
-        params: dict, size_result: int, stats: np.ndarray,
-        clustering: np.ndarray, mask_valid_indices: np.ndarray
+    params: dict,
+    size_result: int,
+    stats: np.ndarray,
+    clustering: np.ndarray,
+    mask_valid_indices: np.ndarray,
 ) -> np.ndarray:
     """
     Classify segments with a k-means clustering, based on texture value.
@@ -246,7 +252,7 @@ def clustering_texture(
     returns a list of segments with their cluster index (0..nb_clusters),
     ordered by increasing mean texture value
     :param dict params: arguments of the algorithm
-    :param int size_result: size of the final result 
+    :param int size_result: size of the final result
                             (nb of segments initially detected + 1 for NODATA areas)
     :param np.ndarray stats: sum of each primitive for each segment
         stats[0:size_result] -> mean NDVI
@@ -257,18 +263,20 @@ def clustering_texture(
     returns [ array of segments, with their cluster index (ordered by texture value),
     list of texture centroid values]
     """
-    
+
     mean_texture = stats[2 * size_result :]
     """
     texture_values = np.nan_to_num(
         mean_texture[np.where(clustering >= UNDEFINED_VEG)]
     )
     """
-    veg_values =  mean_texture[np.where(mask_valid_indices)]
-    texture_values = veg_values[np.where(clustering>= UNDEFINED_VEG)]
-    
-    logger.debug(f"DBG> {mean_texture.shape=} {clustering.shape=} {texture_values.shape=}")
-    
+    veg_values = mean_texture[np.where(mask_valid_indices)]
+    texture_values = veg_values[np.where(clustering >= UNDEFINED_VEG)]
+
+    logger.debug(
+        f"DBG> {mean_texture.shape=} {clustering.shape=} {texture_values.shape=}"
+    )
+
     threshold_max = np.percentile(texture_values, params["filter_texture"])
     data_textures = np.transpose(texture_values)
     data_textures[data_textures > threshold_max] = threshold_max
@@ -738,7 +746,7 @@ def process_stats(
     key_ndwi,
     key_texture,
     size_result,
-    mask_valid_indices
+    mask_valid_indices,
 ):
     """
     Computes statistics (mean NDVI, NDWI, and texture) for each segmented region.
@@ -762,21 +770,28 @@ def process_stats(
 
     # TODO : maybe we could delete this np.seterr (except in the very weird case where sum of NDVI is 0)
     np.seterr(divide="ignore", invalid="ignore")
-    
-   
-    mean_ndvi = stats[0][:size_result] 
-    mean_ndvi[np.where(mask_valid_indices==0)] = NODATA_INT16
-    mean_ndvi[np.where(mask_valid_indices)] = mean_ndvi[np.where(mask_valid_indices)]/stats[1][np.where(mask_valid_indices)]
 
-    mean_ndwi = stats[0][size_result:2 * size_result] 
-    mean_ndwi[np.where(mask_valid_indices==0)] = NODATA_INT16
-    mean_ndwi[np.where(mask_valid_indices)] = mean_ndwi[np.where(mask_valid_indices)]/stats[1][np.where(mask_valid_indices)]
+    mean_ndvi = stats[0][:size_result]
+    mean_ndvi[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_ndvi[np.where(mask_valid_indices)] = (
+        mean_ndvi[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
 
-    mean_texture = stats[0][2 * size_result:3 * size_result] 
-    mean_texture[np.where(mask_valid_indices==0)] = NODATA_INT16
-    mean_texture[np.where(mask_valid_indices)] = mean_texture[np.where(mask_valid_indices)]/stats[1][np.where(mask_valid_indices)]
+    mean_ndwi = stats[0][size_result : 2 * size_result]
+    mean_ndwi[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_ndwi[np.where(mask_valid_indices)] = (
+        mean_ndwi[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
 
-    
+    mean_texture = stats[0][2 * size_result : 3 * size_result]
+    mean_texture[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_texture[np.where(mask_valid_indices)] = (
+        mean_texture[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
+
     return stats
 
 
@@ -1107,7 +1122,7 @@ def slurp_vegetationmask(
 
             # Stats #
 
-            '''
+            """
             *** Recover number total of segments and check valid segments ***
             res_seg contains segments from 1 to n
             - 0 stands for NO_DATA
@@ -1120,24 +1135,27 @@ def slurp_vegetationmask(
             Note that segment 0 (that covers NODATA) is also marked as invalid,
             because we cannot use it in clustering step
             
-            '''
+            """
             res_seg = eoscale_manager.get_array(future_seg[0])[0]
-            
+
             size_result = np.max(res_seg) + 1
 
             start_valid = time.time()
-            mask_valid_indices=np.zeros(size_result)
+            mask_valid_indices = np.zeros(size_result)
             for i in range(1, size_result):
                 # TODO : try to implement with lambda func
                 mask_valid_indices[i] = i in res_seg
-            
+
             end_valid = time.time()
-            
-            logger.debug(f"DBG> {mask_valid_indices.shape=}  {np.count_nonzero(mask_valid_indices)=}")
+
+            logger.debug(
+                f"DBG> {mask_valid_indices.shape=}  {np.count_nonzero(mask_valid_indices)=}"
+            )
             logger.debug(f"DBG> {np.max(res_seg)=} {len(np.unique(res_seg))=}")
-            logger.debug(f"Compute mask of valid indices in {utils.convert_time(end_valid-start_valid)}")
-            
-            
+            logger.debug(
+                f"Compute mask of valid indices in {utils.convert_time(end_valid-start_valid)}"
+            )
+
             # Stats calculation
             stats = process_stats(
                 args,
@@ -1147,17 +1165,17 @@ def slurp_vegetationmask(
                 key_ndwi,
                 key_texture,
                 size_result,
-                mask_valid_indices
+                mask_valid_indices,
             )
-                        
+
             time_stats = time.time()
-                        
+
             # Clustering #
 
             pred_veg, sorted_ndvi_centroids = clustering_vegetation(
                 vars(args), size_result, stats[0], mask_valid_indices
             )
-            
+
             logger.debug(
                 f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
             )
@@ -1171,9 +1189,13 @@ def slurp_vegetationmask(
                 )
 
             # print(f"DBG> Labeling : {pred_veg.shape=} {clusters_veg.shape=}")
-                
+
             pred_texture, sorted_texture_centroids = clustering_texture(
-                vars(args), size_result, stats[0], clusters_veg, mask_valid_indices
+                vars(args),
+                size_result,
+                stats[0],
+                clusters_veg,
+                mask_valid_indices,
             )
             if args.autolabel:
                 clusters_low_high_veg = texture_labeling_with_LCM(
@@ -1189,14 +1211,16 @@ def slurp_vegetationmask(
             #  0/ 1         3
             # --> 0 / 11, 13 / 21, 23
             clusters = clusters_veg + clusters_low_high_veg
-            #print(f"DBG> {clusters[unknown_vals[0]-2:unknown_vals[0]+2]=}")
+            # print(f"DBG> {clusters[unknown_vals[0]-2:unknown_vals[0]+2]=}")
             time_cluster = time.time()
 
             # final tab
             final_clusters = np.zeros(size_result)
             final_clusters[np.where(mask_valid_indices)] = clusters
-            final_clusters[np.where(mask_valid_indices==0)] = 0 # TODO : -1 or 0 ? it will be masked by valid_stack at the end
-            
+            final_clusters[np.where(mask_valid_indices == 0)] = (
+                0  # TODO : -1 or 0 ? it will be masked by valid_stack at the end
+            )
+
             # Finalize mask #
             final_seg = eoexe.n_images_to_m_images_filter(
                 inputs=[future_seg[0], key_valid_stack],
@@ -1208,7 +1232,7 @@ def slurp_vegetationmask(
                 multiproc_context=args.multiproc_context,
                 filter_desc="Finalize processing...",
             )
-            
+
             if args.save_mode == "debug":
                 # Save intermediate masks
                 eoscale_manager.write(
@@ -1236,7 +1260,7 @@ def slurp_vegetationmask(
                         ".tif", "_vegclusters.tif"
                     ),
                 )
-                
+
                 # Save texture clusters
                 texture_clustering = eoexe.n_images_to_m_images_filter(
                     inputs=[future_seg[0], key_valid_stack],
@@ -1254,9 +1278,7 @@ def slurp_vegetationmask(
                         ".tif", "_textureclusters.tif"
                     ),
                 )
-            
 
-            
             time_final = time.time()
 
             # Post-process : delete small holes / objects, dilate low veg areas a little bit
