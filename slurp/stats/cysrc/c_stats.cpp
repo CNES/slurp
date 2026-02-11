@@ -43,16 +43,13 @@ namespace stats {
 	// label_coors : rank in the flattened array
         label_coords = r * nb_cols + c;
 	seg = label_img[label_coords];
-	// first segment is 1 ; index_seg is 0
-	index_seg = seg - 1;
-        if (index_seg != -1){
-	  counter[index_seg]++;
-	  for(unsigned int b = 0; b < nb_bands; b++){
-	    accumulator[ b * num_labels + index_seg ] += color_img[ num_pixels * b + label_coords ];
-	  }
-        }
+	counter[seg]++;
+	for(unsigned int b = 0; b < nb_bands; b++){
+	  accumulator[ b * num_labels + seg ] += color_img[ num_pixels * b + label_coords ];
+	}
       }
     }
+  
     // accumulator contains the sum of each band for each label
     // counter contains the nb of occurrence (pixel) for each label
   }

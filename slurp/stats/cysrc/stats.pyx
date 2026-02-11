@@ -67,9 +67,18 @@ cdef class PyStats:
     
     def run_stats(self, primitives: np.ndarray, labelImage: np.ndarray, nbLabels):
         # Compute sums of different primitives, for each labeled segments of an image
-        # returns an accumulator and a counter 
+        # returns an accumulator and a counter
+	# primitives : image that stacks NDVI, NDWI and Texture
+	# labelImage : segmentation of the initial image (some value may have been
+	#  	       masked by NODATA mask)
+	# nbLabels : nb of different segments (including 0 : NODATA) in the image
+	# 
         # accumulator : sum of each primitive for each segment (dimension : nbBands * nbLabels)
         # counter : nb of pixels by segment (dimension : nbLabels)
+	#
+	# Remark : counter[0] will be > 0 if image contains NO_DATA
+	#          counter[i] will be == 0 if segmentation does not contain segment i
+	#          (happens when part of the segmentation had been masked by NODATA mask)
         
         nbBands = primitives.shape[0]
         nbRows = primitives.shape[1]
@@ -78,7 +87,7 @@ cdef class PyStats:
         cdef float[::1] primitives_memview = primitives.flatten().astype(np.float32)
         cdef unsigned int[::1] label_img_memview = labelImage.flatten().astype(np.uint32)
 	
-        cdef float[::1] accumulator_mem_view = np.zeros(nbLabels*nbBands).astype(np.float32)
+        cdef float[::1] accumulator_mem_view = np.zeros((nbLabels)*nbBands).astype(np.float32)
         cdef unsigned int[::1] counter_mem_view = np.zeros(nbLabels).astype(np.uint32)
         
         compute_stats(&primitives_memview[0],
