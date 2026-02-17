@@ -98,21 +98,18 @@ def segmentation_task(
     input_buffers: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    Segmentation
+    Segments NDVI with SLIC algorithm, masks invalid pxels with 0
 
     :param list input_buffers: [ndvi, valid_stack]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments
     :returns: segments
     """
-    # Note : input_buffers[x][input_buffers[2]] applies the valid mask on input_buffers[x]
-    # Warning : input_buffers[0] : the mask is not applied !
-    # But we only use NDVI mode (see compute_segmentation)
+    # Count NO_DATA pixels in the current tile
     nb_val_zero = len(np.where(input_buffers[1] == 0)[0])
     if nb_val_zero == 0:
         # The input image is only NODATA !!
         # We don't compute segmentation
-        logger.debug(f"DBG> Tile is full of NODATA -> don't compute seg")
         segments = np.zeros_like(input_buffers[1])
     else:
         segments = compute_segmentation(params, input_buffers[0])
@@ -131,13 +128,11 @@ def concat_seg(previous_result, output_algo_computer, tile):
     # prevents from computing a map with several identical labels !!
     num_seg = np.max(previous_result[0])
 
-    # logger.debug(f"print DBG> {np.max(output_algo_computer)=} {len(np.unique(output_algo_computer))=}")
-    # logger.debug(f"print DBG> {np.max(previous_result)=} {len(np.unique(previous_result))=}")
-
     previous_result[0][
         :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
     ] = (output_algo_computer[0][:, :, :] + num_seg)
 
+    # TODO : check if we can keep only this statement
     previous_result[0][
         :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
     ] = np.where(
@@ -221,9 +216,13 @@ def clustering_vegetation(
 
     ndvi = stats[0:size_result]
     ndwi = stats[size_result : 2 * size_result]
+    logger.debug(f"Before NODATA removal {ndvi.shape=}")
     ndvi = ndvi[np.where(mask_valid_indices)]
     ndwi = ndwi[np.where(mask_valid_indices)]
     vec_predic = np.stack((ndvi, ndwi), axis=1)
+    logger.debug(
+        f"{len(np.where(mask_valid_indices)[0])=} -> after NODATA removal {ndvi.shape=}"
+    )
 
     pred_veg = kmeans_rad_indices.fit_predict(vec_predic)
 
@@ -266,16 +265,13 @@ def clustering_texture(
 
     mean_texture = stats[2 * size_result :]
     """
+    TODO : check if we can remove this
     texture_values = np.nan_to_num(
         mean_texture[np.where(clustering >= UNDEFINED_VEG)]
     )
     """
     veg_values = mean_texture[np.where(mask_valid_indices)]
     texture_values = veg_values[np.where(clustering >= UNDEFINED_VEG)]
-
-    logger.debug(
-        f"DBG> {mean_texture.shape=} {clustering.shape=} {texture_values.shape=}"
-    )
 
     threshold_max = np.percentile(texture_values, params["filter_texture"])
     data_textures = np.transpose(texture_values)
@@ -567,6 +563,7 @@ def finalize_task(input_buffers: list, input_profiles: list, params: dict):
     :returns: final mask
     """
     clustering = params["data"]
+    # Load Cython module and launch C++ function
     ts_stats = ts.PyStats()
 
     final_mask = ts_stats.finalize(input_buffers[0], clustering)
@@ -625,11 +622,13 @@ def clean_task(
         ] = LOW_VEG_CLASS
 
     # Filter final mask with a NDVI threshold (1st cluster of vegetation)
+    # TODO : replace 0 by UNDEFINED_VEG ?
     im_classif = np.where(
         im_classif == LOW_VEG_CLASS,
         np.where(im_ndvi > params["min_ndvi_veg"], LOW_VEG_CLASS, 0),
         im_classif,
     )
+    # TODO : replace 0 by UNDEFINED_VEG + MIDDLE_TEXTURE_CODE
     im_classif = np.where(
         im_classif > LOW_VEG_CLASS,
         np.where(
@@ -768,7 +767,8 @@ def process_stats(
     # Once the sum of each primitive is computed,
     # we compute the mean by dividing by the size of each segment
 
-    # TODO : maybe we could delete this np.seterr (except in the very weird case where sum of NDVI is 0)
+    # TODO : maybe we could delete this np.seterr
+    # (except in the very weird case where sum of NDVI is 0)
     np.seterr(divide="ignore", invalid="ignore")
 
     mean_ndvi = stats[0][:size_result]
@@ -1121,7 +1121,6 @@ def slurp_vegetationmask(
             time_seg = time.time()
 
             # Stats #
-
             """
             *** Recover number total of segments and check valid segments ***
             res_seg contains segments from 1 to n
@@ -1134,26 +1133,23 @@ def slurp_vegetationmask(
             0 otherwise
             Note that segment 0 (that covers NODATA) is also marked as invalid,
             because we cannot use it in clustering step
-            
             """
             res_seg = eoscale_manager.get_array(future_seg[0])[0]
 
             size_result = np.max(res_seg) + 1
 
             start_valid = time.time()
-            mask_valid_indices = np.zeros(size_result)
-            for i in range(1, size_result):
-                # TODO : try to implement with lambda func
-                mask_valid_indices[i] = i in res_seg
+            # use Cython to optimize mask computation
+            ts_stats = ts.PyStats()
 
-            end_valid = time.time()
-
-            logger.debug(
-                f"DBG> {mask_valid_indices.shape=}  {np.count_nonzero(mask_valid_indices)=}"
+            start_valid = time.time()
+            mask_valid_indices = ts_stats.compute_mask_valid_indices(
+                res_seg, size_result
             )
-            logger.debug(f"DBG> {np.max(res_seg)=} {len(np.unique(res_seg))=}")
+            end_valid = time.time()
             logger.debug(
-                f"Compute mask of valid indices in {utils.convert_time(end_valid-start_valid)}"
+                f"Compute mask of valid indices (CYTHON) in "
+                f"{utils.convert_time(end_valid-start_valid)}"
             )
 
             # Stats calculation
@@ -1171,7 +1167,6 @@ def slurp_vegetationmask(
             time_stats = time.time()
 
             # Clustering #
-
             pred_veg, sorted_ndvi_centroids = clustering_vegetation(
                 vars(args), size_result, stats[0], mask_valid_indices
             )
@@ -1187,8 +1182,6 @@ def slurp_vegetationmask(
                 clusters_veg = vegetation_labeling_with_rule_of_third(
                     vars(args), pred_veg
                 )
-
-            # print(f"DBG> Labeling : {pred_veg.shape=} {clusters_veg.shape=}")
 
             pred_texture, sorted_texture_centroids = clustering_texture(
                 vars(args),
@@ -1211,7 +1204,6 @@ def slurp_vegetationmask(
             #  0/ 1         3
             # --> 0 / 11, 13 / 21, 23
             clusters = clusters_veg + clusters_low_high_veg
-            # print(f"DBG> {clusters[unknown_vals[0]-2:unknown_vals[0]+2]=}")
             time_cluster = time.time()
 
             # final tab
