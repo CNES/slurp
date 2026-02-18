@@ -37,12 +37,16 @@ def compute_valid_stack_clouds(
     """
     if len(input_buffers) == 1:
         # 0 where image is valid, invalid for other values
-        valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, 0)
+        # Note : we check no data on all dimensions, because in some weird cases
+        # (ex : RGB bands and NIR had been superimposed on a slightly different grid)
+        # some pixels may be valid in band 0 (Red)  and not in band 3 (NIR)
+        valid_mask = 1 - np.all(
+            input_buffers[0] != args["nodata"], axis=0
+        ).astype(int)
     else:
-        valid_mask = np.where(
-            input_buffers[0][0] == args["nodata"],
-            1,
-            np.where(input_buffers[1] != 0, 2, 0),
-        )
+        valid_mask = 1 - np.all(
+            input_buffers[0] != args["nodata"], axis=0
+        ).astype(int)
+        valid_mask = np.where(input_buffers[1] != 0, 2, valid_mask)
 
     return valid_mask
