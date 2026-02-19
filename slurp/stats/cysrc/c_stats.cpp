@@ -21,7 +21,33 @@
 using namespace std;
  
 namespace stats {
+  void check_valid_indices(unsigned int * labelimage,
+			   unsigned int * mask_valid_indices, unsigned int nb_labels,
+			   unsigned int nb_rows, unsigned int nb_cols) {
 
+    /*
+      check which valid indices (between 0 and nb_labels) really exist
+      in labelimage (some of them may have been masked)
+    */
+    
+    unsigned int seg = 0;
+    
+    for (unsigned int i = 0; i < nb_labels; i++){
+      mask_valid_indices[i] = 0;
+    }
+    // all known segments are marked as 1
+    for(unsigned int r = 0; r < nb_rows; r++){
+      for(unsigned int c = 0; c < nb_cols; c++){
+	seg = labelimage[r * nb_cols + c];
+	mask_valid_indices[seg] = 1;
+      }
+    }
+    // first index is always invalid (0 stands for NODATA)
+    mask_valid_indices[0] = 0;
+    
+  }
+
+      
   void compute_stats(float * color_img, unsigned int * label_img, 
 		     float * accumulator, unsigned int * counter, 
 		     unsigned int num_labels, unsigned int nb_bands,
@@ -43,16 +69,13 @@ namespace stats {
 	// label_coors : rank in the flattened array
         label_coords = r * nb_cols + c;
 	seg = label_img[label_coords];
-	// first segment is 1 ; index_seg is 0
-	index_seg = seg - 1;
-        if (index_seg != -1){
-	  counter[index_seg]++;
-	  for(unsigned int b = 0; b < nb_bands; b++){
-	    accumulator[ b * num_labels + index_seg ] += color_img[ num_pixels * b + label_coords ];
-	  }
-        }
+	counter[seg]++;
+	for(unsigned int b = 0; b < nb_bands; b++){
+	  accumulator[ b * num_labels + seg ] += color_img[ num_pixels * b + label_coords ];
+	}
       }
     }
+  
     // accumulator contains the sum of each band for each label
     // counter contains the nb of occurrence (pixel) for each label
   }
@@ -72,11 +95,9 @@ namespace stats {
          for(unsigned int c = 0; c < nb_cols; c++){
              label_coords = r * nb_cols + c;
              seg = segmentation[label_coords];
-             if (seg != 0) {
-	       seg_class = clustering[seg - 1];
-	       final_image[label_coords] = seg_class;
-             }
-        }
+    	     seg_class = clustering[seg];
+	     final_image[label_coords] = seg_class;
+	 }
     }
     
   }

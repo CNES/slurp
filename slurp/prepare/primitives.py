@@ -47,7 +47,15 @@ def compute_ndxi(
         np.float32(input_buffer[0][params["im_b1"] - 1])
         + np.float32(input_buffer[0][params["im_b2"] - 1])
     )
-    im_ndxi[np.logical_or(im_ndxi < -1000.0, im_ndxi > 1000.0)] = np.nan
+    # Special case where reflectance values are negative : we could obtain a NDVI slightly below -1
+    # ex : R: 90.07, NIR: -1.24 --> NDVI: -1.02
+    # In that special case, we prefer set the value to -1 or 1.
+    # Otherwise we should modify the validity mask, to avoid these values to be taken into account
+    # in the next steps of the classification algorithms.
+    im_ndxi[im_ndxi < -1000.0] = -1000
+    im_ndxi[im_ndxi > 1000.0] = 1000
+
+    # Apply Validity Mask
     im_ndxi[np.where(input_buffer[1][0] != 0)] = np.nan
     np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
     im_ndxi = np.int16(im_ndxi)
