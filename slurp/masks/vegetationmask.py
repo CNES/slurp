@@ -78,8 +78,15 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     nseg = int(len(ndvi[ndvi!=NODATA_INT16]) / params["slic_seg_size"])
     if nseg == 0:
         logger.debug(f"Taille de segments : 0 !!  attention, risque de div par zero {ndvi.shape=}")
+    TODO : clean / choose right way. 
+    print(f"Nseg - X*Y / slic_seg_size (do not take into account NODATA) : {nseg}\n"
+          f"Alternative count : {int(len(ndvi[ndvi!=NODATA_INT16]) / params['slic_seg_size'])=}")
+
     """
-    nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
+    # nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
+    # nseg cannot be equal to 0, because calling function already checked
+    # there were valid pixels to segment...
+    nseg = int(len(ndvi[ndvi != NODATA_INT16]) / params["slic_seg_size"])
 
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)

@@ -52,8 +52,8 @@ def compute_ndxi(
     # In that special case, we prefer set the value to -1 or 1.
     # Otherwise we should modify the validity mask, to avoid these values to be taken into account
     # in the next steps of the classification algorithms.
-    im_ndxi[im_ndxi < -1000.0] = -1000.0
-    im_ndxi[im_ndxi > 1000.0] = 1000.0
+    im_ndxi[im_ndxi < -1000.0] = -1000
+    im_ndxi[im_ndxi > 1000.0] = 1000
 
     # Apply Validity Mask
     im_ndxi[np.where(input_buffer[1][0] != 0)] = np.nan
