@@ -69,7 +69,7 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint8_profile(input_profiles: list, map_params):
+def single_uint8_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1

@@ -22,27 +22,49 @@
 """Brings together functions that create valid mask"""
 
 import numpy as np
+from typing import Optional
 
 
 def compute_valid_stack_clouds(
-    input_buffers: list, input_profiles: list, args: dict
+    im_vhr: np.ndarray,
+    mask_cloud: Optional[np.ndarray] = None,
+    nodata: float = None,
 ) -> np.ndarray:
     """
-    Calculation of the valid pixels of a given image with a cloud mask
+    Calculation of valid pixels of a given image with optional cloud mask.
 
-    :param list input_buffer: VHR input image [im_vhr, mask_cloud]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_mask (numpy array, 0 : valid, 1 : NODATA, 2 : Clouds)
+    Parameters
+    ----------
+    im_vhr : np.ndarray
+        Input VHR image tile (C, H, W) or (H, W)
+    mask_cloud : np.ndarray, optional
+        Cloud mask tile
+    nodata : numeric
+        Nodata value
+
+    Returns
+    -------
+    np.ndarray
+        valid_mask:
+            0 ? valid
+            1 ? nodata
+            2 ? cloud
     """
-    if len(input_buffers) == 1:
-        # 0 where image is valid, invalid for other values
-        valid_mask = np.where(input_buffers[0][0] == args["nodata"], 1, 0)
+
+    # If multi-band image ? take first band
+    if im_vhr.ndim == 3:
+        band = im_vhr[0]
+    else:
+        band = im_vhr
+
+    if mask_cloud is None:
+        valid_mask = np.where(band == nodata, 1, 0)
+
     else:
         valid_mask = np.where(
-            input_buffers[0][0] == args["nodata"],
+            band == nodata,
             1,
-            np.where(input_buffers[1] != 0, 2, 0),
+            np.where(mask_cloud != 0, 2, 0),
         )
 
-    return valid_mask
+    return valid_mask.astype(np.uint8)
