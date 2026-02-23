@@ -50,7 +50,6 @@ def compute_valid_stack_clouds(
             1 ? nodata
             2 ? cloud
     """
-
     # If multi-band image ? take first band
     if im_vhr.ndim == 3:
         band = im_vhr[0]

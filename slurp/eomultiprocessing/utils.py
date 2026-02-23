@@ -82,7 +82,7 @@ def read(img_path: str) -> np.ndarray:
     """Read a file with minimal GDAL cache"""
     with rasterio.Env(GDAL_CACHEMAX=MAX_CACHE):
         with rasterio.open(img_path, "r") as src:
-            data = src.read(1)
+            data = src.read()
 
     return data
 
@@ -92,7 +92,7 @@ def read_and_get_profile(img_path: str) -> Tuple[np.ndarray, dict]:
     with rasterio.Env(GDAL_CACHEMAX=MAX_CACHE):
         with rasterio.open(img_path, "r") as src:
             input_profile = src.profile.copy()
-            data = src.read(1)
+            data = src.read()
 
     return data, input_profile
 

@@ -268,8 +268,9 @@ def create_valid_stack(
 
     # ==========================================================
     # INPUT KEYS
+    # Take the first band as it's the only one required for calc mask
     # ==========================================================
-    input_keys = [key_vhr]
+    input_keys = [key_vhr[0]]
 
     if args.cloud_mask:
         key_cloud_mask = slurp_manager.get_path(args.cloud_mask)
@@ -282,7 +283,6 @@ def create_valid_stack(
     output_filename = path.basename(args.valid_stack)
     parameter: dict = {"nodata": profile["nodata"]}
     output_profile = eo_utils.single_uint8_profile([profile])
-    print(parameter)
     # ==========================================================
     # SLURP EXECUTOR CALL
     # ==========================================================
@@ -304,10 +304,11 @@ def create_valid_stack(
 
 def compute_ndvi(
     args: argparse.Namespace,
-    eoscale_manager: eom.EOContextManager,
-    key_vhr: str,
-    valid_stack_key: List[str],
-) -> List[str]:
+    slurp_manager: slurpContextManager,
+    key_vhr: Union[str, np.ndarray],
+    valid_stack_key: List[Union[str, np.ndarray]],
+    vhr_profile: dict,
+) -> List[Union[str, np.ndarray]]:
     """
     Compute the Normalized Difference Vegetation Index (ndvi) layer and
     return its key.
@@ -323,18 +324,29 @@ def compute_ndvi(
     Returns:
         list[str]: list of VirtualPath to the ndwi image.
     """
+    # Ensure output directory exists
     makedirs(path.dirname(args.file_ndvi), exist_ok=True)
-    key_ndvi = eoexe.n_images_to_m_images_filter(
-        inputs=[key_vhr, valid_stack_key[0]],
-        image_filter=primitives.compute_ndxi,
-        filter_parameters={"im_b1": args.nir, "im_b2": args.red},
-        generate_output_profiles=eo_utils.single_int16_profile,
+    output_profile = eo_utils.single_int16_profile([vhr_profile])
+    output_filename = path.basename(args.file_ndvi) 
+    key_vhr_b1 = key_vhr[args.nir - 1]
+    key_vhr_b2 = key_vhr[args.red - 1]
+    [ndvi_key] = mp_n_to_m_images(
+        inputs=[key_vhr_b1, key_vhr_b2, valid_stack_key[0]],
+        image_height=vhr_profile["height"],
+        image_width=vhr_profile["width"],
+        output_profiles=[output_profile],
+        output_keys=[output_filename],
+        func=primitives.compute_ndxi,
+        func_parameters={
+            "im_b1": args.nir,
+            "im_b2": args.red,
+        },
+        context_manager=slurp_manager,
         stable_margin=0,
-        context_manager=eoscale_manager,
-        multiproc_context=args.multiproc_context,
-        filter_desc="NDVI processing...",
+        binary=True,
     )
-    return key_ndvi
+
+    return [ndvi_key]
 
 
 def compute_ndwi(
@@ -380,13 +392,15 @@ def compute_ndwi(
     """
     # Ensure output directory exists
     makedirs(path.dirname(args.file_ndwi), exist_ok=True)
-    print(key_vhr, valid_stack_key[0])
+    output_profile = eo_utils.single_int16_profile([vhr_profile])
     output_filename = path.basename(args.file_ndwi) 
+    key_vhr_b1 = key_vhr[args.green - 1]
+    key_vhr_b2 = key_vhr[args.nir - 1]
     [ndwi_key] = mp_n_to_m_images(
-        inputs=[key_vhr, valid_stack_key[0]],
+        inputs=[key_vhr_b1, key_vhr_b2, valid_stack_key[0]],
         image_height=vhr_profile["height"],
         image_width=vhr_profile["width"],
-        output_profiles=[eo_utils.single_int16_profile],
+        output_profiles=[output_profile],
         output_keys=[output_filename],
         func=primitives.compute_ndxi,
         func_parameters={
@@ -797,7 +811,7 @@ def slurp_prepare(
 
             key_vhr = slurp_manager.get_path(args.file_vhr)
             vhr, input_profile = read_and_get_profile(key_vhr)
-            print(input_profile)
+
             # ==============================
             # VALID STACK
             # ==============================
@@ -809,6 +823,31 @@ def slurp_prepare(
                 input_profile,
             )
 
+            # ==============================
+            # NDVI
+            # ==============================
+
+            if args.file_ndvi is not None and (
+                args.overwrite or not path.isfile(args.file_ndvi)
+            ):
+                ndvi_key = compute_ndvi(
+                    args,
+                    slurp_manager,
+                    vhr,
+                    valid_stack_key,
+                    input_profile,
+                )
+
+                slurp_manager.write_tif(
+                    ndvi_key[0],
+                    args.file_ndvi,
+                    input_profile,
+                    key="out"
+                )
+
+            else:
+                logger.info("Not computing NDWI: file already exists.")
+            
             # ==============================
             # NDWI
             # ==============================
@@ -828,6 +867,7 @@ def slurp_prepare(
                     ndwi_key[0],
                     args.file_ndwi,
                     input_profile,
+                    key="out"
                 )
 
             else:
@@ -843,7 +883,7 @@ def slurp_prepare(
             # ==============================
             # TEXTURE (vegetation only)
             # ==============================
-
+            '''
             if args.mode != "water":
                 compute_texture(
                     args,
@@ -851,7 +891,7 @@ def slurp_prepare(
                     key_vhr,
                     valid_stack_key,
                 )
-
+            '''
             # ==============================
             # SAVE CONFIG
             # ==============================

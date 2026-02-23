@@ -274,7 +274,6 @@ def mp_n_to_m_images(
 
         out: Union[List[str], List[np.ndarray]]
         if context_manager.in_memory:
-            print(range(len(inputs)))
             # inputs are numpy arrays
             list_input = [
                 (
@@ -405,7 +404,6 @@ def mp_execute_from_arrays(inputs: List[np.ndarray], func: Callable, func_parame
 
     """
     outputs = func(*inputs, **func_parameters)
-
     if not isinstance(outputs, tuple):
         return {
             "data": [

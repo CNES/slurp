@@ -28,31 +28,53 @@ from slurp.tools.constant import NODATA_INT16
 
 
 def compute_ndxi(
-    input_buffer: list, input_profiles: list, params: dict
+    input_buffer_b1: np.ndarray,
+    input_buffer_b2: np.ndarray,
+    valid_stack: np.ndarray,
+    im_b1: int,
+    im_b2: int,
 ) -> np.ndarray:
     """
-    Compute Normalize Difference X Index.
-    Rescale to [-1000, 1000] int16 with nodata value = 32767
-    1000 * (im_b1 - im_b2) / (im_b1 + im_b2)
+    Compute Normalized Difference X Index (NDXI).
 
-    :param list input_buffer: VHR input image [im_vhr, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys "im_b1" and "im_b2"
-    :returns: NDXI
+    Formula:
+        1000 * (B1 - B2) / (B1 + B2)
+
+    The result is clipped to [-1000, 1000] and converted to int16.
+    Nodata value is set to NODATA_INT16 (32767).
+
+    Special case:
+    If reflectance values are negative, the index may slightly exceed
+    the theoretical range [-1000, 1000]. In that case, values are clipped
+    to -1000 or 1000.
+
+    :param np.ndarray input_buffer: Multi-band image array
+        Shape expected: (bands, height, width)
+    :param np.ndarray valid_stack: Validity mask
+        Non-zero values indicate invalid pixels
+    :param int im_b1: 1-based index of band B1
+    :param int im_b2: 1-based index of band B2
+    :returns: NDXI image as np.int16 array
+    :rtype: np.ndarray
     """
-    np.seterr(divide="ignore", invalid="ignore")
-    im_ndxi = 1000.0 - (
-        2000.0 * np.float32(input_buffer[0][params["im_b2"] - 1])
-    ) / (
-        np.float32(input_buffer[0][params["im_b1"] - 1])
-        + np.float32(input_buffer[0][params["im_b2"] - 1])
-    )
-    im_ndxi[np.logical_or(im_ndxi < -1000.0, im_ndxi > 1000.0)] = np.nan
-    im_ndxi[np.where(input_buffer[1][0] != 0)] = np.nan
-    np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
-    im_ndxi = np.int16(im_ndxi)
+    # Convert selected bands to float32 for safe division
+    band_b1 = input_buffer_b1.astype(np.float32)
+    band_b2 = input_buffer_b2.astype(np.float32)
 
-    return im_ndxi
+    denom = band_b1 + band_b2
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        im_ndxi = 1000.0 - (2000.0 * band_b2) / denom
+
+    # Clip to theoretical range
+    np.clip(im_ndxi, -1000.0, 1000.0, out=im_ndxi)
+
+    # Apply validity mask (non-zero = invalid)
+    im_ndxi[valid_stack != 0] = np.nan
+
+    # Replace NaN with NODATA value
+    np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
+    return im_ndxi.astype(np.int16)
 
 
 def std_convoluted(
