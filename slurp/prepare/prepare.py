@@ -30,11 +30,9 @@ import traceback
 from os import makedirs, path
 from typing import List, Union
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write
+from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
 import numpy as np
 
 from slurp.prepare import analyse_glcm
@@ -247,7 +245,7 @@ def add_cluster_vegetation_info(
 
 def create_valid_stack(
     args: argparse.Namespace,
-    slurp_manager,
+    slurp_manager: slurpContextManager,
     key_vhr: str,
     profile: dict,
 ) -> List[str]:
@@ -257,43 +255,32 @@ def create_valid_stack(
     Args:
         args (Namespace): Namespace object of arguments.
         slurp_manager (slurpContextManager): slurp context manager.
-        key_vhr (str): key to the input VHR image (shared memory).
+        key_vhr (str): the input VHR image.
         profile (dict): raster profile.
 
     Returns:
-        List[str]: valid_stack_key (shared memory keys)
+        List[str]: valid_stack_key filtered output images
     """
 
     makedirs(path.dirname(args.valid_stack), exist_ok=True)
 
     # ==========================================================
-    # INPUT KEYS
     # Take the first band as it's the only one required for calc mask
     # ==========================================================
     input_keys = [key_vhr[0]]
 
     if args.cloud_mask:
-        key_cloud_mask = slurp_manager.get_path(args.cloud_mask)
-        input_keys.append(key_cloud_mask)
+        cloud_mask = read(args.cloud_mask)
+        input_keys = [key_vhr[0], key_cloud_mask]
 
-    # ==========================================================
-    # OUTPUT PROFILE
-    # ==========================================================
-
-    output_filename = path.basename(args.valid_stack)
-    parameter: dict = {"nodata": profile["nodata"]}
-    output_profile = eo_utils.single_uint8_profile([profile])
-    # ==========================================================
-    # SLURP EXECUTOR CALL
-    # ==========================================================
     valid_stack_key = mp_n_to_m_images(
         inputs=input_keys,
         image_height=profile["height"],
         image_width=profile["width"],
-        output_profiles=[output_profile],
-        output_keys=[output_filename],
+        output_profiles=[eo_utils.single_uint8_profile([profile])],
+        output_keys=[path.basename(args.valid_stack)],
         func=validity.compute_valid_stack_clouds,
-        func_parameters=parameter,
+        func_parameters={"nodata": profile["nodata"]},
         context_manager=slurp_manager,
         stable_margin=0,
         binary=True,
@@ -310,32 +297,47 @@ def compute_ndvi(
     vhr_profile: dict,
 ) -> List[Union[str, np.ndarray]]:
     """
-    Compute the Normalized Difference Vegetation Index (ndvi) layer and
-    return its key.
-    This key is used by eoscale to access to the ndvi layer.
+    Create the Normalized Difference Vegetation Index (NDVI) layer
+    using multiprocessing with slurpContextManager and return its key.
+
+    The NDVI is computed from the input VHR image using the red
+    and near-infrared (NIR) bands through the generic
+    mp_n_to_m_images processing engine.
 
     Args:
-        args (argparse.Namespace): Namespace object of arguments.
-        eoscale_manager (eom.EOContextManager): eoscale context manager.
-        key_vhr (str): key to the input VHR image.
-        valid_stack_key (list[str]): list of VirtualPath to the
-        valid stack image.
+        args (argparse.Namespace): Namespace object containing
+            the processing arguments. Must include:
+                - file_ndvi (str): output NDVI file path
+                - red (int): index of the red band
+                - nir (int): index of the NIR band
+        slurp_manager (slurpContextManager): Slurp context manager
+            handling multiprocessing, temporary folders, and
+            output paths.
+        key_vhr (Union[str, np.ndarray]): VHR input image
+            (file path or numpy array).
+        valid_stack_key (List[Union[str, np.ndarray]]):
+            List containing the valid stack image
+            (file path or numpy array).
+        vhr_profile (dict): Raster profile of the VHR image.
+            Must contain at least:
+                - height
+                - width
+                - transform
+                - dtype
 
     Returns:
-        list[str]: list of VirtualPath to the ndwi image.
+        List[Union[str, np.ndarray]]:
+            A list containing the NDVI image key
+            (file path if disk mode, numpy array if memory mode).
     """
     # Ensure output directory exists
     makedirs(path.dirname(args.file_ndvi), exist_ok=True)
-    output_profile = eo_utils.single_int16_profile([vhr_profile])
-    output_filename = path.basename(args.file_ndvi) 
-    key_vhr_b1 = key_vhr[args.nir - 1]
-    key_vhr_b2 = key_vhr[args.red - 1]
     [ndvi_key] = mp_n_to_m_images(
-        inputs=[key_vhr_b1, key_vhr_b2, valid_stack_key[0]],
+        inputs=[key_vhr[args.nir - 1], key_vhr[args.red - 1], valid_stack_key[0]],
         image_height=vhr_profile["height"],
         image_width=vhr_profile["width"],
-        output_profiles=[output_profile],
-        output_keys=[output_filename],
+        output_profiles=[eo_utils.single_int16_profile([vhr_profile])],
+        output_keys=[path.basename(args.file_ndvi)],
         func=primitives.compute_ndxi,
         func_parameters={
             "im_b1": args.nir,
@@ -392,16 +394,12 @@ def compute_ndwi(
     """
     # Ensure output directory exists
     makedirs(path.dirname(args.file_ndwi), exist_ok=True)
-    output_profile = eo_utils.single_int16_profile([vhr_profile])
-    output_filename = path.basename(args.file_ndwi) 
-    key_vhr_b1 = key_vhr[args.green - 1]
-    key_vhr_b2 = key_vhr[args.nir - 1]
     [ndwi_key] = mp_n_to_m_images(
-        inputs=[key_vhr_b1, key_vhr_b2, valid_stack_key[0]],
+        inputs=[key_vhr[args.green - 1], key_vhr[args.nir - 1], valid_stack_key[0]],
         image_height=vhr_profile["height"],
         image_width=vhr_profile["width"],
-        output_profiles=[output_profile],
-        output_keys=[output_filename],
+        output_profiles=[eo_utils.single_int16_profile([vhr_profile])],
+        output_keys=[path.basename(args.file_ndwi)],
         func=primitives.compute_ndxi,
         func_parameters={
             "im_b1": args.green,
@@ -571,56 +569,95 @@ def wbm_extraction(
 
 def compute_texture(
     args: argparse.Namespace,
-    eoscale_manager: eom.EOContextManager,
-    key_vhr: str,
-    valid_stack_key: List[str],
-) -> None:
+    slurp_manager: slurpContextManager,
+    key_vhr: Union[str, np.ndarray],
+    valid_stack_key: List[Union[str, np.ndarray]],
+    vhr_profile: dict,
+) -> List[Union[str, np.ndarray]]:
     """
-    Compute texture used in vegetation mask
+    Compute texture layer used in vegetation mask using multiprocessing
+    with slurpContextManager and return its key.
+
+    Texture is computed on the NIR band using a moving window
+    defined by texture_rad. Percentiles (2, 98) are calculated
+    beforehand to limit the influence of outliers.
 
     Args:
-    args (argparse.Namespace): args_dict instancied in Namespace object.
-    eoscale_manager (eom.EOContextManager): eoscale context manager.
-    key_vhr (str): key to the VHR input image.
-    valid_stack_key (list[str]): list of VirtualPath to the
-    valid stack image.
-    """
-    if args.texture_rad:
-        if args.file_texture is not None and (
-            args.overwrite or not path.isfile(args.file_texture)
-        ):
-            makedirs(path.dirname(args.file_texture), exist_ok=True)
-            # take percentiles to avoid outliers that could affect texture computation
-            # compute texture on NIR band
-            image_vhr = eoscale_manager.get_array(key_vhr)
-            valid_stack = eoscale_manager.get_array(valid_stack_key[0])
-            percentiles = np.percentile(image_vhr[args.nir - 1][np.where(valid_stack[0]==0)], [2, 98])
-            del image_vhr
-            del valid_stack
+        args (argparse.Namespace): Namespace object containing:
+            - file_texture (str): output texture file path
+            - nir (int): index of the NIR band
+            - texture_rad (int): radius for texture computation
+            - overwrite (bool): overwrite existing file
+        slurp_manager (slurpContextManager): Slurp context manager
+            handling multiprocessing and outputs.
+        key_vhr (Union[str, np.ndarray]): VHR input image
+            (file path or numpy array).
+        valid_stack_key (List[Union[str, np.ndarray]]):
+            List containing the valid stack image.
+        vhr_profile (dict): Raster profile of the VHR image.
+            Must contain at least:
+                - height
+                - width
+                - transform
+                - dtype
 
-            params = {
-                "nir": args.nir,
-                "texture_rad": args.texture_rad,
-                "min_value": percentiles[0],
-                "max_value": percentiles[1],
-            }
-            key_texture = eoexe.n_images_to_m_images_filter(
-                inputs=[key_vhr, valid_stack_key[0]],
-                image_filter=primitives.texture_task,
-                filter_parameters=params,
-                generate_output_profiles=eo_utils.single_uint16_profile,
-                stable_margin=args.texture_rad,
-                context_manager=eoscale_manager,
-                multiproc_context=args.multiproc_context,
-                filter_desc="Texture processing...",
-            )
-            eoscale_manager.write(
-                key=key_texture[0], img_path=args.file_texture
-            )
-        else:
-            logger.info("Not computing texture file : the file already exists.")
-    else:
+    Returns:
+        List[Union[str, np.ndarray]]:
+            A list containing the texture image key.
+    """
+
+    if not args.texture_rad:
         logger.info("Pass texture computation")
+        return []
+
+    if args.file_texture is None:
+        logger.info("No texture output file provided.")
+        return []
+
+    if not args.overwrite and path.isfile(args.file_texture):
+        logger.info("Not computing texture file: file already exists.")
+        return []
+
+    # Ensure output directory exists
+    makedirs(path.dirname(args.file_texture), exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # Compute percentiles (2, 98) on valid pixels to avoid outliers
+    # ------------------------------------------------------------------
+    nir_band = key_vhr[args.nir - 1]
+    if isinstance(nir_band, np.ndarray):
+        valid_mask = valid_stack_key[0] == 0
+        percentiles = np.percentile(
+            nir_band[valid_mask], [2, 98]
+        )
+
+    [texture_key] = mp_n_to_m_images(
+        inputs=[nir_band, valid_stack_key[0]],
+        image_height=vhr_profile["height"],
+        image_width=vhr_profile["width"],
+        output_profiles=[eo_utils.single_uint16_profile([vhr_profile])],
+        output_keys=[path.basename(args.file_texture)],
+        func=primitives.texture_task,
+        func_parameters={
+            "nir": args.nir,
+            "texture_rad": args.texture_rad,
+            "min_value": percentiles[0],
+            "max_value": percentiles[1],
+        },
+        context_manager=slurp_manager,
+        stable_margin=args.texture_rad,
+        binary=False,
+    )
+
+    # write output to disk
+    slurp_manager.write_tif(
+        texture_key,
+        args.file_texture,
+        eo_utils.single_uint16_profile([vhr_profile]),
+        key="out"
+    )
+
+    return [texture_key]
 
 
 def valid_stack_process(
@@ -635,10 +672,6 @@ def valid_stack_process(
 
     Uses slurpContextManager only.
     """
-
-    # ==========================================================
-    # CASE 1 ? compute valid stack
-    # ==========================================================
     if args.valid_stack is not None and (
         args.overwrite or not path.isfile(args.valid_stack)
     ):
@@ -648,27 +681,20 @@ def valid_stack_process(
             key_vhr,
             profile,
         )
-
-        # write output to disk
         slurp_manager.write_tif(
             valid_stack_key[0],
             args.valid_stack,
             profile,
             key="out"
         )
-
-    # ==========================================================
-    # CASE 2 ? load existing valid stack into slurp
-    # ==========================================================
     else:
         logger.info(
             "Not computing valid stack mask: file already exists."
         )
 
         valid_stack_key = [
-            slurp_manager.read(args.valid_stack)
+            read(args.valid_stack)
         ]
-
     return valid_stack_key
 
 
@@ -768,6 +794,11 @@ def slurp_prepare(
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
+    External data recovery (Pekel, Hand, WSF) : these global raster database
+    must be superimposed on the VHR image.
+    
+    For sensor-mode only, we compute an interpolation grid taking into account
+    sensor geometry, geoid and DTM.
 
     Uses only slurpContextManager and slurp executor.
     """
@@ -782,15 +813,11 @@ def slurp_prepare(
     logger.info("--" * 50)
     logger.info("SLURP - Prepare step\n")
     logger.info(f"JSON data loaded: {main_config}")
-
+    logger.debug(argsdict)
     args = argparse.Namespace(**argsdict)
-
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG)
-
-    # ==============================
-    # SLURP CONTEXT INITIALIZATION
-    # ==============================
+    logger.debug(f"{argsdict=}")
 
     params = {
         "nb_max_workers": args.n_workers,
@@ -811,6 +838,10 @@ def slurp_prepare(
 
             key_vhr = slurp_manager.get_path(args.file_vhr)
             vhr, input_profile = read_and_get_profile(key_vhr)
+
+            # Global land cover map (used for vegetation mask, not water mask)
+            if args.analyse_glcm and args.mode != "water":
+                argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # ==============================
             # VALID STACK
@@ -883,15 +914,16 @@ def slurp_prepare(
             # ==============================
             # TEXTURE (vegetation only)
             # ==============================
-            '''
+            
             if args.mode != "water":
                 compute_texture(
                     args,
                     slurp_manager,
-                    key_vhr,
+                    vhr,
                     valid_stack_key,
+                    input_profile
                 )
-            '''
+            
             # ==============================
             # SAVE CONFIG
             # ==============================

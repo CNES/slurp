@@ -112,28 +112,46 @@ def std_convoluted(
 
 
 def texture_task(
-    input_buffers: list, input_profiles: list, params: dict
+    nir_band: np.ndarray,
+    valid_stack: np.ndarray,
+    nir: int,
+    texture_rad: int,
+    min_value: float,
+    max_value: float,
 ) -> np.ndarray:
     """
-    Compute textures
+    Compute texture on NIR band.
 
-    :param list input_buffers: [im_vhr, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params:
-    dictionary of arguments, must contain the keys "nir", "texture_rad",
-    "min_value" and "max_value"
-    :returns: texture image
+    :param np.ndarray nir_band:
+        nir-band image array (height, width)
+    :param np.ndarray valid_stack:
+        Validity mask (non-zero = invalid)
+    :param int nir:
+        1-based index of NIR band
+    :param int texture_rad:
+        Radius of texture window
+    :param float min_value:
+        Lower percentile clipping value
+    :param float max_value:
+        Upper percentile clipping value
+    :returns:
+        Texture image as np.uint16
+    :rtype: np.ndarray
     """
-    masked_band = np.ma.array(
-        input_buffers[0][params["nir"] - 1],
-        mask=input_buffers[1] != 0,
-    )
-    texture = std_convoluted(
-        masked_band.astype(float),
-        params["texture_rad"],
-        params["min_value"],
-        params["max_value"],
-    )
-    texture = np.where(input_buffers[1] != 0, NODATA_INT16, texture)
 
-    return texture
+    # Select NIR band (convert to float)
+    masked_band = np.ma.array(
+        nir_band.astype(float),
+        mask=valid_stack != 0,
+    )
+
+    texture = std_convoluted(
+        masked_band,
+        texture_rad,
+        min_value,
+        max_value,
+    )
+
+    texture = np.where(valid_stack != 0, NODATA_INT16, texture)
+
+    return texture.astype(np.uint16)
