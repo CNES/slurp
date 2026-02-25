@@ -598,21 +598,28 @@ def clean_task(
     im_ndvi = input_buffers[2][0]
 
     # Filter final mask with a NDVI threshold (1st cluster of vegetation)
-    # -> allows to have better shapes : pixels around a low veg area will be classified as bare ground
+    # -> allows to have better shapes : pixels around a low veg area will be
+    #    classified as bare ground
     im_classif = np.where(
         im_classif == LOW_VEG_CLASS,
-        np.where(im_ndvi > params["min_ndvi_veg"], LOW_VEG_CLASS, UNDEFINED_VEG+LOW_VEG_CLASS),
+        np.where(
+            im_ndvi > params["min_ndvi_veg"],
+            LOW_VEG_CLASS,
+            UNDEFINED_VEG + LOW_VEG_CLASS,
+        ),
         im_classif,
     )
     # pixels around trees will be classified as middle texture
     im_classif = np.where(
         im_classif > LOW_VEG_CLASS,
         np.where(
-            im_ndvi > params["min_ndvi_veg"], VEG_CODE + MIDDLE_TEXTURE_CODE, UNDEFINED_VEG+MIDDLE_TEXTURE_CODE
+            im_ndvi > params["min_ndvi_veg"],
+            VEG_CODE + MIDDLE_TEXTURE_CODE,
+            UNDEFINED_VEG + MIDDLE_TEXTURE_CODE,
         ),
         im_classif,
     )
-    
+
     if params["remove_small_objects"]:
         high_veg_binary = np.where(im_classif > LOW_VEG_CLASS, True, False)
         high_veg_binary = apply_morpho(
@@ -644,7 +651,6 @@ def clean_task(
             np.logical_and(im_classif > LOW_VEG_CLASS, low_veg_binary == 1)
         ] = LOW_VEG_CLASS
 
-   
     im_classif = np.where(valid_stack == 0, im_classif, NODATA_INT8)
 
     return im_classif
