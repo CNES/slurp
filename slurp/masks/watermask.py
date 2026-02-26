@@ -86,15 +86,13 @@ def compute_hand_mask(
     :param dict params: dictionary of arguments
     :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
     """
-    mask_hand = input_buffer[0] > params["thresh_hand"]
-
-    # Do not learn in water surface (useful if image contains big water surfaces)
-    # Add some robustness if hand_strict is not used
-    # if args.hand_strict:
-    # np.logical_not(np.logical_or(mask_hand, inputBuffer[1]), out=mask_hand)
-    # else:
-    # np.logical_not(mask_hand, out=mask_hand)
-    np.logical_not(mask_hand, out=mask_hand)
+    # HAND (Height Above Nearest Drainage) is used to select "ground" pixels
+    # quite close to the known water areas.
+    # HAND mask are valid pixels, below an altitude "thresh_hand"
+    mask_hand = np.logical_and(
+        input_buffer[0] < params["thresh_hand"],
+        input_buffer[0] != params["hand_nodata"],
+    )
 
     return mask_hand
 
@@ -238,13 +236,8 @@ def build_samples(
     # valid pixels for 'other' (every thing but water) : valid mask + hand > 0
     # This criteria should be reconsidered
     # (ie : think of a relative threshold to select samples not too far from water)
-    nb_valid_pix_other = np.count_nonzero(
+    nb_other_subset = np.count_nonzero(
         np.logical_and(validity_mask, input_buffer[1])
-    )
-    nb_other_subset = nb_valid_pix_other
-
-    logger.debug(
-        f"DBG> {nb_water_subset=} {nb_other_subset=} {params['nb_valid_water_pixels']=}"
     )
 
     # Ratio of pixel class compare to the full image ratio
@@ -264,10 +257,6 @@ def build_samples(
         rows_pekel, cols_pekel = get_random_indexes_from_masks(
             nb_water_subsamples, validity_mask, input_buffer[2][0]
         )
-        # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, validity_mask, input_buffer[1][0]
-        )
 
     elif params["samples_method"] == "smart":
         rows_pekel, cols_pekel = get_smart_indexes_from_mask(
@@ -276,25 +265,20 @@ def build_samples(
             params["smart_minimum"],
             np.logical_and(input_buffer[2][0], validity_mask),
         )
-        # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, validity_mask, input_buffer[1][0]
-        )
 
     elif params["samples_method"] == "grid":
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(
             nb_water_subsamples, validity_mask, valid_water_pixels[0]
         )
 
-        # Hand samples, always random (currently)
-        rows_hand, cols_hand = get_random_indexes_from_masks(
-            nb_other_subsamples, validity_mask, input_buffer[1][0]
-        )
-
     else:
         raise Exception(
             "Sample method not accepted : use 'random', 'smart' or 'grid'"
         )
+    # Always use grid indexes method for ground pixels (selected in HAND mask)
+    rows_hand, cols_hand = get_grid_indexes_from_mask(
+        nb_other_subsamples, validity_mask, input_buffer[1][0]
+    )
 
     # All samples
     rows = np.concatenate((rows_pekel, rows_hand))
@@ -621,7 +605,17 @@ def process_hand(args, eoscale_manager, margin):
         multiproc_context=args.multiproc_context,
         filter_desc="Hand valid mask processing...",
     )
-    return mask_hand
+
+    not_enough_ground_samples = False
+    # Check Hand mask : if there are too few valid pixels, we propose to threshold NDWI
+    local_mask_hand = eoscale_manager.get_array(mask_hand[0])
+    if len(np.where(local_mask_hand)[0]) < args.nb_samples_other:
+        not_enough_ground_samples = True
+        logger.warning(
+            "** WARNING ** not enough ground samples are found in Hand : return a simple mask"
+        )
+
+    return mask_hand, not_enough_ground_samples
 
 
 def nominal_case_predict(
@@ -1068,12 +1062,14 @@ def slurp_watermask(
             )
 
             # HAND
-            mask_hand = process_hand(args, eoscale_manager, margin)
+            mask_hand, not_enough_ground_samples = process_hand(
+                args, eoscale_manager, margin
+            )
 
             # Flag to command post-process
             do_post_process = True
 
-            if args.simple_ndwi_threshold:
+            if args.simple_ndwi_threshold or not_enough_ground_samples:
                 # Simple NDWI threshold,
                 # but taking account valid stack to take care of NO_DATA values
                 (
