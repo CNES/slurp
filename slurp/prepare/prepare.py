@@ -809,13 +809,13 @@ def slurp_prepare(
     """
     Main function that prepares common layers (primitives, external data)
     for mask computation.
-    External data recovery (Pekel, Hand, WSF) : these global raster database
+    External data recovery (Pekel, Hand, WSF) : these global raster databases
     must be superimposed on the VHR image.
-    
+
     For sensor-mode only, we compute an interpolation grid taking into account
     sensor geometry, geoid and DTM.
 
-    Uses only slurpContextManager and slurp executor.
+    Uses slurpContextManager and slurp executor.
     """
 
     keys = ["input", "prepare", "aux_layers", "vegetation", "resources"]
@@ -850,6 +850,7 @@ def slurp_prepare(
             # ==============================
             # LOAD VHR INTO SLURP
             # ==============================
+            logger.info("Step 0: Loading VHR image")
             vhr, input_profile = read_and_get_profile(args.file_vhr)
 
             # Global land cover map (used for vegetation mask, not water mask)
@@ -857,9 +858,9 @@ def slurp_prepare(
                 argsdict = add_cluster_vegetation_info(argsdict, args)
 
             # ==============================
-            # VALID STACK
+            # Step 1 / 4: VALID STACK
             # ==============================
-
+            logger.info("[1/4] Step: VALID STACK")
             valid_stack_key = valid_stack_process(
                 args,
                 slurp_manager,
@@ -868,9 +869,9 @@ def slurp_prepare(
             )
 
             # ==============================
-            # NDVI
+            # Step 2 / 4: NDVI
             # ==============================
-
+            logger.info("[2/4] Step: NDVI")
             if args.file_ndvi is not None and (
                 args.overwrite or not path.isfile(args.file_ndvi)
             ):
@@ -881,20 +882,18 @@ def slurp_prepare(
                     valid_stack_key,
                     input_profile,
                 )
-
                 slurp_manager.write_tif(
                     ndvi_key,
                     args.file_ndvi,
                     output_profile,
                 )
-
             else:
-                logger.info("Not computing NDWI: file already exists.")
-            
-            # ==============================
-            # NDWI
-            # ==============================
+                logger.info("NDVI skipped: file already exists.")
 
+            # ==============================
+            # Step 3 / 4: NDWI
+            # ==============================
+            logger.info("[3/4] Step: NDWI")
             if args.file_ndwi is not None and (
                 args.overwrite or not path.isfile(args.file_ndwi)
             ):
@@ -905,28 +904,19 @@ def slurp_prepare(
                     valid_stack_key,
                     input_profile,
                 )
-
                 slurp_manager.write_tif(
                     ndwi_key,
                     args.file_ndwi,
                     output_profile,
                 )
-
             else:
-                logger.info("Not computing NDWI: file already exists.")
+                logger.info("NDWI skipped: file already exists.")
 
             # ==============================
-            # SENSOR MODE
+            # Step 4 / 4: TEXTURE (vegetation only)
             # ==============================
-
-            if args.sensor_mode:
-                sensor_mode_process(args)
-
-            # ==============================
-            # TEXTURE (vegetation only)
-            # ==============================
-            
             if args.mode != "water":
+                logger.info("[4/4] Step: TEXTURE")
                 compute_texture(
                     args,
                     slurp_manager,
@@ -934,11 +924,17 @@ def slurp_prepare(
                     valid_stack_key,
                     input_profile
                 )
-            
+
+            # ==============================
+            # SENSOR MODE
+            # ==============================
+            if args.sensor_mode:
+                logger.info("Sensor mode processing")
+                sensor_mode_process(args)
+
             # ==============================
             # SAVE CONFIG
             # ==============================
-
             update_and_save_used_config(argsdict, args)
 
             t1 = time.time()
