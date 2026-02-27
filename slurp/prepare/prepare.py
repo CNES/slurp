@@ -39,7 +39,7 @@ import numpy as np
 from slurp.prepare import analyse_glcm
 from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
-from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
 
 logger = logging.getLogger("slurp")

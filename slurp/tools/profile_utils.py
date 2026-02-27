@@ -34,7 +34,7 @@ def concatenate_samples(output_scalars, chunk_output_scalars, tile):
 
 
 # Profiles
-def single_float_profile(input_profiles: list, map_params):
+def single_float_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -45,7 +45,7 @@ def single_float_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_bool_profile(input_profiles: list, map_params):
+def single_bool_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -56,7 +56,7 @@ def single_bool_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint8_1b_profile(input_profiles: list, map_params):
+def single_uint8_1b_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -69,7 +69,7 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint8_profile(input_profiles: list, map_params):
+def single_uint8_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -81,7 +81,7 @@ def single_uint8_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_int16_profile(input_profiles: list, map_params):
+def single_int16_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -93,7 +93,7 @@ def single_int16_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint16_profile(input_profiles: list, map_params):
+def single_uint16_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -105,7 +105,7 @@ def single_uint16_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_int32_profile(input_profiles: list, map_params):
+def single_int32_profile(input_profiles: list):
     """Define profile for eoscale"""
     profile = input_profiles[0]
     profile["count"] = 1
@@ -116,7 +116,7 @@ def single_int32_profile(input_profiles: list, map_params):
     return profile
 
 
-def three_uint8_profile(input_profiles: list, map_params):
+def three_uint8_profile(input_profiles: list):
     """Define profiles for eoscale"""
     profile1 = input_profiles[0]
     profile1["count"] = 1
@@ -134,7 +134,7 @@ def three_uint8_profile(input_profiles: list, map_params):
     return [profile1, profile2, profile3]
 
 
-def double_uint8_profile(input_profiles: list, map_params):
+def double_uint8_profile(input_profiles: list):
     """Define profiles for eoscale"""
     profile1 = input_profiles[0]
     profile1["count"] = 1
