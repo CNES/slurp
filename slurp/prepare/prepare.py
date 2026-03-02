@@ -645,7 +645,7 @@ def compute_texture(
             nir_band[valid_mask], [2, 98]
         )
     input_profile = deepcopy(vhr_profile)
-    output_profile = eo_utils.single_int16_profile(
+    output_profile = eo_utils.single_uint16_profile(
         [deepcopy(vhr_profile)]
     )
     [texture_key] = mp_n_to_m_images(
