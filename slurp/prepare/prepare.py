@@ -276,8 +276,8 @@ def create_valid_stack(
     )
 
     if args.cloud_mask:
-        cloud_mask = read(args.cloud_mask)
-        input_keys = [key_vhr[0], key_cloud_mask]
+        key_cloud_mask = read(args.cloud_mask)
+        input_keys = [key_vhr[0], key_cloud_mask[0]]
 
     valid_stack_key = mp_n_to_m_images(
         inputs=input_keys,
@@ -837,7 +837,7 @@ def slurp_prepare(
     params = {
         "nb_max_workers": args.n_workers,
         "developer_mode": args.debug,
-        "method": "mem",   # full shared memory mode
+        "method": "mem",   
         "mp_context": multiproc_context,
         "output_dir": path.dirname(args.file_vhr),
     }
