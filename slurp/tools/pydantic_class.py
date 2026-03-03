@@ -250,11 +250,6 @@ class Water(BaseModel):
     strict_thresh: Optional[int] = Field(
         default=50, description="Pekel Threshold float if hand_strict"
     )
-    simple_ndwi_threshold: Optional[bool] = Field(
-        default=False,
-        description="Compute water mask as a simple NDWI threshold - useful in arid places "
-        "where no water is known by Peckel",
-    )
     ndwi_threshold: Optional[float] = Field(
         default=100,
         description="Threshold used when Pekel is empty in the area",

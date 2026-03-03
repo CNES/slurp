@@ -526,7 +526,7 @@ def display_computation_info(
     logger.info(
         "- Build_stack           :\t" + utils.convert_time(time_stack - t0)
     )
-    if not args.simple_ndwi_threshold and not not_enough_water_samples:
+    if not not_enough_water_samples:
         logger.info(
             "- Build_samples         :\t"
             + utils.convert_time(time_samples - time_stack)
@@ -759,7 +759,15 @@ def getarguments():
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
-
+    parser.add_argument(
+        "-mode",
+        choices=["nominal", "no_HAND", "relative_th", "absolute_th"],
+        dest="mode",
+        default="nominal",
+        help="Watermask algorithm : nominal refers to Random Forest learning/prediction, "
+        "no HAND won't use HAND to select samples, relative_th computes a NDWI threshold based "
+        "on Pekel, and absolute_th simply filters NDWI values above a threshold",
+    )
     parser.add_argument(
         "-log_f",
         "--logs_to_file",
@@ -824,11 +832,6 @@ def getarguments():
         "-save_mode",
         choices=["none", "debug"],
         help="Save all files (debug) or only output mask (none)",
-    )
-    group2.add_argument(
-        "-simple_ndwi_threshold",
-        help="Compute water mask as a simple NDWI threshold - "
-        "useful in arid places where no water is known by Peckel",
     )
     group2.add_argument(
         "-ndwi_threshold",
@@ -964,6 +967,7 @@ def getarguments():
 
 def slurp_watermask(
     main_config: str,
+    mode: str,
     logs_to_file: bool,
     debug: bool,
     user_config: str,
@@ -980,7 +984,6 @@ def slurp_watermask(
     thresh_hand: int,
     strict_thresh: float,
     save_mode: str,
-    simple_ndwi_threshold: bool,
     ndwi_threshold: float,
     samples_method: str,
     nb_samples_water: int,
@@ -1045,7 +1048,45 @@ def slurp_watermask(
             t0 = time.time()
 
             utils.display_mem_usage(args.debug, "Start computation")
+            """
+            Read NDWI
+            """
 
+            if args.mode == "absolute_th":
+                logger.debug(f"Absolute threshold mode : filter NDWI values above "
+                             f"{args.ndwi_threshold=}")
+                # exit()? 
+            else:
+                """
+                read Pekel
+                """
+                if args.mode == "relative_th":
+                    """
+                    Compute relative threshold
+                    """
+                    logger.debug(f"Relative threshold mode : compute a relative "
+                                 "threshold based on Pekel")
+                else:
+                    # args.mode = nominal or "no HAND"
+                    if args.mode == "no_HAND":
+                        """
+                        Create a void HAND layer to select samples
+                        """
+                        logger.debug(f"no HAND mode : won't read HAND file")
+                    else:
+                        logger.debug(f"nominal mode : read HAND file")
+
+                    """
+                    read NDVI
+                    build stack
+                    select samples
+                    learn / predict (or filter NDWI, corner case)
+                    """
+                    logger.debug("Learn/Predict watermask")
+                """ Post-process """
+                logger.debug("Post-process watermask")
+                
+            exit()
             # --Build stack with all layers-- #
 
             key_ndvi, key_ndwi, key_phr, key_valid_stack, margin = (
@@ -1069,7 +1110,7 @@ def slurp_watermask(
             # Flag to command post-process
             do_post_process = True
 
-            if args.simple_ndwi_threshold or not_enough_ground_samples:
+            if not_enough_ground_samples:
                 # Simple NDWI threshold,
                 # but taking account valid stack to take care of NO_DATA values
                 (
@@ -1114,6 +1155,8 @@ def slurp_watermask(
                         mask_pekel,
                     )
                 )
+
+            # Post-processing can be applied to clean raw prediction from false positives
             if do_post_process:
                 # --Post_processing-- #
                 launch_postprocess(
@@ -1135,7 +1178,7 @@ def slurp_watermask(
             end_time = time.time()
 
             display_global_infos(args, end_time, t0, time_stack)
-            if not args.simple_ndwi_threshold and not not_enough_water_samples:
+            if not not_enough_water_samples:
                 display_rf_infos(
                     end_time, time_random_forest, time_samples, time_stack
                 )

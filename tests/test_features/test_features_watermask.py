@@ -63,14 +63,16 @@ def test_hand_strict_ci(
     sys.argv = command
     slurp.masks.watermask.main()
 
+"""
+TODO : replace these tests by new tests on different modes
 
 @pytest.mark.features
 def test_simple_ndwi_threshold(
     main_config, features_test_img, output_dir, ref_dir
 ):
-    """Tests the water mask computation with a simple NDWI threshold enabled.
+    Tests the water mask computation with a simple NDWI threshold enabled.
     simple_ndwi_threshold: Compute water mask as a simple NDWI threshold,
-    useful in arid places where no water is known by Peckel"""
+    useful in arid places where no water is known by Peckel
     cmd = write_command_compute_watermask(
         1, main_config, features_test_img, output_dir, ref_dir
     )
@@ -83,14 +85,14 @@ def test_simple_ndwi_threshold(
 def test_simple_ndwi_threshold_ci(
     main_config, features_test_img, output_dir, ref_dir, valid_stack
 ):
-    """Run test_simple_nwdi_threshold with specified valid_stack (for GithubCI)."""
+Run test_simple_nwdi_threshold with specified valid_stack (for GithubCI).
     cmd = write_command_compute_watermask(
         1, main_config, features_test_img, output_dir, ref_dir, valid_stack
     )
     command = f"{cmd} -simple_ndwi_threshold True".split()
     sys.argv = command
     slurp.masks.watermask.main()
-
+"""
 
 @pytest.mark.features
 @pytest.mark.parametrize("samples_method", ["random", "smart", "grid"])
