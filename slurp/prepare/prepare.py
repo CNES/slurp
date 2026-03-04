@@ -707,9 +707,8 @@ def valid_stack_process(
             "Not computing valid stack mask: file already exists."
         )
 
-        valid_stack_key = [
-            read(args.valid_stack)
-        ]
+        valid_stack_key = read(args.valid_stack)
+
     return valid_stack_key
 
 
