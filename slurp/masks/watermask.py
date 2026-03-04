@@ -234,14 +234,22 @@ def build_samples(
     valid_stack: np.ndarray,
     mask_hand: np.ndarray,
     mask_pekel: np.ndarray,
-    phr: np.ndarray,
+    phr1: np.ndarray,
+    phr2: np.ndarray,
+    phr3: np.ndarray,
+    phr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     ndwi_threshold:float,
     nb_valid_water_pixels: int,
     nb_valid_other_pixels: int,
     nb_samples_water: int,
-    nb_samples_other: int
+    nb_samples_other: int,
+    samples_method: str,
+    nb_samples_auto: bool,
+    auto_pct: float,
+    smart_area_pct: float,
+    smart_minimum: int,
 ) -> np.ndarray:
     """
     Build samples from tiled ndarray inputs (SLURP executor version).
@@ -276,14 +284,44 @@ def build_samples(
 
     nb_water_subsamples = round(water_ratio * nb_samples_water)
     nb_other_subsamples = round(other_ratio * nb_samples_other)
-    
-    # ---- sampling ----
-    rows_pekel, cols_pekel = get_random_indexes_from_masks(
-        nb_water_subsamples,
-        validity_mask,
-        mask_pekel,
-    )
 
+    # ---- AUTO MODE ----
+    if nb_samples_auto:
+        nb_water_subsamples = int(nb_water_subset * auto_pct)
+        nb_other_subsamples = int(nb_other_subset * auto_pct)
+    
+    # ---- WATER SAMPLES ----
+    if samples_method == "random":
+
+        rows_pekel, cols_pekel = get_random_indexes_from_masks(
+            nb_water_subsamples,
+            validity_mask,
+            mask_pekel,
+        )
+
+    elif samples_method == "smart":
+
+        rows_pekel, cols_pekel = get_smart_indexes_from_mask(
+            nb_water_subsamples,
+            smart_area_pct,
+            smart_minimum,
+            np.logical_and(mask_pekel, validity_mask),
+        )
+
+    elif samples_method == "grid":
+
+        rows_pekel, cols_pekel = get_grid_indexes_from_mask(
+            nb_water_subsamples,
+            validity_mask,
+            valid_water_pixels,
+        )
+
+    else:
+        raise ValueError(
+            "samples_method must be 'random', 'smart' or 'grid'"
+        )
+
+    # ---- OTHER SAMPLES (always random) ----
     rows_hand, cols_hand = get_random_indexes_from_masks(
         nb_other_subsamples,
         validity_mask,
@@ -295,7 +333,7 @@ def build_samples(
     cols = np.concatenate((cols_pekel, cols_hand))
     # ---- stack features ----
     im_stack = np.stack(
-        (mask_pekel, phr, ndvi, ndwi),
+        (mask_pekel, phr1, phr2, phr3, phr4, ndvi, ndwi),
         axis=0,
     )
     samples = np.transpose(
@@ -800,6 +838,9 @@ def nominal_case_predict(
         mask_hand[0],
         local_mask_pekel,
         phr[0][0],
+        phr[0][1],
+        phr[0][2],
+        phr[0][3],
         ndvi[0][0],
         ndwi[0][0],
     ] + keys_files_layers
@@ -814,7 +855,12 @@ def nominal_case_predict(
             "nb_valid_water_pixels": args.nb_valid_water_pixels,
             "nb_valid_other_pixels": args.nb_valid_other_pixels,
             "nb_samples_water": args.nb_samples_water,
-            "nb_samples_other": args.nb_samples_other
+            "nb_samples_other": args.nb_samples_other,
+            "samples_method": args.samples_method,
+            "nb_samples_auto": args.nb_samples_auto,
+            "auto_pct": args.auto_pct,
+            "smart_area_pct": args.smart_area_pct,
+            "smart_minimum": args.smart_minimum,
         },
         reducer=utils.concatenate_samples,
     )
@@ -842,6 +888,9 @@ def nominal_case_predict(
     input_for_prediction = [
         valid_stack[0][0],
         phr[0][0],
+        phr[0][1],
+        phr[0][2],
+        phr[0][3],
         ndvi[0][0],
         ndwi[0][0],
     ] + keys_files_layers
