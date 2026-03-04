@@ -421,3 +421,117 @@ def mp_execute_from_arrays(inputs: List[np.ndarray], func: Callable, func_parame
         ],
         "tile": tile,
     }
+
+def mp_n_to_m_scalars(
+    inputs: list,
+    image_height: int,
+    image_width: int,
+    context_manager: slurpContextManager,
+    func: Callable,
+    reducer: Callable,
+    func_parameters: Union[dict, None] = None,
+    stable_margin: int = 0,
+    tile_mode: Union[bool, None] = None,
+    specific_tile_size: Union[int, None] = None,
+    strip_along_lines: bool = False,
+) -> Union[float, Tuple]:
+    """
+    Generic paradigm to process n images providing m scalar results.
+
+    func is executed in parallel on tiles.
+    reducer aggregates tile-level scalar outputs into global scalar(s).
+
+    Strong hypothesis: all input images are in the same geometry.
+    """
+
+    if len(inputs) < 1:
+        raise ValueError("At least one input image must be given.")
+
+    if func is None:
+        raise ValueError("A function must be provided.")
+
+    if reducer is None:
+        raise ValueError("A reducer function must be provided.")
+
+    if context_manager is None:
+        raise ValueError("Context manager must be provided.")
+
+    if func_parameters is None:
+        func_parameters = {}
+
+    # ---- NO MULTIPROCESSING ----
+    if context_manager.pool is None:
+
+        if isinstance(inputs[0], str):
+            raise ValueError("Without multiprocessing inputs must be numpy arrays.")
+
+        result = func(*inputs, **func_parameters)
+        return result
+
+    # ---- MULTIPROCESSING ----
+    tiles = compute_mp_tiles(
+        image_height=image_height,
+        image_width=image_width,
+        stable_margin=stable_margin,
+        nb_workers=context_manager.nb_workers,
+        tile_mode=tile_mode if tile_mode is not None else context_manager.tile_mode,
+        specific_tile_size=specific_tile_size,
+        strip_along_lines=strip_along_lines,
+    )
+
+    if context_manager.in_memory:
+        # inputs are numpy arrays
+        list_input = [
+            (
+                [
+                    inputs[i][
+                        tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
+                        tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
+                    ]
+                    for i in range(len(inputs))
+                ],
+                func,
+                func_parameters,
+                tile,
+            )
+            for tile in tiles
+        ]
+
+        chunk_results = context_manager.pool.starmap(
+            mp_execute_scalar_from_arrays, tqdm.tqdm(list_input, total=len(list_input))
+        )
+
+    else:
+        # inputs are paths
+        list_input = [
+            (inputs, func, func_parameters, tile)
+            for tile in tiles
+        ]
+
+        chunk_results = context_manager.pool.starmap(
+            mp_execute_scalar_from_paths, tqdm.tqdm(list_input, total=len(list_input))
+        )
+
+    # ---- REDUCE PHASE ----
+    final_result = reducer(chunk_results)
+
+    return final_result
+
+def mp_execute_scalar_from_arrays(
+    inputs: List[np.ndarray],
+    func: Callable,
+    func_parameters: dict,
+    tile: MpTile,
+):
+    outputs = func(*inputs, **func_parameters)
+    return outputs
+
+def mp_execute_scalar_from_paths(
+    input_paths: List[str],
+    func: Callable,
+    func_parameters: dict,
+    tile: MpTile,
+):
+    inputs = [read_window(path, tile) for path in input_paths]
+    outputs = func(*inputs, **func_parameters)
+    return outputs
