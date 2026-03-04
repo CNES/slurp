@@ -301,7 +301,6 @@ def build_samples(
     samples = np.transpose(
         im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
     )
-    print(samples)
     return samples
 
 def rf_prediction(
@@ -351,7 +350,6 @@ def rf_prediction(
     prediction = np.zeros(im_stack.shape[1:], dtype=np.uint8)
 
     if buffer_to_predict.shape[0] > 0:
-        print(buffer_to_predict.shape)
         prediction[valid_mask] = classifier.predict(buffer_to_predict)
 
     # ---- debug -------------------------------------------------------------
@@ -805,7 +803,6 @@ def nominal_case_predict(
         ndvi[0][0],
         ndwi[0][0],
     ] + keys_files_layers
-    print(len(input_for_samples))
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
         image_height=input_profile["height"],
@@ -821,7 +818,6 @@ def nominal_case_predict(
         },
         reducer=utils.concatenate_samples,
     )
-    print(samples)
     # samples=[x_samples, y_samples]
     del local_mask_pekel
     time_samples = time.time()
@@ -835,7 +831,7 @@ def nominal_case_predict(
     logger.debug(
         "RandomForest parameters: \n%s\n", str(classifier.get_params())
     )
-    samples = np.stack(samples, axis=0)
+    samples = np.concatenate(samples[:])
     x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
     y_samples = samples[:, 0]  # mask_pekel
     rf_utils.train_classifier(classifier, x_samples, y_samples)
