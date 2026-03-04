@@ -36,6 +36,9 @@ from slurp.tools.constant import NODATA_INT8
 logger = logging.getLogger("slurp")
 
 
+def concatenate_samples(chunk_results):
+    return [chunk[0] for chunk in chunk_results]
+
 def store_arglist(parser):
     """
     Stores the list of argument names from the CLI parser into a JSON file.
