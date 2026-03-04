@@ -55,7 +55,7 @@ except ModuleNotFoundError:
 
 
 def compute_pekel_mask(
-    input_buffer: np.ndarray,
+    pekel_img: np.ndarray,
     thresh_pekel: float,
     hand_strict: bool,
     strict_thresh: float,
@@ -80,9 +80,6 @@ def compute_pekel_mask(
     tuple[np.ndarray, np.ndarray]
         (mask_pekel, secondary_mask)
     """
-
-    pekel_img = input_buffer
-
     # Main water mask
     mask_pekel = utils.compute_mask(pekel_img, [thresh_pekel])
 
@@ -101,7 +98,7 @@ def compute_pekel_mask(
 
 
 def compute_hand_mask(
-    input_buffer: list, thresh_hand: int,
+    hand_array: np.ndarray, thresh_hand: int,
 ) -> bool:
     """
     Compute Hand mask with one or multiple threshold values.
@@ -110,7 +107,7 @@ def compute_hand_mask(
     :param dict params: dictionary of arguments
     :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
     """
-    mask_hand = input_buffer > thresh_hand
+    mask_hand = hand_array > thresh_hand
 
     # Do not learn in water surface (useful if image contains big water surfaces)
     # Add some robustness if hand_strict is not used
@@ -304,7 +301,7 @@ def build_samples(
     samples = np.transpose(
         im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
     )
-
+    print(samples)
     return samples
 
 def rf_prediction(
@@ -416,7 +413,7 @@ def post_process(
     remove_small_holes,
     remove_small_objects,
     value_classif,
-) -> list:
+) -> tuple:
     """
     Compute filters on the prediction image.
 
@@ -501,7 +498,7 @@ def post_process(
     im_predict[valid_stack != 0] = NODATA_INT8
     im_predict[im_predict == 1] = value_classif
 
-    return im_classif, im_predict
+    return im_predict, im_classif
 
 
 def build_stack_water(args, slurp_manager):
@@ -679,15 +676,14 @@ def process_pekel(args, slurp_manager, margin):
     output_profile = eo_utils.double_uint8_profile(
         [deepcopy(pekel_profile)]
     )
-
     # ==============================
     # COMPUTE PEKEL MASK
     # ==============================
-    mask_pekel = mp_n_to_m_images(
+    local_mask_pekel, mask_pekel0 = mp_n_to_m_images(
         inputs=[pekel_array[0]],
         image_height=input_profile["height"],
         image_width=input_profile["width"],
-        output_profiles = output_profile,
+        output_profiles = [output_profile[0], output_profile[0]],
         output_keys=["pekel_mask"],
         func=compute_pekel_mask,
         func_parameters={
@@ -708,14 +704,14 @@ def process_pekel(args, slurp_manager, margin):
 
     not_enough_water_samples = False
 
-    if np.count_nonzero(mask_pekel[0]) < args.nb_samples_water:
+    if np.count_nonzero(local_mask_pekel) < args.nb_samples_water:
         not_enough_water_samples = True
         logger.warning(
             "** WARNING ** Not enough water samples found in Pekel: "
             "switching to NDWI threshold mode."
         )
 
-    return mask_pekel[0], mask_pekel, not_enough_water_samples
+    return local_mask_pekel, mask_pekel0, not_enough_water_samples
 
 
 def process_hand(args, slurp_manager, margin):
@@ -778,14 +774,14 @@ def nominal_case_predict(
     local_mask_pekel,
     margin,
     mask_hand,
-    mask_pekel,
+    mask_pekel0,
     phr_profile
 ):
     """
     Performs supervised classification using Random Forest to predict a water mask.
     """
     keys_files_layers = [
-        slurp_manager.read(raster_path=args.files_layers[i])
+        read(raster_path=args.files_layers[i])
         for i in range(len(args.files_layers))
     ]
     
@@ -793,7 +789,7 @@ def nominal_case_predict(
         np.where(valid_stack[0][0] == 0)[0]
     )
     args.nb_valid_water_pixels = np.count_nonzero(
-        np.logical_and(local_mask_pekel[0], valid_stack[0][0] == 0)
+        np.logical_and(local_mask_pekel, valid_stack[0][0] == 0)
     )
     input_profile = deepcopy(phr_profile)
     output_profile = eo_utils.single_uint8_profile(
@@ -804,11 +800,12 @@ def nominal_case_predict(
     input_for_samples = [
         valid_stack[0][0],
         mask_hand[0],
-        mask_pekel[0],
+        local_mask_pekel,
         phr[0][0],
         ndvi[0][0],
         ndwi[0][0],
     ] + keys_files_layers
+    print(len(input_for_samples))
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
         image_height=input_profile["height"],
@@ -824,6 +821,7 @@ def nominal_case_predict(
         },
         reducer=utils.concatenate_samples,
     )
+    print(samples)
     # samples=[x_samples, y_samples]
     del local_mask_pekel
     time_samples = time.time()
@@ -877,7 +875,7 @@ def launch_postprocess(
     valid_stack,
     margin,
     mask_hand,
-    mask_pekel,
+    mask_pekel0,
     predict_profile
 ):
     """
@@ -890,22 +888,19 @@ def launch_postprocess(
     inputs_for_classif = [
         predict[0],   # predicted RF mask
         mask_hand[0],     # hand mask
-        mask_pekel[0],    # Pekel mask
+        mask_pekel0,    # Pekel mask
         valid_stack[0][0],  # validity mask
     ]
-    print(predict[0].shape)
-    print(mask_hand[0].shape)
-    print(mask_pekel[0].shape)
-    print(valid_stack[0][0].shape)
+
     input_profile = deepcopy(predict_profile)
-    output_profile = eo_utils.single_uint8_profile([deepcopy(predict_profile)])
+    output_profile = eo_utils.double_uint8_profile([deepcopy(predict_profile)])
 
     # ---- Slurp executor version of n_images_to_m_images_filter ----
-    im_predict = mp_n_to_m_images(
+    im_predict, im_classif = mp_n_to_m_images(
         inputs=inputs_for_classif,
         image_height=input_profile["height"],
         image_width=input_profile["width"],
-        output_profiles=[output_profile],
+        output_profiles=[output_profile[0], output_profile[0]],
         output_keys=["postprocessed_mask", "raw_prediction"],
         func=post_process,
         func_parameters={
@@ -922,21 +917,20 @@ def launch_postprocess(
         context_manager=slurp_manager,
         stable_margin=margin,
     )
-    
     # ---- write final mask ----
     slurp_manager.write_tif(
-        data=im_predict[0], 
+        data=im_classif, 
         path=args.watermask, 
-        target_profile=output_profile
+        target_profile=output_profile[0]
     )
 
     # ---- write raw prediction in debug mode ----
-    if args.save_mode == "debug":
-        slurp_manager.write(
-            data=im_predict[1],
-            path=args.watermask.replace(".tif", "_raw_predict.tif"),
-            target_profile=output_profile
-        )
+   # if args.save_mode == "debug":
+    slurp_manager.write_tif(
+        data=im_predict,
+        path=args.watermask.replace(".tif", "_raw_predict.tif"),
+        target_profile=output_profile[0]
+    )
 
 
 def getarguments():
@@ -1259,7 +1253,7 @@ def slurp_watermask(
             # PEKEL & HAND
             # ==============================
             logger.info("[1] Step: PEKEL")
-            local_mask_pekel, mask_pekel, not_enough_water_samples = (
+            local_mask_pekel, mask_pekel0, not_enough_water_samples = (
                 process_pekel(args, slurp_manager, margin)
             )
             logger.info("[2] Step: HAND")
@@ -1317,7 +1311,7 @@ def slurp_watermask(
                     local_mask_pekel,
                     margin,
                     mask_hand,
-                    mask_pekel,
+                    mask_pekel0,
                     phr_profile
                 )
 
@@ -1332,7 +1326,7 @@ def slurp_watermask(
                 valid_stack,
                 margin,
                 mask_hand,
-                mask_pekel,
+                mask_pekel0,
                 predict_profile
             )
 
