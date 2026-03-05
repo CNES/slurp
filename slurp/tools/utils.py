@@ -86,7 +86,7 @@ def convert_time(seconds):
     return time.strftime("%H:%M:%S", full_time)
 
 
-def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:
+def compute_mask(im_ref: np.ndarray, thresh_ref: float) -> list:
     """
     Compute mask with one or multiple threshold values
 
@@ -103,7 +103,7 @@ def compute_mask(im_ref: np.ndarray, thresh_ref: list) -> list:
 
 
 def compute_mask_threshold(
-    input_buffers: list, input_profiles: list, params: dict
+    ndwi: np.ndarray, valid_stack: np.ndarray ,ndwi_threshold: float
 ) -> np.ndarray:
     """
     Compute boolean mask with threshold value
@@ -113,8 +113,8 @@ def compute_mask_threshold(
     :param dict params: dictionary of arguments, must contain the key "threshold"
     :returns: computed mask
     """
-    mask = np.where(input_buffers[0][0] > params["threshold"], 1, 0)
-    mask[np.where(input_buffers[1][0] != 0)] = NODATA_INT8
+    mask = np.where(ndwi > ndwi_threshold, 1, 0)
+    mask[np.where(valid_stack != 0)] = NODATA_INT8
 
     return mask
 

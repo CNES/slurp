@@ -600,7 +600,7 @@ def build_stack_water(args, slurp_manager):
     # ==============================
 
     key_ndvi = read(args.file_ndvi)
-    key_ndwi = read(args.file_ndwi)
+    key_ndwi, profile_ndwi = read_and_get_profile(args.file_ndwi)
 
     # Wrap into lists for consistency with mp_n_to_m_images API
     return (
@@ -609,7 +609,8 @@ def build_stack_water(args, slurp_manager):
         [key_phr],
         [key_valid_stack], 
         margin,
-        profile_phr
+        profile_phr,
+        profile_ndwi
     )
 
 
@@ -1289,7 +1290,7 @@ def slurp_watermask(
             # BUILD STACK
             # ==============================
 
-            ndvi, ndwi, phr, valid_stack, margin, phr_profile = (
+            ndvi, ndwi, phr, valid_stack, margin, phr_profile, ndwi_profile = (
                 build_stack_water(args, slurp_manager)
             )
 
@@ -1308,43 +1309,51 @@ def slurp_watermask(
             # ==============================
 
             if args.simple_ndwi_threshold:
-                # TODO : NDWI PROFILE AND ARRAY
-                # modif build stack water function to return profile and arrays separately 
+                logger.info("[3] Step: NDWI THRESHOLD")
+                input_profile = deepcopy(ndwi_profile)
+                output_profile = eo_utils.single_uint8_profile(
+                    [deepcopy(ndwi_profile)]
+                ) 
                 predict = mp_n_to_m_images(
-                    inputs=[ndwi[0], valid_stack[0]],
+                    inputs=[ndwi[0][0], valid_stack[0][0]],
                     image_height=input_profile["height"],
                     image_width=input_profile["width"],
-                    output_profiles=[eo_utils.single_uint8_profile([input_profile])],
+                    output_profiles=[output_profile],
                     output_keys=[path.basename(args.watermask)],
                     func=utils.compute_mask_threshold,
-                    func_parameters={"threshold": args.ndwi_threshold},
+                    func_parameters={"ndwi_threshold": args.ndwi_threshold},
                     context_manager=slurp_manager,
                     stable_margin=margin,
                     binary=True,
                 )
+                predict_profile = output_profile
 
             # ==============================
             # RANDOM FOREST MODE
             # ==============================
 
             elif not_enough_water_samples:
-                # TODO : NDWI PROFILE AND ARRAY
-                # modif build stack water function to return profile and arrays separately 
+                logger.info("[3] Step: NDWI THRESHOLD")
+                input_profile = deepcopy(ndwi_profile)
+                output_profile = eo_utils.single_uint8_profile(
+                    [deepcopy(ndwi_profile)]
+                )
                 predict = mp_n_to_m_images(
-                    inputs=[key_ndwi[0], key_valid_stack[0]],
+                    inputs=[ndwi[0][0], valid_stack[0][0]],
                     image_height=input_profile["height"],
                     image_width=input_profile["width"],
-                    output_profiles=[eo_utils.single_uint8_profile([input_profile])],
+                    output_profiles=[output_profile],
                     output_keys=[path.basename(args.watermask)],
                     func=utils.compute_mask_threshold,
-                    func_parameters={"threshold": 1000},
+                    func_parameters={"ndwi_threshold": 1000},
                     context_manager=slurp_manager,
                     stable_margin=margin,
                     binary=True,
                 )
+                predict_profile = output_profile
 
             else:
-
+                logger.info("[3] Step: RF WATER")
                 predict, predict_profile, time_random_forest, time_samples = nominal_case_predict(
                     args,
                     slurp_manager,
@@ -1362,7 +1371,7 @@ def slurp_watermask(
             # ==============================
             # POST PROCESS
             # ==============================
-
+            logger.info("[3] Step: POST PROCESS")
             launch_postprocess(
                 args,
                 slurp_manager,
