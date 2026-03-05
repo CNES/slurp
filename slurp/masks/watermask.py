@@ -439,7 +439,6 @@ def post_process(
     mask_hand,
     mask_pekel0,
     valid_stack,
-    *,
     hand_filter,
     hand_strict,
     no_pekel_filter,
@@ -496,7 +495,7 @@ def post_process(
     # ---- Filter for final classification ----
     if not no_pekel_filter:
         mask = np.zeros(buffer_shape, dtype=bool)
-        mask = np.logical_or(mask, mask_pekel0[0])
+        mask = np.logical_or(mask, mask_pekel0)
         im_classif = mask_filter(im_predict, mask)
     else:
         im_classif = im_predict.copy()
