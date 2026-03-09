@@ -28,6 +28,7 @@ import time
 import traceback
 from os import makedirs, path
 from copy import deepcopy
+from typing import List, Optional
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -250,6 +251,7 @@ def build_samples(
     auto_pct: float,
     smart_area_pct: float,
     smart_minimum: int,
+    aux_inputs: Optional[List[np.ndarray]] = None,
 ) -> np.ndarray:
     """
     Build samples from tiled ndarray inputs (SLURP executor version).
@@ -321,7 +323,7 @@ def build_samples(
             "samples_method must be 'random', 'smart' or 'grid'"
         )
 
-    # ---- OTHER SAMPLES (always random) ----
+    # ---- OTHER SAMPLES ----
     rows_hand, cols_hand = get_random_indexes_from_masks(
         nb_other_subsamples,
         validity_mask,
@@ -331,14 +333,27 @@ def build_samples(
     # ---- merge samples ----
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
+
     # ---- stack features ----
-    im_stack = np.stack(
-        (mask_pekel, phr1, phr2, phr3, phr4, ndvi, ndwi),
-        axis=0,
-    )
+    base_features = [
+        mask_pekel,
+        phr1,
+        phr2,
+        phr3,
+        phr4,
+        ndvi,
+        ndwi,
+    ]
+
+    # concat optional aux inputs
+    features = base_features + list(aux_inputs)
+
+    im_stack = np.stack(features, axis=0)
+
     samples = np.transpose(
         im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
     )
+
     return samples
 
 def rf_prediction(
@@ -817,8 +832,9 @@ def nominal_case_predict(
     Performs supervised classification using Random Forest to predict a water mask.
     """
     keys_files_layers = [
-        read(raster_path=args.files_layers[i])
-        for i in range(len(args.files_layers))
+        band
+        for path in args.files_layers
+        for band in read(path)
     ]
     
     nb_valid_pixels = len(
@@ -843,9 +859,10 @@ def nominal_case_predict(
         phr[0][3],
         ndvi[0][0],
         ndwi[0][0],
-    ] + keys_files_layers
+    ]
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
+        aux_inputs=keys_files_layers,
         image_height=input_profile["height"],
         image_width=input_profile["width"],
         context_manager=slurp_manager,
@@ -864,6 +881,9 @@ def nominal_case_predict(
         },
         reducer=utils.concatenate_samples,
     )
+    logger.debug(
+        "samples: \n%s\n", samples
+    )
     # samples=[x_samples, y_samples]
     del local_mask_pekel
     time_samples = time.time()
@@ -877,7 +897,6 @@ def nominal_case_predict(
     logger.debug(
         "RandomForest parameters: \n%s\n", str(classifier.get_params())
     )
-    samples = np.concatenate(samples[:])
     x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
     y_samples = samples[:, 0]  # mask_pekel
     rf_utils.train_classifier(classifier, x_samples, y_samples)

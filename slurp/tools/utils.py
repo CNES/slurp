@@ -37,7 +37,8 @@ logger = logging.getLogger("slurp")
 
 
 def concatenate_samples(chunk_results):
-    return [chunk for chunk in chunk_results]
+    samples = np.concatenate(chunk_results)
+    return samples
 
 def store_arglist(parser):
     """

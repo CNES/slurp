@@ -24,7 +24,7 @@ This module is used to run multiprocessing in slurp
 
 import math
 from multiprocessing.synchronize import Lock
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Tuple, Union, Optional
 
 import numpy as np
 import tqdm
@@ -430,19 +430,12 @@ def mp_n_to_m_scalars(
     func: Callable,
     reducer: Callable,
     func_parameters: Union[dict, None] = None,
+    aux_inputs: Optional[List[np.ndarray]] = None,
     stable_margin: int = 0,
     tile_mode: Union[bool, None] = None,
     specific_tile_size: Union[int, None] = None,
     strip_along_lines: bool = False,
 ) -> Union[float, Tuple]:
-    """
-    Generic paradigm to process n images providing m scalar results.
-
-    func is executed in parallel on tiles.
-    reducer aggregates tile-level scalar outputs into global scalar(s).
-
-    Strong hypothesis: all input images are in the same geometry.
-    """
 
     if len(inputs) < 1:
         raise ValueError("At least one input image must be given.")
@@ -459,13 +452,25 @@ def mp_n_to_m_scalars(
     if func_parameters is None:
         func_parameters = {}
 
+    if aux_inputs is None:
+        aux_inputs = []
+
+    # ---- dimension checks ----
+    for arr in inputs:
+        if arr.shape != (image_height, image_width):
+            raise ValueError("All inputs must match image dimensions")
+
+    for arr in aux_inputs:
+        if arr.shape != (image_height, image_width):
+            raise ValueError("All aux_inputs must match image dimensions")
+
     # ---- NO MULTIPROCESSING ----
     if context_manager.pool is None:
 
-        if isinstance(inputs[0], str):
-            raise ValueError("Without multiprocessing inputs must be numpy arrays.")
+        params = dict(func_parameters)
+        params["aux_inputs"] = aux_inputs
 
-        result = func(*inputs, **func_parameters)
+        result = func(*inputs, **params)
         return result
 
     # ---- MULTIPROCESSING ----
@@ -479,40 +484,60 @@ def mp_n_to_m_scalars(
         strip_along_lines=strip_along_lines,
     )
 
+    list_input = []
+
     if context_manager.in_memory:
-        # inputs are numpy arrays
-        list_input = [
-            (
-                [
-                    inputs[i][
-                        tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
-                        tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
-                    ]
-                    for i in range(len(inputs))
-                ],
-                func,
-                func_parameters,
-                tile,
+
+        for tile in tiles:
+
+            # slice main inputs
+            tile_inputs = [
+                arr[
+                    tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
+                    tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
+                ]
+                for arr in inputs
+            ]
+
+            # slice aux inputs
+            tile_aux_inputs = [
+                arr[
+                    tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
+                    tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
+                ]
+                for arr in aux_inputs
+            ]
+
+            tile_params = dict(func_parameters)
+            tile_params["aux_inputs"] = tile_aux_inputs
+
+            list_input.append(
+                (
+                    tile_inputs,
+                    func,
+                    tile_params,
+                    tile,
+                )
             )
-            for tile in tiles
-        ]
 
         chunk_results = context_manager.pool.starmap(
-            mp_execute_scalar_from_arrays, tqdm.tqdm(list_input, total=len(list_input))
+            mp_execute_scalar_from_arrays,
+            tqdm.tqdm(list_input, total=len(list_input)),
         )
 
     else:
-        # inputs are paths
+
         list_input = [
             (inputs, func, func_parameters, tile)
             for tile in tiles
         ]
 
         chunk_results = context_manager.pool.starmap(
-            mp_execute_scalar_from_paths, tqdm.tqdm(list_input, total=len(list_input))
+            mp_execute_scalar_from_paths,
+            tqdm.tqdm(list_input, total=len(list_input)),
         )
 
-    # ---- REDUCE PHASE ----
+    # ---- REDUCE ----
     final_result = reducer(chunk_results)
 
     return final_result
