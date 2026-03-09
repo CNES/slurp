@@ -37,20 +37,32 @@ def extract_param(params: dict, key: str) -> Any:
         raise ValueError(f"Input parameters must contain the key '{key}'")
     return params[key]
 
-
 class slurpContextManager:
     """
-    slurp Context Manager to manage multiprocessing execution.
+    SLURP Context Manager to manage multiprocessing execution and safe writing of rasters.
 
     Responsibilities:
-    - Manage multiprocessing pool
-    - Manage shared lock (if needed)
-    - Provide safe write_tif utility
+        - Manage a multiprocessing pool for parallel execution
+        - Manage shared locks for safe writing in multiprocessing mode
+        - Provide a thread-safe `write_tif` method
 
-    Does NOT manage output directories anymore.
+    Notes:
+        - Does NOT handle output directory management.
+        - Determines whether processing is in-memory or streaming based on params.
     """
 
     def __init__(self, params: dict, tile_mode: bool = False):
+        """
+        Initialize the SLURP context manager.
+
+        Args:
+            params (dict): Dictionary containing execution parameters:
+                - "nb_max_workers" (int): maximum number of parallel workers
+                - "developer_mode" (bool): if True, enables debug writing
+                - "method" (str): "mem" for in-memory processing, else streaming
+                - "mp_context" (str, optional): multiprocessing start method
+            tile_mode (bool): Whether to split images into tiles (True) or strips (False)
+        """
         self.nb_workers: int = extract_param(params, "nb_max_workers")
         self.dev_mode: bool = extract_param(params, "developer_mode")
         self.in_memory: bool = extract_param(params, "method") == "mem"
@@ -61,13 +73,17 @@ class slurpContextManager:
         self.lock: Optional[mp.synchronize.Lock] = None
         self._manager: Optional[mp.Manager] = None
 
-    # ---------------------------------------------------------------------
-    # Context Manager
-    # ---------------------------------------------------------------------
-
     def __enter__(self):  # type: ignore
-        if self.nb_workers > 1:
+        """
+        Enter the context manager.
 
+        Sets up the multiprocessing pool if nb_workers > 1.
+        Initializes a lock for thread-safe writing if not in-memory.
+
+        Returns:
+            slurpContextManager: self
+        """
+        if self.nb_workers > 1:
             if self.context is None:
                 self.context = mp.get_start_method()
 
@@ -81,28 +97,27 @@ class slurpContextManager:
             ctx = mp.get_context(self.context)
             self.pool = ctx.Pool(processes=self.nb_workers)
 
-            # Lock only needed if writing to disk with multiprocessing
             if not self.in_memory:
                 self._manager = mp.Manager()
                 self.lock = self._manager.Lock()
-
         else:
-            # No multiprocessing ? always in memory
             self.in_memory = True
 
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):  # type: ignore
+        """
+        Exit the context manager.
+
+        Closes and joins the multiprocessing pool if used,
+        and shuts down the manager if one was created.
+        """
         if self.nb_workers > 1 and self.pool is not None:
             self.pool.close()
             self.pool.join()
 
             if not self.in_memory and self._manager is not None:
                 self._manager.shutdown()
-
-    # ---------------------------------------------------------------------
-    # IO Utilities
-    # ---------------------------------------------------------------------
 
     def write_tif(
         self,
@@ -112,28 +127,25 @@ class slurpContextManager:
         binary: bool = False,
     ) -> str:
         """
-        Write a GeoTIFF file.
+        Write a GeoTIFF file in a thread-safe manner.
 
         Handles:
-        - Relative paths
-        - Absolute paths
-        - Automatic directory creation
-        - Thread-safe writing (if multiprocessing)
+            - Relative and absolute paths
+            - Automatic creation of parent directories
+            - Thread-safe writing when using multiprocessing
 
-        :param data: numpy array to write
-        :param path: relative or absolute file path
-        :param target_profile: raster profile
-        :param binary: write as binary mask if True
-        :return: absolute path of written file
+        Args:
+            data (np.ndarray): Array to write to disk
+            path (str): File path (relative or absolute)
+            target_profile (Dict[str, Any]): Rasterio profile for the output
+            binary (bool): If True, writes as binary mask
+
+        Returns:
+            str: Absolute path of the written file
         """
-
-        # Resolve path properly (handles relative, absolute, ~, etc.)
         full_path = Path(path).expanduser().resolve()
-
-        # Ensure parent directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # If multiprocessing with disk writing ? protect write
         if self.lock is not None:
             with self.lock:
                 write(data, str(full_path), target_profile, binary)

@@ -104,8 +104,8 @@ def compute_hand_mask(
     """
     Compute Hand mask with one or multiple threshold values.
 
-    :param list input_buffer: Hand image [hand_image]
-    :param dict params: dictionary of arguments
+    :param np.ndarray input_buffer: Hand image passed as an numpy ndarray
+    :param int thresh_hand: Hand array threshold
     :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
     """
     mask_hand = hand_array > thresh_hand
@@ -241,7 +241,7 @@ def build_samples(
     phr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
-    ndwi_threshold:float,
+    ndwi_threshold: float,
     nb_valid_water_pixels: int,
     nb_valid_other_pixels: int,
     nb_samples_water: int,
@@ -254,105 +254,98 @@ def build_samples(
     aux_inputs: Optional[List[np.ndarray]] = None,
 ) -> np.ndarray:
     """
-    Build samples from tiled ndarray inputs (SLURP executor version).
+    Build training samples from tiled input arrays for water detection.
 
-    Each argument is a tile extracted by mp_n_to_m_scalars.
+    Each input corresponds to a tile extracted by `mp_n_to_m_scalars`.
+    The function selects water and non-water pixels according to masks,
+    sampling strategies, and optional auto-subsampling. Optional auxiliary
+    inputs are concatenated to the feature stack.
+
+    Args:
+        valid_stack (np.ndarray): Tile of the validity mask (0=valid, 1=invalid).
+        mask_hand (np.ndarray): Tile mask for hand pixels.
+        mask_pekel (np.ndarray): Tile mask for candidate water pixels.
+        phr1, phr2, phr3, phr4 (np.ndarray): Tiles of spectral bands.
+        ndvi (np.ndarray): Tile of NDVI index.
+        ndwi (np.ndarray): Tile of NDWI index.
+        ndwi_threshold (float): NDWI threshold for water detection.
+        nb_valid_water_pixels (int): Total number of valid water pixels in the full image.
+        nb_valid_other_pixels (int): Total number of valid "other" pixels in the full image.
+        nb_samples_water (int): Target number of water samples.
+        nb_samples_other (int): Target number of "other" samples.
+        samples_method (str): Sampling method for water pixels: 'random', 'smart', or 'grid'.
+        nb_samples_auto (bool): Whether to automatically determine number of samples based on auto_pct.
+        auto_pct (float): Percentage of valid pixels to sample if nb_samples_auto is True.
+        smart_area_pct (float): Area fraction used for 'smart' sampling method.
+        smart_minimum (int): Minimum number of pixels per smart sample.
+        aux_inputs (Optional[List[np.ndarray]]): Optional additional tiles to include in the feature stack.
+
+    Returns:
+        np.ndarray: Array of shape (nb_samples, n_features), where features include
+                    spectral bands, indices, masks, and optional auxiliary inputs.
+
+    Notes:
+        - `rows` and `cols` indices are computed per sampling method for water and other classes.
+        - Features are stacked along axis=0 before selecting sampled pixels.
+        - Auxiliary inputs, if provided, are concatenated to the base feature stack.
     """
+    if aux_inputs is None:
+        aux_inputs = []
 
     # ---- validity mask ----
     validity_mask = (valid_stack == 0)
-    # ---- valid water pixels ----
-    valid_water_pixels = np.logical_and(
-        mask_pekel,
-        ndwi > ndwi_threshold,
-    )
-    valid_water_pixels = np.logical_and(valid_water_pixels, validity_mask)
 
+    # ---- valid water pixels ----
+    valid_water_pixels = np.logical_and(mask_pekel, ndwi > ndwi_threshold)
+    valid_water_pixels = np.logical_and(valid_water_pixels, validity_mask)
     nb_water_subset = np.count_nonzero(valid_water_pixels)
 
     # ---- valid "other" pixels ----
-    nb_valid_pix_other = np.count_nonzero(
-        np.logical_and(validity_mask, mask_hand)
-    )
-    nb_other_subset = nb_valid_pix_other
+    nb_other_subset = np.count_nonzero(np.logical_and(validity_mask, mask_hand))
 
-    logger.debug(
-        f"DBG> {nb_water_subset=} {nb_other_subset=}"
-    )
+    logger.debug(f"DBG> {nb_water_subset=} {nb_other_subset=}")
 
-    # ---- ratios ----
+    # ---- compute sampling ratios ----
     water_ratio = nb_water_subset / nb_valid_water_pixels
     other_ratio = nb_other_subset / nb_valid_other_pixels
-
     nb_water_subsamples = round(water_ratio * nb_samples_water)
     nb_other_subsamples = round(other_ratio * nb_samples_other)
 
-    # ---- AUTO MODE ----
+    # ---- auto sampling ----
     if nb_samples_auto:
         nb_water_subsamples = int(nb_water_subset * auto_pct)
         nb_other_subsamples = int(nb_other_subset * auto_pct)
-    
+
     # ---- WATER SAMPLES ----
     if samples_method == "random":
-
         rows_pekel, cols_pekel = get_random_indexes_from_masks(
-            nb_water_subsamples,
-            validity_mask,
-            mask_pekel,
+            nb_water_subsamples, validity_mask, mask_pekel
         )
-
     elif samples_method == "smart":
-
         rows_pekel, cols_pekel = get_smart_indexes_from_mask(
-            nb_water_subsamples,
-            smart_area_pct,
-            smart_minimum,
-            np.logical_and(mask_pekel, validity_mask),
+            nb_water_subsamples, smart_area_pct, smart_minimum, np.logical_and(mask_pekel, validity_mask)
         )
-
     elif samples_method == "grid":
-
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(
-            nb_water_subsamples,
-            validity_mask,
-            valid_water_pixels,
+            nb_water_subsamples, validity_mask, valid_water_pixels
         )
-
     else:
-        raise ValueError(
-            "samples_method must be 'random', 'smart' or 'grid'"
-        )
+        raise ValueError("samples_method must be 'random', 'smart' or 'grid'")
 
     # ---- OTHER SAMPLES ----
-    rows_hand, cols_hand = get_random_indexes_from_masks(
-        nb_other_subsamples,
-        validity_mask,
-        mask_hand,
-    )
+    rows_hand, cols_hand = get_random_indexes_from_masks(nb_other_subsamples, validity_mask, mask_hand)
 
-    # ---- merge samples ----
+    # ---- merge indices ----
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
 
     # ---- stack features ----
-    base_features = [
-        mask_pekel,
-        phr1,
-        phr2,
-        phr3,
-        phr4,
-        ndvi,
-        ndwi,
-    ]
-
-    # concat optional aux inputs
+    base_features = [mask_pekel, phr1, phr2, phr3, phr4, ndvi, ndwi]
     features = base_features + list(aux_inputs)
-
     im_stack = np.stack(features, axis=0)
 
-    samples = np.transpose(
-        im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
-    )
+    # ---- select sampled pixels ----
+    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
 
     return samples
 
@@ -829,7 +822,41 @@ def nominal_case_predict(
     phr_profile
 ):
     """
-    Performs supervised classification using Random Forest to predict a water mask.
+    Perform supervised classification to predict a water mask using Random Forest.
+
+    This function executes the full pipeline for a single nominal case:
+    1. Prepare input features and optional auxiliary layers.
+    2. Sample water and "other" pixels using `build_samples`.
+    3. Train a Random Forest classifier.
+    4. Apply the trained classifier to predict the water mask for the full tile.
+
+    Args:
+        args (argparse.Namespace): Input arguments containing parameters for sampling and RF.
+        slurp_manager (slurpContextManager): SLURP execution context for multiprocessing.
+        ndvi (List[np.ndarray]): NDVI tiles.
+        ndwi (List[np.ndarray]): NDWI tiles.
+        phr (List[List[np.ndarray]]): List of spectral band tiles (phr1 to phr4).
+        valid_stack (List[np.ndarray]): Validity mask tiles (0=valid, else=invalid).
+        local_mask_pekel (np.ndarray): Mask tile of candidate water pixels.
+        margin (int): Stable margin for tile processing.
+        mask_hand (np.ndarray): Mask tile for valid "other" pixels.
+        mask_pekel0 (np.ndarray): Mask of candidate water pixels for reference.
+        phr_profile (dict): Raster profile for the spectral bands.
+
+    Returns:
+        Tuple containing:
+            - predict (List[np.ndarray] or List[str]): Predicted water mask tile(s).
+            - output_profile (dict): Raster profile of the predicted mask.
+            - time_random_forest (float): Timestamp after prediction step.
+            - time_samples (float): Timestamp after sampling and training.
+
+    Notes:
+        - Auxiliary layers (`files_layers`) are read and split into single-band arrays.
+        - Sampling ratios are computed using valid pixels and optional auto mode.
+        - The feature stack includes spectral bands, indices, and auxiliary layers.
+        - Random Forest classifier is trained on the sampled pixels.
+        - Multiprocessing is used for sampling and prediction using `mp_n_to_m_scalars` and `mp_n_to_m_images`.
+        - Memory is managed and garbage collected between training and prediction steps.
     """
     keys_files_layers = [
         band
@@ -881,29 +908,29 @@ def nominal_case_predict(
         },
         reducer=utils.concatenate_samples,
     )
-    logger.debug(
-        "samples: \n%s\n", samples
-    )
-    # samples=[x_samples, y_samples]
+    logger.debug("samples: \n%s\n", samples)
+
     del local_mask_pekel
     time_samples = time.time()
-    # --Train classifier from samples-- #
+
+    # -- Train Random Forest classifier -- #
     classifier = RandomForestClassifier(
         n_estimators=args.nb_estimators,
         max_depth=args.max_depth,
         random_state=712,
         n_jobs=1,
     )
-    logger.debug(
-        "RandomForest parameters: \n%s\n", str(classifier.get_params())
-    )
-    x_samples = samples[:, 1:]  # im_phr, im_ndvi, im_ndwi and files_layers
-    y_samples = samples[:, 0]  # mask_pekel
+    logger.debug("RandomForest parameters: \n%s\n", str(classifier.get_params()))
+
+    x_samples = samples[:, 1:]  # features: spectral bands, indices, auxiliary layers
+    y_samples = samples[:, 0]   # labels: mask_pekel
     rf_utils.train_classifier(classifier, x_samples, y_samples)
     rf_utils.print_feature_importance(classifier, args.files_layers)
+
     gc.collect()
     utils.display_mem_usage(args.debug, "After training step")
-    # --Predict-- #
+
+    # -- Predict full tile -- #
     input_for_prediction = [
         valid_stack[0][0],
         phr[0][0],
@@ -913,6 +940,7 @@ def nominal_case_predict(
         ndvi[0][0],
         ndwi[0][0],
     ] + keys_files_layers
+
     predict = mp_n_to_m_images(
         inputs=input_for_prediction,
         image_height=input_profile["height"],
@@ -927,10 +955,11 @@ def nominal_case_predict(
         context_manager=slurp_manager,
         stable_margin=margin,
     )
+
     time_random_forest = time.time()
     utils.display_mem_usage(args.debug, "After prediction step")
-    return predict, output_profile, time_random_forest, time_samples
 
+    return predict, output_profile, time_random_forest, time_samples
 
 def launch_postprocess(
     args,
@@ -943,17 +972,38 @@ def launch_postprocess(
     predict_profile
 ):
     """
-    Combines the predicted mask with additional masks and the validity mask.
-    Applies the custom `post_process` filter using Slurp executor.
-    Writes the post-processed mask to args.watermask,
-    and optionally the raw output in debug mode.
-    """
+    Apply post-processing to the predicted water mask using additional masks and validity mask.
 
+    This function:
+    1. Combines the predicted mask with hand-made masks, Pekel mask, and validity mask.
+    2. Applies the `post_process` function via SLURP executor (`mp_n_to_m_images`) for parallel processing.
+    3. Writes the final post-processed mask to `args.watermask`.
+    4. Optionally writes the raw prediction in debug mode.
+
+    Args:
+        args (argparse.Namespace): Input arguments containing post-processing parameters.
+        slurp_manager (slurpContextManager): SLURP execution context for multiprocessing.
+        predict (List[np.ndarray] or List[str]): Predicted water mask from Random Forest.
+        valid_stack (List[np.ndarray]): Validity mask tiles (0=valid, else=invalid).
+        margin (int): Stable margin for tile processing.
+        mask_hand (np.ndarray): Hand-made mask for valid "other" pixels.
+        mask_pekel0 (np.ndarray): Pekel mask for candidate water pixels.
+        predict_profile (dict): Raster profile of the predicted mask.
+
+    Returns:
+        None
+
+    Notes:
+        - Uses `mp_n_to_m_images` to apply `post_process` function in a tiled/multiprocessing manner.
+        - Writes the final mask using `slurp_manager.write_tif`.
+        - Raw prediction is saved only if `args.save_mode` is set to "debug".
+        - Output profiles are duplicated for post-processed and raw masks.
+    """
     inputs_for_classif = [
-        predict[0],   # predicted RF mask
-        mask_hand[0],     # hand mask
-        mask_pekel0,    # Pekel mask
-        valid_stack[0][0],  # validity mask
+        predict[0],          # predicted RF mask
+        mask_hand[0],        # hand mask
+        mask_pekel0,         # Pekel mask
+        valid_stack[0][0],   # validity mask
     ]
 
     input_profile = deepcopy(predict_profile)
@@ -981,6 +1031,7 @@ def launch_postprocess(
         context_manager=slurp_manager,
         stable_margin=margin,
     )
+
     # ---- write final mask ----
     slurp_manager.write_tif(
         data=im_classif, 
@@ -989,12 +1040,12 @@ def launch_postprocess(
     )
 
     # ---- write raw prediction in debug mode ----
-   # if args.save_mode == "debug":
-    slurp_manager.write_tif(
-        data=im_predict,
-        path=args.watermask.replace(".tif", "_raw_predict.tif"),
-        target_profile=output_profile[0]
-    )
+    if args.save_mode == "debug":
+        slurp_manager.write_tif(
+            data=im_predict,
+            path=args.watermask.replace(".tif", "_raw_predict.tif"),
+            target_profile=output_profile[0]
+        )
 
 
 def getarguments():
