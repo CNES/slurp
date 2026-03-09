@@ -42,18 +42,30 @@ def compute_mp_strips(
     specific_strip_size: Union[int, None] = None,
 ) -> List[MpTile]:
     """
-    This method computes strips according to the image size and the number of workers.
+    Compute processing strips for multiprocessing based on image geometry.
+
+    The image is divided into strips either horizontally or vertically
+    depending on the value of ``along_line``. Each strip corresponds to
+    a processing tile assigned to a worker. Optional margins are added
+    to ensure stable border processing when neighborhood operations are
+    required.
 
     Args:
-        image_height: height of the input image.
-        image_width: width of the input image.
-        nb_workers: number of workers.
-        stable_margin: margin to add to each tile.
-        along_line: horizontal strips (true) or vertical strips (false).
-        specific_strip_size: specific strip size (by default size of the height/width divided by the number of workers).
+        image_height (int): Height of the input image.
+        image_width (int): Width of the input image.
+        nb_workers (int): Number of workers used for multiprocessing.
+        stable_margin (int): Margin size added around each strip to
+            guarantee stable computation near tile borders.
+        along_line (bool): If True, generate vertical strips
+            (split along X direction). If False, generate horizontal
+            strips (split along Y direction).
+        specific_strip_size (Union[int, None]): Optional fixed strip size.
+            If None, the strip size is automatically computed as
+            image_height or image_width divided by the number of workers.
 
     Returns:
-        a list of strips
+        List[MpTile]: List of MpTile objects describing the strips,
+        including their coordinates, dimensions, and margins.
     """
     total_size = image_width if along_line else image_height
     if specific_strip_size:
@@ -121,20 +133,33 @@ def compute_mp_tiles(
     strip_along_lines: bool = False,
 ) -> List[MpTile]:
     """
-    Given an input image size and nb_workers, this method computes the list of strips that will be processed
-    in parallel within a stream strip or tile
+    Compute multiprocessing tiles or strips based on the input image geometry.
+
+    This function determines how an image should be split for parallel
+    processing. Depending on ``tile_mode``, the image is either divided
+    into square tiles or into horizontal/vertical strips. Each resulting
+    region is represented as an ``MpTile`` object containing coordinates
+    and margins used for stable border computations.
 
     Args:
-        image_height: height of the input image.
-        image_width: width of the input image.
-        nb_workers: number of workers.
-        stable_margin: margin to add to each tile.
-        tile_mode: tiles (true) or strips (false).
-        specific_tile_size: specific tile size (by default size of the input image divided by the number of workers).
-        strip_along_lines: horizontal strips (true) or vertical strips (false).
+        image_height (int): Height of the input image.
+        image_width (int): Width of the input image.
+        nb_workers (int): Number of workers used for multiprocessing.
+        stable_margin (int): Margin added around each tile or strip to
+            ensure correct processing at boundaries.
+        tile_mode (bool): If True, the image is divided into square tiles.
+            If False, the image is divided into strips.
+        specific_tile_size (Union[int, None]): Optional fixed tile or strip
+            size. If None, the size is automatically computed based on the
+            image size and the number of workers.
+        strip_along_lines (bool): If using strips (tile_mode=False),
+            controls the orientation of the strips:
+            True for horizontal strips, False for vertical strips.
 
     Returns:
-        a list of strips
+        List[MpTile]: List of MpTile objects describing each tile or strip,
+        including coordinates, dimensions, and margins required for
+        processing.
     """
 
     if tile_mode:
@@ -145,8 +170,10 @@ def compute_mp_tiles(
             tile_size = specific_tile_size
         else:
             tile_size = int(math.sqrt(nb_pixels_per_worker))
+
         nb_tiles_x = image_width // tile_size
         nb_tiles_y = image_height // tile_size
+
         if image_width % tile_size > 0:
             nb_tiles_x += 1
         if image_height % tile_size > 0:
@@ -163,6 +190,7 @@ def compute_mp_tiles(
                 start_y = ty * tile_size
                 end_x = min((tx + 1) * tile_size - 1, image_width - 1)
                 end_y = min((ty + 1) * tile_size - 1, image_height - 1)
+
                 top_margin = stable_margin if start_y - stable_margin >= 0 else start_y
                 left_margin = stable_margin if start_x - stable_margin >= 0 else start_x
                 bottom_margin = stable_margin if end_y + stable_margin <= image_height - 1 else image_height - 1 - end_y
@@ -215,15 +243,53 @@ def mp_n_to_m_images(
     debug: bool = False,
 ) -> Union[List[str], List[np.ndarray], Tuple[np.ndarray]]:
     """
-    Generic paradigm to process n images providing m resulting images using a paradigm similar to the old map/reduce
+    Process n input images to produce m output images using a multiprocessing
+    map/reduce-like paradigm.
 
-    func is processed in parallel with a multiprocessing starmap
+    The input images are split into tiles or strips depending on the chosen
+    parallelization strategy. Each tile is processed independently by the
+    provided function ``func`` and the results are then merged to reconstruct
+    the final output images.
 
-    If tile_mode is set to False, the image will be cropped as strips.
-    specific_tile_size: hotfix to handle dezoom in filling dsm method.
-    If strip_along_line is set to True, those strips will be vertical.
+    Args:
+        inputs (list): List of input images. These can be numpy arrays
+            (in-memory mode) or file paths (streaming mode).
+        image_height (int): Height of the input images.
+        image_width (int): Width of the input images.
+        output_keys (List[str]): List of output identifiers used by the
+            context manager to generate output file paths.
+        output_profiles (List[dict]): Raster profiles describing the
+            metadata of each output image.
+        context_manager (slurpContextManager): Context manager responsible
+            for multiprocessing management and I/O handling.
+        func (Callable): Processing function applied to each tile. The
+            function must return either a numpy array or a tuple of arrays
+            corresponding to the output images.
+        func_parameters (Union[dict, None]): Optional dictionary of
+            parameters passed to the processing function.
+        stable_margin (int): Margin added around each tile to ensure stable
+            computations near tile borders.
+        tile_mode (Union[bool, None]): If True, the image is split into
+            square tiles. If False, the image is split into strips. If None,
+            the default value from the context manager is used.
+        specific_tile_size (Union[int, None]): Optional fixed tile or strip
+            size. If None, the size is automatically computed based on the
+            image dimensions and the number of workers.
+        strip_along_lines (bool): When using strip mode (tile_mode=False),
+            controls the orientation of the strips: horizontal (True) or
+            vertical (False).
+        binary (bool): If True, outputs are written as binary rasters.
+        debug (bool): If True and development mode is enabled, intermediate
+            outputs are written to disk for debugging purposes.
 
-    Strong hypothesis: all input image are in the same geometry and have the same size
+    Returns:
+        Union[List[str], List[np.ndarray], Tuple[np.ndarray]]:
+            - List[str]: Paths to output images when processing is done
+              using file streaming.
+            - List[np.ndarray]: Output images stored in memory when
+              processing in in-memory mode.
+            - Tuple[np.ndarray]: Returned when the processing function
+              directly outputs multiple arrays.
     """
     if len(inputs) < 1:
         raise ValueError("At least one input image must be given.")
@@ -343,17 +409,30 @@ def mp_execute_from_paths(
     binary: bool,
 ) -> None:
     """
-    This method is called within multiprocessing.
-    It opens all input files along a window, execute the given function on it, then save the results in files.
+    Execute a function on raster windows in multiprocessing and save the outputs.
+
+    This method is designed to run within a multiprocessing pool. Each process
+    reads the portion of each input raster corresponding to the provided tile,
+    executes the given function on this window, and writes the results to disk.
+    A lock is used to prevent concurrent writes to the same output files.
 
     Args:
-        input_paths: list of input file paths.
-        output_paths: list of output file paths.
-        func: callable to execute.
-        func_parameters: all parameters for func.
-        output_profiles: the rasterio profile for each output.
-        lock: manager lock to avoid concurrent write accesses.
-        tile: tile to process.
+        input_paths (List[str]): List of input raster file paths.
+        output_paths (List[str]): List of output raster file paths.
+        func (Callable): Processing function applied to each tile.
+        func_parameters (dict): Dictionary of parameters to pass to `func`.
+        output_profiles (List[dict]): Rasterio profiles for each output image.
+        lock (Lock): Multiprocessing lock to avoid simultaneous writes.
+        tile (MpTile): Tile defining the window to process (coordinates, size, margins).
+        binary (bool): If True, outputs are written as binary rasters.
+
+    Returns:
+        None
+
+    Notes:
+        - The function slices inputs and outputs using the tile's margins to ensure
+          stable border processing.
+        - Supports multiple outputs (tuple of arrays) or single output arrays.
     """
     # Read the inputs
     inputs = [read_window(path, tile) for path in input_paths]
@@ -379,7 +458,8 @@ def mp_execute_from_paths(
         with lock:
             write_window(
                 outputs[
-                    tile.top_margin : tile.top_margin + tile.height, tile.left_margin : tile.left_margin + tile.width
+                    tile.top_margin : tile.top_margin + tile.height,
+                    tile.left_margin : tile.left_margin + tile.width,
                 ],
                 output_paths[0],
                 output_profiles[0],
@@ -388,27 +468,43 @@ def mp_execute_from_paths(
             )
 
 
-def mp_execute_from_arrays(inputs: List[np.ndarray], func: Callable, func_parameters: dict, tile: MpTile) -> dict:
+def mp_execute_from_arrays(
+    inputs: List[np.ndarray],
+    func: Callable,
+    func_parameters: dict,
+    tile: MpTile,
+) -> dict:
     """
-    This method is called within multiprocessing.
-    It executes the given function on given input arrays.
+    Execute a function on numpy array tiles in multiprocessing and return results.
+
+    This method is designed to run within a multiprocessing pool. Each process
+    slices the given input arrays according to the tile's coordinates and margins,
+    applies the function, and returns a dictionary containing the results and
+    tile information. Margins are removed from the returned data.
 
     Args:
-        inputs: list of input numpy arrays.
-        func: callable to execute.
-        func_parameters: all parameters for func.
-        tile: tile to process.
+        inputs (List[np.ndarray]): List of input arrays corresponding to the tile.
+        func (Callable): Processing function applied to each tile.
+        func_parameters (dict): Dictionary of parameters to pass to `func`.
+        tile (MpTile): Tile defining the window to process (coordinates, size, margins).
 
     Returns:
-        a dictionary containing the tile infos and the outputs without margin.
+        dict: Dictionary with keys:
+            - "data": List of numpy arrays (one per output) cropped to the tile
+              without margins.
+            - "tile": MpTile object corresponding to the processed tile.
 
+    Notes:
+        - Supports functions returning a single array or a tuple of arrays.
+        - Useful for in-memory multiprocessing workflows.
     """
     outputs = func(*inputs, **func_parameters)
     if not isinstance(outputs, tuple):
         return {
             "data": [
                 outputs[
-                    tile.top_margin : tile.top_margin + tile.height, tile.left_margin : tile.left_margin + tile.width
+                    tile.top_margin : tile.top_margin + tile.height,
+                    tile.left_margin : tile.left_margin + tile.width,
                 ]
             ],
             "tile": tile,
@@ -416,7 +512,10 @@ def mp_execute_from_arrays(inputs: List[np.ndarray], func: Callable, func_parame
 
     return {
         "data": [
-            output[tile.top_margin : tile.top_margin + tile.height, tile.left_margin : tile.left_margin + tile.width]
+            output[
+                tile.top_margin : tile.top_margin + tile.height,
+                tile.left_margin : tile.left_margin + tile.width,
+            ]
             for output in outputs
         ],
         "tile": tile,
@@ -436,6 +535,57 @@ def mp_n_to_m_scalars(
     specific_tile_size: Union[int, None] = None,
     strip_along_lines: bool = False,
 ) -> Union[float, Tuple]:
+    """
+    Process n input images to produce m scalar outputs using a parallel
+    map/reduce-like paradigm with optional auxiliary inputs.
+
+    This function slices input images (and optional auxiliary images)
+    into tiles or strips depending on ``tile_mode`` and dispatches them
+    to a processing function ``func``. The results of each tile are
+    then aggregated using the provided ``reducer`` function.
+
+    Args:
+        inputs (list): List of input images as numpy arrays (all must
+            have the same geometry: image_height x image_width).
+        image_height (int): Height of the input images.
+        image_width (int): Width of the input images.
+        context_manager (slurpContextManager): Context manager handling
+            multiprocessing pool, I/O, and locking.
+        func (Callable): Function to process each tile. Must return a
+            scalar or tuple of scalars for each tile.
+        reducer (Callable): Function to aggregate tile-level outputs
+            into global scalar(s).
+        func_parameters (Union[dict, None]): Optional dictionary of
+            parameters passed to ``func``.
+        aux_inputs (Optional[List[np.ndarray]]): Optional list of
+            auxiliary images of same dimensions as inputs. These are
+            sliced similarly to main inputs and passed to ``func``.
+        stable_margin (int): Margin added around tiles/strips to ensure
+            stable border computations.
+        tile_mode (Union[bool, None]): If True, split images into square
+            tiles; if False, split images into strips. If None, uses
+            default from context_manager.
+        specific_tile_size (Union[int, None]): Optional fixed tile/strip
+            size. If None, size is computed automatically.
+        strip_along_lines (bool): If using strips (tile_mode=False),
+            True for horizontal strips, False for vertical strips.
+
+    Returns:
+        Union[float, Tuple]: Aggregated scalar result(s) computed from
+        all tiles. Can be a single scalar or a tuple of scalars depending
+        on the processing function ``func`` and the ``reducer`` used.
+
+    Raises:
+        ValueError: If inputs or aux_inputs are missing or have incompatible
+        dimensions, or if required functions (func/reducer) or context_manager
+        are not provided.
+
+    Notes:
+        - All input images and aux_inputs must have identical dimensions.
+        - If context_manager.pool is None, the function runs in serial.
+        - In multiprocessing mode, tiles/strips are dispatched to workers
+          and the results are merged by the reducer.
+    """
 
     if len(inputs) < 1:
         raise ValueError("At least one input image must be given.")
