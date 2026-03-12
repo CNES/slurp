@@ -91,7 +91,7 @@ def compute_pekel_mask(
         return mask_pekel, mask_pekel_strict
 
     if not no_pekel_filter:
-        mask_pekel0 = utils.compute_mask(pekel_img, [0])
+        mask_pekel0 = utils.compute_mask(pekel_img, [30])
     else:
         mask_pekel0 = np.zeros(pekel_img.shape, dtype=np.uint8)
 
@@ -1441,7 +1441,7 @@ def slurp_watermask(
             # ==============================
             # POST PROCESS
             # ==============================
-            logger.info("[3] Step: POST PROCESS")
+            logger.info("[4] Step: POST PROCESS")
             launch_postprocess(
                 args,
                 slurp_manager,
