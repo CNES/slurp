@@ -421,7 +421,7 @@ def nominal_case_urbanmask(
         ndvi[0][0],
         ndwi[0][0],
     ]
-
+    logger.info("[3.1] Step: Select samples")
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
         aux_inputs=keys_files_layers,
@@ -441,7 +441,7 @@ def nominal_case_urbanmask(
     )
 
     logger.debug("samples:\n%s\n", samples)
-
+    logger.info("[3.2] Step: Learn model")
     time_samples = time.time()
 
     # ----------------------------------------------------
@@ -516,7 +516,7 @@ def nominal_case_urbanmask(
         ndvi[0][0],
         ndwi[0][0]
     ]
-
+    logger.info("[3.3] Step: Predict")
     proba_buildings, predict  = mp_n_to_m_images(
         inputs=input_for_prediction,
         aux_inputs=keys_files_layers,
@@ -714,67 +714,6 @@ def build_stack_urban(args, slurp_manager):
         phr_profile,
         valid_stack_profile
     )
-
-
-def samples_train_and_predict(
-    args,
-    eoscale_manager,
-    key_ndvi,
-    key_ndwi,
-    key_original_valid_stack,
-    key_phr,
-    key_valid_stack,
-    keys_files_layers,
-    x_samples,
-    y_samples,
-):
-    """
-    Trains a Random Forest classifier on provided samples and predicts an urban mask.
-    Then, the predicted urban mask is saved to `args.urbanmask`.
-    If `args.save_mode == "debug"`, also saves raw prediction probabilities.
-    The function is called when there are sufficient building and non-building samples.
-    """
-    classifier = RandomForestClassifier(
-        n_estimators=args.nb_estimators,
-        max_depth=args.max_depth,
-        class_weight="balanced",
-        random_state=0,
-        n_jobs=args.n_jobs,
-    )
-    logger.debug(
-        "RandomForest parameters: \n%s\n", str(classifier.get_params())
-    )
-    random_forest_utils.train_classifier(classifier, x_samples, y_samples)
-    random_forest_utils.print_feature_importance(classifier, args.files_layers)
-    gc.collect()
-    # Predict
-    input_for_prediction = [
-        key_original_valid_stack,
-        key_valid_stack,
-        key_phr,
-        key_ndvi,
-        key_ndwi,
-    ] + keys_files_layers
-    key_predict = eoexe.n_images_to_m_images_filter(
-        inputs=input_for_prediction,
-        image_filter=rf_prediction,
-        filter_parameters={"classifier": classifier},
-        generate_output_profiles=eo_utils.double_uint8_profile,
-        stable_margin=0,
-        context_manager=eoscale_manager,
-        multiproc_context="spawn",
-        filter_desc="RF prediction processing...",
-    )
-    time_random_forest = time.time()
-    eoscale_manager.write(
-        key=key_predict[0], img_path=args.urbanmask
-    )  # classif
-    if args.save_mode == "debug":
-        eoscale_manager.write(
-            key=key_predict[1],
-            img_path=args.urbanmask.replace(".tif", "_raw_predict.tif"),
-        )
-    return time_random_forest
 
 
 def fill_constant_mask(
