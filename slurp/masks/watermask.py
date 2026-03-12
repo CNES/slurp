@@ -68,7 +68,8 @@ def compute_pekel_mask(
         return [mask_pekel, mask_pekelxx]
 
     if not params["no_pekel_filter"]:
-        mask_pekel0 = utils.compute_mask(input_buffer[0], [0])
+        # TODO : check if 30pct threshold fix false positive Pekel issues
+        mask_pekel0 = utils.compute_mask(input_buffer[0], [30])
     else:
         mask_pekel0 = np.zeros(input_buffer[0].shape)
 
