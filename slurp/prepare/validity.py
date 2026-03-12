@@ -50,20 +50,10 @@ def compute_valid_stack_clouds(
             1 ? nodata
             2 ? cloud
     """
-    # If multi-band image ? take first band
-    if im_vhr.ndim == 3:
-        band = im_vhr[0]
-    else:
-        band = im_vhr
-
-    if mask_cloud is None:
-        valid_mask = np.where(band == nodata, 1, 0)
-
-    else:
-        valid_mask = np.where(
-            band == nodata,
-            1,
-            np.where(mask_cloud != 0, 2, 0),
-        )
+    # check NODATA on all bands : in very rare cases, we observe images
+    # with invalid data on only one band
+    valid_mask = 1 - np.all(im_vhr != nodata, axis=0).astype(int)
+    if mask_cloud is not None:
+        valid_mask = np.where(mask_cloud != 0, 2, valid_mask)
 
     return valid_mask.astype(np.uint8)
