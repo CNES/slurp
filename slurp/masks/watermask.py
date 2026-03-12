@@ -68,7 +68,7 @@ def compute_pekel_mask(
         return [mask_pekel, mask_pekelxx]
 
     if not params["no_pekel_filter"]:
-        mask_pekel0 = utils.compute_mask(input_buffer[0], [0])
+        mask_pekel0 = utils.compute_mask(input_buffer[0], [30])
     else:
         mask_pekel0 = np.zeros(input_buffer[0].shape)
 
@@ -337,7 +337,8 @@ def mask_filter(im_in, mask_ref):
 
     return im_filtered
 
-
+"""
+TODO remove
 def apply_ndwi_thresh(args, eoscale_manager, key_ndwi, key_valid_stack):
     logger.info("Simple threshold mask NDWI > " + str(args.ndwi_threshold))
     key_predict = eoexe.n_images_to_m_images_filter(
@@ -353,7 +354,7 @@ def apply_ndwi_thresh(args, eoscale_manager, key_ndwi, key_valid_stack):
     time_samples = time_random_forest
     do_post_process = False
     return do_post_process, key_predict, time_random_forest, time_samples
-
+"""
 
 def post_process(
     input_buffer: list, input_profiles: list, params: dict
@@ -387,6 +388,8 @@ def post_process(
     else:
         im_classif = input_buffer[0]
 
+
+        
     # Closing
     if params["binary_closing"]:
         im_classif[0, :, :] = apply_morpho(
@@ -585,12 +588,11 @@ def process_pekel(args, eoscale_manager, margin):
     return local_mask_pekel, mask_pekel, not_enough_water_samples
 
 
-def process_hand(args, eoscale_manager, margin):
+def process_hand(args, key_hand, eoscale_manager, margin):
     """
     Processes a HAND (Height Above Nearest Drainage) raster and applies the
     `compute_hand_mask` filter to create a usable mask for further processing.
     """
-    key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
     hand_profile = eoscale_manager.get_profile(key_hand)
     args.hand_nodata = hand_profile["nodata"]
     # Create HAND mask
@@ -606,16 +608,7 @@ def process_hand(args, eoscale_manager, margin):
         filter_desc="Hand valid mask processing...",
     )
 
-    not_enough_ground_samples = False
-    # Check Hand mask : if there are too few valid pixels, we propose to threshold NDWI
-    local_mask_hand = eoscale_manager.get_array(mask_hand[0])
-    if len(np.where(local_mask_hand)[0]) < args.nb_samples_other:
-        not_enough_ground_samples = True
-        logger.warning(
-            "** WARNING ** not enough ground samples are found in Hand : return a simple mask"
-        )
-
-    return mask_hand, not_enough_ground_samples
+    return mask_hand
 
 
 def nominal_case_predict(
@@ -712,7 +705,7 @@ def nominal_case_predict(
     return key_predict, time_random_forest, time_samples
 
 
-def launch_postprocess(
+def launch_post_process(
     args,
     eoscale_manager,
     key_predict,
@@ -1049,23 +1042,64 @@ def slurp_watermask(
 
             utils.display_mem_usage(args.debug, "Start computation")
             """
-            Read NDWI
+            Build stack with all layers (4 bands VHR image, NDVI, NDWI, valid stack)
+            TODO : do we separate read NDVI from read NDWI ?
             """
-
+            key_ndvi, key_ndwi, key_vhr, key_valid_stack, margin = (
+                build_stack_water(args, eoscale_manager)
+            )
+            time_stack = time.time()
+            
             if args.mode == "absolute_th":
                 logger.debug(f"Absolute threshold mode : filter NDWI values above "
                              f"{args.ndwi_threshold=}")
-                # exit()? 
+
+                key_predict = eoexe.n_images_to_m_images_filter(
+                    inputs=[key_ndwi, key_valid_stack],
+                    image_filter=utils.compute_mask_threshold,
+                    filter_parameters={"threshold": 1000 * args.ndwi_threshold},
+                    context_manager=eoscale_manager,
+                    generate_output_profiles=eo_utils.single_uint8_profile,
+                    multiproc_context=args.multiproc_context,
+                    filter_desc="Simple NDWI threshold",
+                )
+                # TODO : allow a post-processing even with NDWI thresholding?
+                do_post_process = False
+                time_random_forest = time.time() 
+                time_samples = time_random_forest # TODO : remove timers
+                end_time = time.time()
             else:
                 """
-                read Pekel
+                Read Pekel and check if there are enough water samples to learn/predict
+                a watermask
                 """
+                # TODO : rename local_mask_pekel and mask_pekel
+                local_mask_pekel, mask_pekel, not_enough_water_samples = (
+                    process_pekel(args, eoscale_manager, margin)
+                )
+                
                 if args.mode == "relative_th":
                     """
                     Compute relative threshold
                     """
                     logger.debug(f"Relative threshold mode : compute a relative "
                                  "threshold based on Pekel")
+
+                    args.ndwi_threshold = 0.1 # compute_relative_NDWI_threshold(key_ndwi, percentile, mask_pekel)
+                    
+                    key_predict = eoexe.n_images_to_m_images_filter(
+                        inputs=[key_ndwi, key_valid_stack],
+                        image_filter=utils.compute_mask_threshold,
+                        filter_parameters={"threshold": 1000 * args.ndwi_threshold},
+                        context_manager=eoscale_manager,
+                        generate_output_profiles=eo_utils.single_uint8_profile,
+                        multiproc_context=args.multiproc_context,
+                        filter_desc="Simple NDWI threshold",
+                    )
+                    do_post_process = True
+                    time_random_forest = time.time() 
+                    time_samples = time_random_forest # TODO : remove timers
+                    end_time = time.time()
                 else:
                     # args.mode = nominal or "no HAND"
                     if args.mode == "no_HAND":
@@ -1073,93 +1107,74 @@ def slurp_watermask(
                         Create a void HAND layer to select samples
                         """
                         logger.debug(f"no HAND mode : won't read HAND file")
+                        profile = eoscale_manager.get_profile(key_vhr)
+                        profile["count"] = 1
+                        profile["dtype"] = int # np.float64
+                        key_hand = eoscale_manager.create_image(profile)
+                        hand = eoscale_manager.get_array(key=key_hand)
+                        hand.fill(0.)
                     else:
+                        key_hand = eoscale_manager.open_raster(raster_path=args.extracted_hand)
                         logger.debug(f"nominal mode : read HAND file")
 
+                    mask_hand = process_hand(args, key_hand, eoscale_manager, margin)
+                    local_mask_hand = eoscale_manager.get_array(mask_hand[0])
+                    
+                    not_enough_ground_samples = False
+                    # Check Hand mask : if there are too few valid pixels, we propose to threshold NDWI
+                    
+                    if len(np.where(local_mask_hand)[0]) < args.nb_samples_other:
+                        not_enough_ground_samples = True
+                        logger.warning(
+                            "** WARNING ** not enough ground samples are found in Hand : return a simple mask"
+                        )
+                    
+                        
                     """
-                    read NDVI
-                    build stack
                     select samples
                     learn / predict (or filter NDWI, corner case)
                     """
                     logger.debug("Learn/Predict watermask")
+                    
+                    if not_enough_ground_samples or not_enough_water_samples:
+                        # We compute a simple mask based on NDWI threshold
+                        # 
+                        key_predict = eoexe.n_images_to_m_images_filter(
+                            inputs=[key_ndwi, key_valid_stack],
+                            image_filter=utils.compute_mask_threshold,
+                            filter_parameters={"threshold": args.ndwi_threshold},
+                            context_manager=eoscale_manager,
+                            generate_output_profiles=eo_utils.single_uint8_profile,
+                            multiproc_context=args.multiproc_context,
+                            filter_desc="Simple NDWI threshold",
+                        )
+                        # Allow post-processing to remove false positive
+                        do_post_process = True
+                        time_random_forest, time_samples = 0, 0
+                    else:
+                        # Nominal case : select samples, train, predict
+                        key_predict, time_random_forest, time_samples = (
+                            nominal_case_predict(
+                                args,
+                                eoscale_manager,
+                                key_ndvi,
+                                key_ndwi,
+                                key_vhr,
+                                key_valid_stack,
+                                local_mask_pekel,
+                                margin,
+                                mask_hand,
+                                mask_pekel,
+                            )
+                        )
+                        do_post_process = True
+                        
+            
+            if do_post_process:
                 """ Post-process """
                 logger.debug("Post-process watermask")
-                
-            exit()
-            # --Build stack with all layers-- #
-
-            key_ndvi, key_ndwi, key_phr, key_valid_stack, margin = (
-                build_stack_water(args, eoscale_manager)
-            )
-
-            time_stack = time.time()
-
-            # --Build samples-- #
-
-            # Pekel
-            local_mask_pekel, mask_pekel, not_enough_water_samples = (
-                process_pekel(args, eoscale_manager, margin)
-            )
-
-            # HAND
-            mask_hand, not_enough_ground_samples = process_hand(
-                args, eoscale_manager, margin
-            )
-
-            # Flag to command post-process
-            do_post_process = True
-
-            if not_enough_ground_samples:
-                # Simple NDWI threshold,
-                # but taking account valid stack to take care of NO_DATA values
-                (
-                    do_post_process,
-                    key_predict,
-                    time_random_forest,
-                    time_samples,
-                ) = apply_ndwi_thresh(
-                    args, eoscale_manager, key_ndwi, key_valid_stack
-                )
-
-            elif not_enough_water_samples:
-                # We compute a void mask (0 everywhere, except for NO DATA values)
-                # Tips : we threshold NDWI > 1000 : no pixel should be detected.
-                key_predict = eoexe.n_images_to_m_images_filter(
-                    inputs=[key_ndwi, key_valid_stack],
-                    image_filter=utils.compute_mask_threshold,
-                    filter_parameters={"threshold": 1000},
-                    context_manager=eoscale_manager,
-                    generate_output_profiles=eo_utils.single_uint8_profile,
-                    multiproc_context=args.multiproc_context,
-                    filter_desc="Void mask",
-                )
-
-                do_post_process = False
-
-            else:
-                # Nominal case : select samples, train, predict
-                #
-                # Taking optional layers into account
-                key_predict, time_random_forest, time_samples = (
-                    nominal_case_predict(
-                        args,
-                        eoscale_manager,
-                        key_ndvi,
-                        key_ndwi,
-                        key_phr,
-                        key_valid_stack,
-                        local_mask_pekel,
-                        margin,
-                        mask_hand,
-                        mask_pekel,
-                    )
-                )
-
-            # Post-processing can be applied to clean raw prediction from false positives
-            if do_post_process:
                 # --Post_processing-- #
-                launch_postprocess(
+                launch_post_process(
                     args,
                     eoscale_manager,
                     key_predict,
@@ -1168,17 +1183,17 @@ def slurp_watermask(
                     mask_hand,
                     mask_pekel,
                 )
-
             else:
+                # Write raw prediction
                 eoscale_manager.write(
                     key=key_predict[0], img_path=args.watermask
                 )  # classif
-
+            
             utils.display_mem_usage(args.debug, "End of computation")
             end_time = time.time()
 
             display_global_infos(args, end_time, t0, time_stack)
-            if not not_enough_water_samples:
+            if args.mode == "nominal" or args.mode == "no_HAND":
                 display_rf_infos(
                     end_time, time_random_forest, time_samples, time_stack
                 )
