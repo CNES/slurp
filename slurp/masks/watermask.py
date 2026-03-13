@@ -350,13 +350,16 @@ def build_samples(
     return samples
 
 def rf_prediction(
-    valid_stack,
-    phr,
-    ndvi,
-    ndwi,
-    *extra_layers,
-    classifier,
-    debug=False,
+    valid_stack: np.ndarray,
+    phr1: np.ndarray,
+    phr2: np.ndarray,
+    phr3: np.ndarray,
+    phr4: np.ndarray,
+    ndvi: np.ndarray,
+    ndwi: np.ndarray,
+    aux_inputs=None,
+    classifier=None,
+    debug: bool =False,
 ):
     """
     Random Forest prediction
@@ -371,22 +374,41 @@ def rf_prediction(
         NDVI layer(s)
     ndwi : np.ndarray
         NDWI layer(s)
-    *extra_layers : np.ndarray
-        Additional feature layers
     classifier : sklearn-like estimator
         Trained classifier
     debug : bool
         Enable memory debug logs
+    aux_inputs : np.ndarray
+        Additional feature layers
 
     Returns
     -------
     np.ndarray
         Predicted mask (uint8)
     """
+    # -------------------------------------------------
+    # AUX INPUT NORMALIZATION
+    # -------------------------------------------------
+    if aux_inputs is None:
+        aux_inputs = []
 
+    if isinstance(aux_inputs, np.ndarray):
+        aux_inputs = [aux_inputs]
     # ---- build feature stack ----------------------------------------------
-    features = (phr, ndvi, ndwi, *extra_layers)
-    im_stack = np.stack(features, axis=0)
+    feature_layers = [
+        phr1,
+        phr2,
+        phr3,
+        phr4,
+        ndvi,
+        ndwi,
+    ] + aux_inputs
+
+    # concatenate exactly like legacy algo
+    im_stack = np.concatenate(
+        [layer[np.newaxis, ...] for layer in feature_layers],
+        axis=0,
+    )
     # valid_stack shape expected: (1, H, W)
     valid_mask = np.logical_not(valid_stack)
 
@@ -424,22 +446,6 @@ def mask_filter(im_in, mask_ref):
 
     return im_filtered
 
-
-def apply_ndwi_thresh(args, eoscale_manager, key_ndwi, key_valid_stack):
-    logger.info("Simple threshold mask NDWI > " + str(args.ndwi_threshold))
-    key_predict = eoexe.n_images_to_m_images_filter(
-        inputs=[key_ndwi, key_valid_stack],
-        image_filter=utils.compute_mask_threshold,
-        filter_parameters={"threshold": 1000 * args.ndwi_threshold},
-        context_manager=eoscale_manager,
-        generate_output_profiles=eo_utils.single_uint8_profile,
-        multiproc_context=args.multiproc_context,
-        filter_desc="Simple NDWI threshold",
-    )
-    time_random_forest = time.time()
-    time_samples = time_random_forest
-    do_post_process = False
-    return do_post_process, key_predict, time_random_forest, time_samples
 
 
 def post_process(
@@ -858,11 +864,15 @@ def nominal_case_predict(
         - Multiprocessing is used for sampling and prediction using `mp_n_to_m_scalars` and `mp_n_to_m_images`.
         - Memory is managed and garbage collected between training and prediction steps.
     """
-    keys_files_layers = [
-        band
-        for path in args.files_layers
-        for band in read(path)
-    ]
+    if args.files_layers is None:
+        files_layers = []
+        keys_files_layers = []
+    else:
+        keys_files_layers = [
+            band
+            for path in args.files_layers
+            for band in read(path)
+        ]
     
     nb_valid_pixels = len(
         np.where(valid_stack[0][0] == 0)[0]
@@ -887,6 +897,7 @@ def nominal_case_predict(
         ndvi[0][0],
         ndwi[0][0],
     ]
+    logger.info("[3.1] Step: Select samples")
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
         aux_inputs=keys_files_layers,
@@ -911,8 +922,9 @@ def nominal_case_predict(
     logger.debug("samples: \n%s\n", samples)
 
     del local_mask_pekel
+    logger.info("[3.2] Step: Learn model")
     time_samples = time.time()
-
+    
     # -- Train Random Forest classifier -- #
     classifier = RandomForestClassifier(
         n_estimators=args.nb_estimators,
@@ -939,10 +951,11 @@ def nominal_case_predict(
         phr[0][3],
         ndvi[0][0],
         ndwi[0][0],
-    ] + keys_files_layers
-
+    ]
+    logger.info("[3.3] Step: Predict")
     predict = mp_n_to_m_images(
         inputs=input_for_prediction,
+        aux_inputs=keys_files_layers,
         image_height=input_profile["height"],
         image_width=input_profile["width"],
         output_profiles=[output_profile],
