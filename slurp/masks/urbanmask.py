@@ -421,7 +421,7 @@ def nominal_case_urbanmask(
         ndvi[0][0],
         ndwi[0][0],
     ]
-    logger.info("[3.1] Step: Select samples")
+    logger.info("[2.1] Step: Select samples")
     samples = mp_n_to_m_scalars(
         inputs=input_for_samples,
         aux_inputs=keys_files_layers,
@@ -441,7 +441,7 @@ def nominal_case_urbanmask(
     )
 
     logger.debug("samples:\n%s\n", samples)
-    logger.info("[3.2] Step: Learn model")
+    logger.info("[2.2] Step: Learn model")
     time_samples = time.time()
 
     # ----------------------------------------------------
@@ -516,7 +516,7 @@ def nominal_case_urbanmask(
         ndvi[0][0],
         ndwi[0][0]
     ]
-    logger.info("[3.3] Step: Predict")
+    logger.info("[2.3] Step: Predict")
     proba_buildings, predict  = mp_n_to_m_images(
         inputs=input_for_prediction,
         aux_inputs=keys_files_layers,
