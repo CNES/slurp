@@ -621,6 +621,7 @@ def build_stack_urban(args, slurp_manager):
     # ==============================
 
     original_valid_stack, valid_stack_profile = read_and_get_profile(args.valid_stack)
+    valid_stack = original_valid_stack
 
     # ==============================
     # NDVI / NDWI
@@ -1016,11 +1017,6 @@ def slurp_urbanmask(
                     phr_profile,
                     valid_stack_profile
                 )
-                slurp_manager.write_tif(
-                    data=predict,
-                    path=args.urbanmask,
-                    target_profile=output_profile
-                )
 
 
             # ==============================
@@ -1079,6 +1075,12 @@ def slurp_urbanmask(
                     context_manager=slurp_manager,
                     stable_margin=margin,
                     binary=True,
+                )
+            
+            slurp_manager.write_tif(
+                    data=predict,
+                    path=args.urbanmask,
+                    target_profile=output_profile
                 )
 
             t1 = time.time()
