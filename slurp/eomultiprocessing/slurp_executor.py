@@ -225,14 +225,13 @@ def compute_mp_tiles(
 
     return strips
 
-
 def mp_n_to_m_images(
     inputs: list,
     image_height: int,
     image_width: int,
     output_keys: List[str],
     output_profiles: List[dict],
-    context_manager: slurpContextManager,
+    context_manager,
     func: Callable,
     func_parameters: Union[dict, None] = None,
     aux_inputs: Optional[List[np.ndarray]] = None,
@@ -244,17 +243,94 @@ def mp_n_to_m_images(
     debug: bool = False,
 ) -> Union[List[str], List[np.ndarray], Tuple[np.ndarray]]:
     """
-    Process n input images to produce m output images using a multiprocessing
-    map-like paradigm with optional auxiliary inputs.
-
-    Auxiliary inputs are only passed to the target function if explicitly
-    provided, ensuring backward compatibility with functions that do not
-    accept them.
+    Process n input images to produce m outputs using optional multiprocessing.
     """
 
-    # ------------------------------------------------------------------
-    # VALIDATION
-    # ------------------------------------------------------------------
+    func_parameters, aux_inputs, has_aux = _validate_inputs(
+        inputs,
+        func,
+        context_manager,
+        func_parameters,
+        aux_inputs,
+        image_height,
+        image_width,
+    )
+
+    # --------------------------------------------------------
+    # SINGLE PROCESS MODE
+    # --------------------------------------------------------
+    if context_manager.pool is None:
+        return _run_singleprocess(
+            inputs,
+            func,
+            func_parameters,
+            aux_inputs,
+            has_aux,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+            debug,
+        )
+
+    # --------------------------------------------------------
+    # MULTIPROCESSING
+    # --------------------------------------------------------
+    tiles = _compute_tiles(
+        image_height,
+        image_width,
+        stable_margin,
+        context_manager,
+        tile_mode,
+        specific_tile_size,
+        strip_along_lines,
+    )
+
+    if context_manager.in_memory:
+        return _run_in_memory(
+            inputs,
+            aux_inputs,
+            has_aux,
+            tiles,
+            func,
+            func_parameters,
+            context_manager,
+            image_height,
+            image_width,
+            output_profiles,
+            output_keys,
+            binary,
+            debug,
+        )
+
+    return _run_streaming(
+        inputs,
+        aux_inputs,
+        has_aux,
+        tiles,
+        func,
+        func_parameters,
+        context_manager,
+        output_profiles,
+        output_keys,
+        binary,
+        debug,
+    )
+
+
+# ============================================================
+# VALIDATION
+# ============================================================
+
+def _validate_inputs(
+    inputs,
+    func,
+    context_manager,
+    func_parameters,
+    aux_inputs,
+    h,
+    w,
+):
     if len(inputs) < 1:
         raise ValueError("At least one input image must be given.")
 
@@ -264,62 +340,39 @@ def mp_n_to_m_images(
     if context_manager is None:
         raise ValueError("The Context Manager must be given!")
 
-    if func_parameters is None:
-        func_parameters = {}
+    func_parameters = func_parameters or {}
 
-    has_aux_inputs = aux_inputs is not None and len(aux_inputs) > 0
+    has_aux = aux_inputs is not None and len(aux_inputs) > 0
     aux_inputs = aux_inputs or []
 
-    # dimension checks only for aux arrays
     for arr in aux_inputs:
-        if arr.shape != (image_height, image_width):
+        if arr.shape != (h, w):
             raise ValueError("All aux_inputs must match image dimensions")
 
-    # ------------------------------------------------------------------
-    # INTERNAL HELPER
-    # ------------------------------------------------------------------
-    def build_params(base_params, aux=None):
-        """Inject aux_inputs only if provided."""
-        params = dict(base_params)
-        if has_aux_inputs:
-            params["aux_inputs"] = aux
-        return params
+    return func_parameters, aux_inputs, has_aux
 
-    # ==================================================================
-    # NO MULTIPROCESSING
-    # ==================================================================
-    if context_manager.pool is None:
 
-        for input_file in inputs:
-            if isinstance(input_file, str):
-                raise ValueError(
-                    "Without multiprocessing the inputs must be numpy arrays."
-                )
+# ============================================================
+# HELPERS
+# ============================================================
 
-        params = build_params(func_parameters, aux_inputs)
-        output = func(*inputs, **params)
+def _build_params(base_params, aux, has_aux):
+    params = dict(base_params)
+    if has_aux:
+        params["aux_inputs"] = aux
+    return params
 
-        if isinstance(output, np.ndarray):
-            if debug and context_manager.dev_mode:
-                context_manager.write_tif(
-                    output, output_keys[0], output_profiles[0], binary
-                )
-            return [output]
 
-        if isinstance(output, tuple):
-            if debug and context_manager.dev_mode:
-                for i, data in enumerate(output):
-                    context_manager.write_tif(
-                        data, output_keys[i], output_profiles[i], binary
-                    )
-            return list(output)
-
-        raise ValueError(f"Wrong output type {type(output)}.")
-
-    # ==================================================================
-    # MULTIPROCESSING
-    # ==================================================================
-    tiles = compute_mp_tiles(
+def _compute_tiles(
+    image_height,
+    image_width,
+    stable_margin,
+    context_manager,
+    tile_mode,
+    specific_tile_size,
+    strip_along_lines,
+):
+    return compute_mp_tiles(
         image_height=image_height,
         image_width=image_width,
         stable_margin=stable_margin,
@@ -331,127 +384,211 @@ def mp_n_to_m_images(
         strip_along_lines=strip_along_lines,
     )
 
-    # ------------------------------------------------------------------
-    # IN-MEMORY MODE
-    # ------------------------------------------------------------------
-    if context_manager.in_memory:
 
-        list_input = []
+# ============================================================
+# SINGLE PROCESS
+# ============================================================
 
-        for tile in tiles:
-
-            # slice main inputs
-            tile_inputs = [
-                arr[
-                    tile.start_y - tile.top_margin : tile.end_y
-                    + tile.bottom_margin
-                    + 1,
-                    tile.start_x - tile.left_margin : tile.end_x
-                    + tile.right_margin
-                    + 1,
-                ]
-                for arr in inputs
-            ]
-
-            # slice aux inputs if needed
-            tile_aux = None
-            if has_aux_inputs:
-                tile_aux = [
-                    arr[
-                        tile.start_y - tile.top_margin : tile.end_y
-                        + tile.bottom_margin
-                        + 1,
-                        tile.start_x - tile.left_margin : tile.end_x
-                        + tile.right_margin
-                        + 1,
-                    ]
-                    for arr in aux_inputs
-                ]
-
-            tile_params = build_params(func_parameters, tile_aux)
-
-            list_input.append(
-                (
-                    tile_inputs,
-                    func,
-                    tile_params,
-                    tile,
-                )
+def _run_singleprocess(
+    inputs,
+    func,
+    func_parameters,
+    aux_inputs,
+    has_aux,
+    context_manager,
+    output_keys,
+    output_profiles,
+    binary,
+    debug,
+):
+    for inp in inputs:
+        if isinstance(inp, str):
+            raise ValueError(
+                "Without multiprocessing the inputs must be numpy arrays."
             )
 
-        out_chunks = context_manager.pool.starmap(
-            mp_execute_from_arrays,
-            tqdm.tqdm(list_input, total=len(list_input)),
+    params = _build_params(func_parameters, aux_inputs, has_aux)
+    output = func(*inputs, **params)
+
+    outputs = _normalize_output(output)
+
+    if debug and context_manager.dev_mode:
+        _write_debug_outputs(
+            outputs,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
         )
 
-        # reconstruct outputs
-        out = [
-            np.zeros(
-                (image_height, image_width),
-                dtype=output_profiles[i]["dtype"],
-            )
-            for i in range(len(output_profiles))
-        ]
+    return outputs
 
-        for chunk_res in out_chunks:
-            tile = chunk_res["tile"]
 
-            for i in range(len(output_profiles)):
-                out[i][
-                    tile.start_y : tile.end_y + 1,
-                    tile.start_x : tile.end_x + 1,
-                ] = chunk_res["data"][i].copy()
+# ============================================================
+# IN MEMORY MULTIPROCESSING
+# ============================================================
 
-        if debug and context_manager.dev_mode:
-            for i, data in enumerate(out):
-                context_manager.write_tif(
-                    data, output_keys[i], output_profiles[i], binary
-                )
+def _run_in_memory(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    image_height,
+    image_width,
+    output_profiles,
+    output_keys,
+    binary,
+    debug,
+):
 
-    # ------------------------------------------------------------------
-    # STREAMING MODE (PATHS)
-    # ------------------------------------------------------------------
-    else:
+    jobs = []
 
-        if debug and context_manager.dev_mode:
-            output_paths = [
-                context_manager.get_path(
-                    key, context_manager.debug_key
-                )
-                for key in output_keys
-            ]
-        else:
-            output_paths = [
-                context_manager.get_path(
-                    key, context_manager.tmp_key
-                )
-                for key in output_keys
-            ]
+    for tile in tiles:
+        tile_inputs = [_slice_array(arr, tile) for arr in inputs]
 
-        params = build_params(func_parameters, aux_inputs if has_aux_inputs else None)
+        tile_aux = None
+        if has_aux:
+            tile_aux = [_slice_array(arr, tile) for arr in aux_inputs]
 
-        list_input = [
-            (
-                inputs,
-                output_paths,
-                func,
-                params,
-                output_profiles,
-                context_manager.lock,
-                tile,
-                binary,
-            )
-            for tile in tiles
-        ]
+        params = _build_params(func_parameters, tile_aux, has_aux)
 
-        context_manager.pool.starmap(
-            mp_execute_from_paths,
-            tqdm.tqdm(list_input, total=len(list_input)),
+        jobs.append((tile_inputs, func, params, tile))
+
+    out_chunks = context_manager.pool.starmap(
+        mp_execute_from_arrays,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+    outputs = _reconstruct_outputs(
+        out_chunks,
+        image_height,
+        image_width,
+        output_profiles,
+    )
+
+    if debug and context_manager.dev_mode:
+        _write_debug_outputs(
+            outputs,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
         )
 
-        out = output_paths
+    return outputs
 
-    return out
+
+# ============================================================
+# STREAMING MODE
+# ============================================================
+
+def _run_streaming(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    output_profiles,
+    output_keys,
+    binary,
+    debug,
+):
+
+    key = (
+        context_manager.debug_key
+        if debug and context_manager.dev_mode
+        else context_manager.tmp_key
+    )
+
+    output_paths = [
+        context_manager.get_path(k, key) for k in output_keys
+    ]
+
+    params = _build_params(
+        func_parameters,
+        aux_inputs if has_aux else None,
+        has_aux,
+    )
+
+    jobs = [
+        (
+            inputs,
+            output_paths,
+            func,
+            params,
+            output_profiles,
+            context_manager.lock,
+            tile,
+            binary,
+        )
+        for tile in tiles
+    ]
+
+    context_manager.pool.starmap(
+        mp_execute_from_paths,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+    return output_paths
+
+
+# ============================================================
+# UTILITIES
+# ============================================================
+
+def _slice_array(arr, tile):
+    return arr[
+        tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
+        tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
+    ]
+
+
+def _normalize_output(output):
+    if isinstance(output, np.ndarray):
+        return [output]
+
+    if isinstance(output, tuple):
+        return list(output)
+
+    raise ValueError(f"Wrong output type {type(output)}.")
+
+
+def _reconstruct_outputs(chunks, h, w, output_profiles):
+    outputs = [
+        np.zeros((h, w), dtype=output_profiles[i]["dtype"])
+        for i in range(len(output_profiles))
+    ]
+
+    for chunk in chunks:
+        tile = chunk["tile"]
+        for i in range(len(outputs)):
+            outputs[i][
+                tile.start_y : tile.end_y + 1,
+                tile.start_x : tile.end_x + 1,
+            ] = chunk["data"][i].copy()
+
+    return outputs
+
+
+def _write_debug_outputs(
+    outputs,
+    context_manager,
+    output_keys,
+    output_profiles,
+    binary,
+):
+    for i, data in enumerate(outputs):
+        context_manager.write_tif(
+            data,
+            output_keys[i],
+            output_profiles[i],
+            binary,
+        )
 
 
 def mp_execute_from_paths(
