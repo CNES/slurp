@@ -29,13 +29,17 @@ import logging
 import time
 import traceback
 from os import path
+from copy import deepcopy
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
 import numpy as np
 
+from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read_and_get_profile, write, read, create_image
 from slurp.post_process.morphology import apply_morpho
-from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
 
@@ -52,7 +56,7 @@ def compute_thresholds(
     specified percentile for each band, with different thresholds for RGB bands and NIR band.
     """
     if absolute_threshold is False:
-        # Compute threshold for each band
+        # Compute threshold for each bandx
         th_bands = np.zeros(4)
         for cpt in range(3):
             min_band = np.percentile(
@@ -85,55 +89,154 @@ def compute_thresholds(
 
 
 def compute_shadowmask(
-    input_buffers: list, input_profiles: list, params: dict
+    phr1: np.ndarray,
+    phr2: np.ndarray,
+    phr3: np.ndarray,
+    phr4: np.ndarray,
+    valid_stack: np.ndarray,
+    watermask: np.ndarray,
+    thresholds: list,
+    binary_opening: int,
+    remove_small_objects: int,
 ) -> np.ndarray:
     """
-    Compute shadow mask
+    Compute shadow mask from spectral bands.
 
-    :param list input_buffers: 0 -> image, 1 -> valid_stack, 2 -> watermask
-    :param list input_profiles: image profiles (not used but necessary for eoscale)
-    :param dict params: must contain the keys "thresholds",
-                                              "binary_opening" and "small_objects"
-    :returns: valid_mask (int numpy array) with following legend
-              0: no shadows, 1: small shadows, 2: big shadows, + NODATA
+    Parameters
+    ----------
+    phr1, phr2, phr3, phr4 : np.ndarray
+        Spectral bands.
+    valid_stack : np.ndarray
+        Validity mask.
+    watermask : np.ndarray
+        Water mask.
+    thresholds : list[float]
+        Thresholds for each band.
+    binary_opening : int
+    remove_small_objects : int
+
+    Returns
+    -------
+    np.ndarray
+        Shadow mask.
     """
-    raw_shadow_mask = np.zeros(input_buffers[0][0].shape, dtype=int)
-    raw_shadow_mask.fill(1)
 
-    for i in range(4):
-        raw_shadow_mask = np.logical_and(
-            raw_shadow_mask, input_buffers[0][i] < params["thresholds"][i]
-        )
+    # ------------------------------
+    # RAW SHADOW DETECTION
+    # ------------------------------
 
-    # Remove shadows on water areas
-    raw_shadow_mask[np.where(input_buffers[2][0] == 1)] = 0
+    raw_shadow_mask = (
+        (phr1 < thresholds[0])
+        & (phr2 < thresholds[1])
+        & (phr3 < thresholds[2])
+        & (phr4 < thresholds[3])
+    )
 
-    # work on binary arrays
-    final_shadow_mask = raw_shadow_mask
-    if params["binary_opening"] > 0:
+    # Remove water shadows
+    raw_shadow_mask[watermask == 1] = 0
+
+    # ------------------------------
+    # MORPHOLOGY
+    # ------------------------------
+
+    final_shadow_mask = raw_shadow_mask.copy()
+
+    if binary_opening > 0:
         final_shadow_mask = apply_morpho(
-            final_shadow_mask, "binary_opening", params["binary_opening"]
+            final_shadow_mask,
+            "binary_opening",
+            binary_opening,
         )
-    if params["remove_small_objects"] > 0:
+
+    if remove_small_objects > 0:
         final_shadow_mask = apply_morpho(
             final_shadow_mask,
             "remove_small_objects",
-            params["remove_small_objects"],
+            remove_small_objects,
         )
 
-    raw_shadow_mask = np.where(raw_shadow_mask, 1, 0)
-    final_shadow_mask = np.where(final_shadow_mask, 1, 0)
+    # ------------------------------
+    # MERGE RAW + FILTERED
+    # ------------------------------
 
-    # Sum between raw shadows and refined shadows
+    raw_shadow_mask = raw_shadow_mask.astype(np.uint8)
+    final_shadow_mask = final_shadow_mask.astype(np.uint8)
+
     final_shadow_mask += raw_shadow_mask
 
-    # apply NO_DATA mask
+    # ------------------------------
+    # APPLY NODATA
+    # ------------------------------
+
     final_shadow_mask = np.where(
-        input_buffers[1][0] == 0, final_shadow_mask, NODATA_INT8
+        valid_stack == 0,
+        final_shadow_mask,
+        NODATA_INT8,
     )
 
     return final_shadow_mask
 
+
+def build_stack_shadow(args, slurp_manager):
+    """
+    Prepare inputs for shadow mask processing.
+
+    Returns
+    -------
+    phr : list
+    valid_stack : list
+    watermask : list
+    margin : int
+    phr_profile : dict
+    """
+
+    logger.info("Loading base rasters")
+
+    # ==============================
+    # PHR
+    # ==============================
+
+    key_phr, phr_profile = read_and_get_profile(args.file_vhr)
+
+    args.nodata_phr = phr_profile.get("nodata")
+    args.shape = (phr_profile["height"], phr_profile["width"])
+    args.crs = phr_profile["crs"]
+    args.transform = phr_profile["transform"]
+
+    # ==============================
+    # VALID STACK
+    # ==============================
+
+    key_valid_stack = read(args.valid_stack)
+
+    # ==============================
+    # WATERMASK
+    # ==============================
+
+    if args.watermask and path.isfile(args.watermask):
+        logger.info("Loading watermask")
+        key_watermask = read(args.watermask)
+
+    else:
+        logger.info("No watermask provided ? creating empty mask")
+
+        empty_profile = deepcopy(phr_profile)
+        empty_profile["count"] = 1
+        empty_profile["dtype"] = np.uint8
+
+        key_watermask = create_image(empty_profile, fill_value=0)[0]
+
+    margin = args.remove_small_objects
+
+    logger.info("Shadow stack ready")
+
+    return (
+        [key_phr],
+        [key_valid_stack],
+        [key_watermask],
+        margin,
+        phr_profile,
+    )
 
 def getarguments() -> dict:
     """Parse command line arguments."""
@@ -241,11 +344,9 @@ def slurp_shadowmask(
     multiproc_context: str,
 ):
     """
-    Main API to compute shadow mask.
+    Main API to compute shadow mask using slurpContextManager.
     """
-    t0 = time.time()
 
-    # Read the JSON files
     keys = [
         "input",
         "aux_layers",
@@ -254,103 +355,135 @@ def slurp_shadowmask(
         "post_process",
         "shadows",
     ]
+
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
-        # If the parameter from the CLI is not None, we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
     logger.info("--" * 50)
     logger.info("SLURP - Shadow mask\n")
     logger.info(f"JSON data loaded: {main_config}")
+
     args = argparse.Namespace(**argsdict)
 
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG)
+
     logger.debug(f"{argsdict=}")
 
-    # Mask calculation
-    with eom.EOContextManager(
-        nb_workers=args.n_workers,
-        tile_mode=True,
-        tile_max_size=args.tile_max_size,
-    ) as eoscale_manager:
+    # ==============================
+    # SLURP CONTEXT
+    # ==============================
+
+    params = {
+        "nb_max_workers": args.n_workers,
+        "developer_mode": args.debug,
+        "method": "mem",
+        "mp_context": multiproc_context,
+        "output_dir": path.dirname(args.file_vhr),
+    }
+
+    with slurpContextManager(params, tile_mode=True) as slurp_manager:
+
         try:
 
-            # Store image in shared memory
-            key_phr = eoscale_manager.open_raster(raster_path=args.file_vhr)
-            local_phr = eoscale_manager.get_array(key_phr)
-            nodata = eoscale_manager.get_profile(key_phr)["nodata"]
+            t0 = time.time()
 
-            # Valid stack
-            key_valid_stack = eoscale_manager.open_raster(
-                raster_path=args.valid_stack
-            )
+            # ==============================
+            # BUILD STACK
+            # ==============================
+
+            logger.info("[0] Step: Build stack")
+
+            (
+                phr,
+                valid_stack,
+                watermask,
+                margin,
+                phr_profile,
+            ) = build_stack_shadow(args, slurp_manager)
+
+            # ==============================
+            # COMPUTE THRESHOLDS
+            # ==============================
+
+            logger.info("[1] Step: Compute thresholds")
+
+            local_phr = phr[0]
 
             th_bands = compute_thresholds(
                 args.absolute_threshold,
                 local_phr,
-                nodata,
+                args.nodata_phr,
                 args.percentile,
                 args.th_rgb,
                 args.th_nir,
             )
 
-            params = {
+            params_filter = {
                 "thresholds": th_bands,
                 "binary_opening": args.binary_opening,
                 "remove_small_objects": args.remove_small_objects,
             }
 
-            if args.watermask and path.isfile(args.watermask):
-                key_watermask = eoscale_manager.open_raster(
-                    raster_path=args.watermask
-                )
-            else:
-                profile = eoscale_manager.get_profile(key_phr)
-                profile["count"] = 1
-                profile["dtype"] = np.uint8
-                key_watermask = eoscale_manager.create_image(profile)
-                eoscale_manager.get_array(key=key_watermask).fill(0)
+            # ==============================
+            # SHADOW MASK PROCESSING
+            # ==============================
 
-            mask_shadow = eoexe.n_images_to_m_images_filter(
-                inputs=[key_phr, key_valid_stack, key_watermask],
-                image_filter=compute_shadowmask,
-                filter_parameters=params,
-                generate_output_profiles=eo_utils.single_uint8_profile,
-                stable_margin=args.remove_small_objects,
-                context_manager=eoscale_manager,
-                multiproc_context=args.multiproc_context,
-                filter_desc="Shadow mask processing...",
+            logger.info("[2] Step: Shadow mask")
+
+            input_profile = deepcopy(phr_profile)
+            output_profile = eo_utils.single_uint8_profile(
+                [deepcopy(phr_profile)]
+            )
+            
+
+            predict = mp_n_to_m_images(
+                inputs=[
+                    phr[0][0],
+                    phr[0][1],
+                    phr[0][2],
+                    phr[0][3],
+                    valid_stack[0][0],
+                    watermask[0][0],
+                ],
+                image_height=input_profile["height"],
+                image_width=input_profile["width"],
+                output_profiles=[output_profile],
+                output_keys=[path.basename(args.shadowmask)],
+                func=compute_shadowmask,
+                func_parameters=params_filter,
+                context_manager=slurp_manager,
+                stable_margin=margin,
+                binary=True,
             )
 
-            eoscale_manager.write(key=mask_shadow[0], img_path=args.shadowmask)
+            # ==============================
+            # WRITE OUTPUT
+            # ==============================
 
-            end_time = time.time()
+            slurp_manager.write_tif(
+                data=predict[0],
+                path=args.shadowmask,
+                target_profile=output_profile,
+            )
+
+            t1 = time.time()
+
             logger.info(
-                f"**** Shadow mask for {args.file_vhr} (saved as {args.shadowmask}) ****"
+                f"**** Shadow mask saved as {args.shadowmask} ****"
             )
             logger.info(
-                "Total time (user)       :\t"
-                + utils.convert_time(end_time - t0)
+                "Total time (user):\t" + utils.convert_time(t1 - t0)
             )
 
-        except FileNotFoundError as fnfe_exception:
-            logger.error("FileNotFoundError", fnfe_exception)
-
-        except PermissionError as pe_exception:
-            logger.error("PermissionError", pe_exception)
-
-        except ArithmeticError as ae_exception:
-            logger.error("ArithmeticError", ae_exception)
-
-        except MemoryError as me_exception:
-            logger.error("MemoryError", me_exception)
-
-        except Exception as exception:  # pylint: disable=broad-except
-            logger.error("oups...", exception)
+        except Exception:
+            logger.error("Unexpected error:", exc_info=True)
             traceback.print_exc()
+
+    logger.info("End of shadowmask step\n")
 
 
 def main():

@@ -33,6 +33,7 @@ import logging
 import time
 import traceback
 from os import path
+from copy import deepcopy
 
 import eoscale.eo_executors as eoexe
 import eoscale.manager as eom
@@ -41,8 +42,11 @@ from skimage import segmentation
 from skimage.filters import sobel
 from skimage.measure import label
 
+from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
 from slurp.post_process.morphology import apply_morpho, morpho_clean
-from slurp.tools import eoscale_utils as eo_utils
+from slurp.tools import profile_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
@@ -54,109 +58,120 @@ LAKE = 2
 RIVER = 3
 
 
+def build_stack_stackmask(args, slurp_manager):
+    """
+    Prepare inputs for stack mask post-processing.
+    """
+
+    logger.info("Loading base rasters")
+
+    # ==============================
+    # VHR IMAGE
+    # ==============================
+
+    key_image, image_profile = read_and_get_profile(args.file_vhr)
+    input_profile = deepcopy(image_profile)
+
+    args.shape = (input_profile["height"], input_profile["width"])
+    args.crs = input_profile["crs"]
+    args.transform = input_profile["transform"]
+    args.nodata_vhr = 0
+
+    # ==============================
+    # REQUIRED MASKS
+    # ==============================
+
+    key_validstack = read(args.valid_stack)
+    key_watermask = read(args.watermask)
+    key_vegmask = read(args.vegetationmask)
+    key_urbanmask = read(args.urbanmask)
+    key_shadowmask = read(args.shadowmask)
+    key_wsf = read(args.extracted_wsf)
+
+    margin = 100  # identical to previous stable_margin
+
+    logger.info("Stackmask inputs ready")
+
+    return (
+        [key_image],
+        [key_validstack],
+        [key_watermask],
+        [key_vegmask],
+        [key_urbanmask],
+        [key_shadowmask],
+        [key_wsf],
+        margin,
+        image_profile,
+    )
+
 def watershed_regul_buildings(
-    input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
+    input_image: np.ndarray,
+    urbanmask: np.ndarray,
+    wsf: np.ndarray,
+    vegmask: np.ndarray,
+    watermask: np.ndarray,
+    shadowmask: np.ndarray,
+    *,
+    sobel_image: str,
+    regul_type: str,
+    building_threshold: int,
+    building_erosion: int,
+    erosion_radius: int,
+    bonus_gt: int,
+    malus_shadow: int,
+    value_classif_bare_ground: int,
+    value_classif_buildings: int,
+    value_classif_low_veg: int,
+    value_classif_high_veg: int,
+    value_classif_false_positive_buildings: int,
+    value_classif_background: int,
 ):
     """
     Clean and apply watershed regulation for buildings
-
-    :param np.ndarray input_image: VHR input image
-    :param np.ndarray urbanmask: Urbanmask created by the dedicated script
-    :param np.ndarray wsf: WSF file from post_process function
-    :param np.ndarray vegmask: Vegetationnmask created by the dedicated script
-    :param np.ndarray watermask: Watermask created by the dedicated script
-    :param np.ndarray shadowmask: Shadowmask created by the dedicated script
-    :param dict params: dictionary of arguments
-    :return: tuple of segmentation value and markers
     """
-    # Compute mono image from RGB image
-    # im_mono = 0.29*input_image[0] + 0.58*input_image[1] + 0.114*input_image[2]
-    if params["sobel_image"] == "ndvi":
-        im_mono = (input_image[3] - input_image[0]) / (
-            input_image[3] + input_image[0]
-        )
-    elif params["sobel_image"] == "nir":
+
+    # Mono image for edge detection
+    if sobel_image == "ndvi":
+        im_mono = (input_image[3] - input_image[0]) / (input_image[3] + input_image[0])
+    elif sobel_image == "nir":
         im_mono = input_image[3]
     else:
-        im_mono = (
-            0.29 * input_image[0]
-            + 0.58 * input_image[1]
-            + 0.114 * input_image[2]
-        )
-    edges = sobel(im_mono)
+        im_mono = 0.29 * input_image[0] + 0.58 * input_image[1] + 0.114 * input_image[2]
 
+    edges = sobel(im_mono)
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
-    # We set markers by reverse order of confidence
-    eroded_bare_ground = apply_morpho(
-        vegmask[0] == 11, "binary_erosion", params["erosion_radius"]
-    )
-    if params["regul_type"] == "all":
-        markers[0][eroded_bare_ground] = params["value_classif_bare_ground"]
-    else:
-        markers[0][eroded_bare_ground] = params["value_classif_background"]
+    # Bare ground
+    eroded_bare_ground = apply_morpho(vegmask == 11, "binary_erosion", erosion_radius)
+    markers[0][eroded_bare_ground] = value_classif_bare_ground if regul_type == "all" else value_classif_background
 
-    ground_truth_eroded = apply_morpho(
-        wsf[0] == 255, "binary_erosion", params["erosion_radius"]
-    )
+    # Buildings
+    ground_truth_eroded = apply_morpho(wsf == 255, "binary_erosion", erosion_radius)
+    normalized_building_threshold = np.percentile(urbanmask, building_threshold)
+    urbanmask[ground_truth_eroded] += bonus_gt
+    urbanmask[shadowmask == 2] -= malus_shadow
+    probable_buildings = np.logical_and(ground_truth_eroded, urbanmask > normalized_building_threshold)
+    probable_buildings = apply_morpho(probable_buildings, "binary_erosion", building_erosion)
+    false_positive = np.logical_and(apply_morpho(wsf == 255, "binary_dilation", 10) == 0, urbanmask > normalized_building_threshold)
+    markers[0][probable_buildings] = value_classif_buildings
+    markers[0][false_positive] = value_classif_false_positive_buildings
 
-    normalized_building_threshold = np.percentile(
-        urbanmask[0], params["building_threshold"]
-    )
-    logger.debug(
-        f"Normalized building threshold {normalized_building_threshold}"
-    )
+    # Low vegetation
+    eroded_low_veg = apply_morpho(vegmask == 21, "binary_erosion", erosion_radius)
+    markers[0][eroded_low_veg] = value_classif_low_veg if regul_type == "all" else value_classif_background
 
-    # Bonus for pixels above ground truth
-    urbanmask[0][ground_truth_eroded] += params["bonus_gt"]
-    # Malus for pixels in shadow areas
-    urbanmask[0][shadowmask[0] == 2] -= params["malus_shadow"]
-    probable_buildings = np.logical_and(
-        ground_truth_eroded, urbanmask[0] > normalized_building_threshold
-    )
-    probable_buildings = apply_morpho(
-        probable_buildings, "binary_erosion", params["building_erosion"]
-    )
-    # TODO : validate marker
-    false_positive = np.logical_and(
-        apply_morpho(wsf[0] == 255, "binary_dilation", 10) == 0,
-        urbanmask[0] > normalized_building_threshold,
-    )
+    # High vegetation
+    eroded_high_veg = apply_morpho(np.logical_or(vegmask == 23, vegmask == 22), "binary_erosion", erosion_radius)
+    markers[0][eroded_high_veg] = value_classif_high_veg if regul_type == "all" else value_classif_background
 
-    markers[0][probable_buildings] = params["value_classif_buildings"]
-    markers[0][false_positive] = params[
-        "value_classif_false_positive_buildings"
-    ]
+    # Shadow
+    eroded_shadow = apply_morpho(shadowmask == 2, "binary_erosion", erosion_radius)
+    markers[0][eroded_shadow] = value_classif_background
 
-    eroded_low_veg = apply_morpho(
-        vegmask[0] == 21, "binary_erosion", params["erosion_radius"]
-    )
-    if params["regul_type"] == "all":
-        markers[0][eroded_low_veg] = params["value_classif_low_veg"]
-    else:
-        markers[0][eroded_low_veg] = params["value_classif_background"]
-
-    # careful : vegetation mask has two values for high veg !
-    eroded_high_veg = apply_morpho(
-        np.logical_or(vegmask[0] == 23, vegmask[0] == 22),
-        "binary_erosion",
-        params["erosion_radius"],
-    )
-
-    if params["regul_type"] == "all":
-        markers[0][eroded_high_veg] = params["value_classif_high_veg"]
-    else:
-        markers[0][eroded_high_veg] = params["value_classif_background"]
-
-    eroded_shadow = apply_morpho(
-        shadowmask[0] == 2, "binary_erosion", params["erosion_radius"]
-    )
-    markers[0][eroded_shadow] = params["value_classif_background"]
-
-    markers[watermask == 1] = params["value_classif_background"]
+    # Water
+    markers[0][watermask == 1] = value_classif_background
 
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
-
     return seg, markers
 
 
@@ -170,7 +185,7 @@ def infer_waterbodies_type(wbm, watermask, params):
     :return: categorized mask
     """
     nb_iter = 2
-    clean_watermask = watermask[0] == 1
+    clean_watermask = watermask == 1
     for _ in range(nb_iter):
         clean_watermask = apply_morpho(clean_watermask, "binary_opening", 2)
 
@@ -209,7 +224,7 @@ def infer_waterbodies_type(wbm, watermask, params):
         # values from WBM covered by value 'val' in label_image
         if 1 in watermask_remove[mask_val]:
             # water body
-            sub_set_wbm = wbm[0][mask_val]
+            sub_set_wbm = wbm[mask_val]
             kind_waterbodies = np.unique(sub_set_wbm)
             # We select water body type by priority order
             # sea > lake > river > (other) water
@@ -231,83 +246,137 @@ def choose_wb(kind_waterbodies):
 
 
 def post_process(
-    input_buffer: list, input_profiles: list, params: dict
-) -> np.ndarray:
+    phr1: np.ndarray,
+    phr2: np.ndarray,
+    phr3: np.ndarray,
+    phr4: np.ndarray,
+    valid_stack: np.ndarray,
+    watermask: np.ndarray,
+    vegmask: np.ndarray,
+    urbanmask: np.ndarray,
+    shadowmask: np.ndarray,
+    wsf: np.ndarray,
+    *,
+    winter_vegetation: bool,
+    value_classif_bare_ground: int,
+    value_classif_buildings: int,
+    value_classif_water: int,
+    value_classif_low_veg: int,
+    value_classif_high_veg: int,
+    value_classif_false_positive_buildings: int,
+    value_classif_background: int,
+    sobel_image: str,
+    regul_type: str,
+    building_threshold: int,
+    building_erosion: int,
+    erosion_radius: int,
+    bonus_gt: int,
+    malus_shadow: int,
+    binary_closing: int | None = None,
+    binary_opening: int | None = None,
+    remove_small_holes: int | None = None,
+    remove_small_objects: int | None = None,
+):
     """
-    key_image, key_validstack, key_watermask, key_vegmask, key_urbanmask, key_shadowmask,
-    0          1              2              3             4              5
-    key_wsf [, key_wbm ]
-    6       [ 7 ]
+    SLURP post-processing kernel (explicit inputs version)
+    phr1..phr4 correspond to the 4 bands of the input VHR image.
     """
-    input_image = input_buffer[0]
-    valid_stack = input_buffer[1]
-    watermask = input_buffer[2]
-    vegmask = input_buffer[3]
-    urbanmask = input_buffer[4]
-    shadowmask = input_buffer[5]
-    wsf = input_buffer[6]
 
-    # 1st channel is the class, 2nd is an estimation of height class,
-    # 3rd the markers layer, for debug purpose
-    stack = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+    # Combine bands into a single array for watershed input
+    input_image = np.stack([phr1, phr2, phr3, phr4], axis=0)
+    h, w = phr1.shape
 
-    # If "winter vegetation" is activated, medium "NDVI" but textured segments
-    # (classified as 12/13) by vegetation mask will be considered as high vegetation
-    if params["winter_vegetation"]:
-        mix_textured_veg = np.logical_or(vegmask[0] == 12, vegmask[0] == 13)
-        vegmask[0][mix_textured_veg] = 22
+    stack = np.zeros((1, h, w), dtype=np.uint8)
 
-    # Improve buildings detection using a watershed / markers regularization
+    # ==============================
+    # Winter vegetation correction
+    # ==============================
+    if winter_vegetation:
+        mix_textured_veg = np.logical_or(
+            vegmask == 12,
+            vegmask == 13,
+        )
+        vegmask[mix_textured_veg] = 22
+
+    # ==============================
+    # Watershed regularisation
+    # ==============================
     seg, markers = watershed_regul_buildings(
-        input_image, urbanmask, wsf, vegmask, watermask, shadowmask, params
+        input_image=input_image,
+        urbanmask=urbanmask,
+        wsf=wsf,
+        vegmask=vegmask,
+        watermask=watermask,
+        shadowmask=shadowmask,
+        sobel_image=sobel_image,
+        regul_type=regul_type,
+        building_threshold=building_threshold,
+        building_erosion=building_erosion,
+        erosion_radius=erosion_radius,
+        bonus_gt=bonus_gt,
+        malus_shadow=malus_shadow,
+        value_classif_bare_ground=value_classif_bare_ground,
+        value_classif_buildings=value_classif_buildings,
+        value_classif_low_veg=value_classif_low_veg,
+        value_classif_high_veg=value_classif_high_veg,
+        value_classif_false_positive_buildings=value_classif_false_positive_buildings,
+        value_classif_background=value_classif_background,
     )
     logger.debug(f"{np.unique(seg)=}")
 
+    # ==============================
+    # Classes cleaning
+    # ==============================
     clean_bare_ground = (
-        morpho_clean(seg == params["value_classif_bare_ground"], params) == 1
-    )
-    stack[0][clean_bare_ground] = params["value_classif_bare_ground"]
+    morpho_clean(
+        seg == value_classif_bare_ground,
+        binary_closing=binary_closing,
+        binary_opening=binary_opening,
+        remove_small_holes=remove_small_holes,
+        remove_small_objects=remove_small_objects,
+    ) == 1
+)
+    stack[0][clean_bare_ground] = value_classif_bare_ground
 
-    clean_buildings = (
-        morpho_clean(seg == params["value_classif_buildings"], params) == 1
-    )
-    stack[0][clean_buildings] = params["value_classif_buildings"]
+    clean_buildings = morpho_clean(
+        seg == value_classif_buildings, 
+        binary_closing=binary_closing,
+        binary_opening=binary_opening,
+        remove_small_holes=remove_small_holes,
+        remove_small_objects=remove_small_objects,
+    ) == 1
+    stack[0][clean_buildings] = value_classif_buildings
 
-    # Note : Watermask and vegetation mask should be quite clean and don't need morpho postprocess
-    stack[0][watermask[0] == 1] = params["value_classif_water"]
+    stack[0][watermask == 1] = value_classif_water
 
-    clean_low_veg = vegmask[0] == 21
-    stack[0][clean_low_veg] = params["value_classif_low_veg"]
+    clean_low_veg = vegmask == 21
+    stack[0][clean_low_veg] = value_classif_low_veg
 
-    clean_high_veg = vegmask[0] == 22
-    stack[0][clean_high_veg] = params["value_classif_high_veg"]
+    clean_high_veg = vegmask == 22
+    stack[0][clean_high_veg] = value_classif_high_veg
 
-    # Apply NODATA
-    stack[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
+    stack[0][valid_stack != 0] = NODATA_INT8
 
-    height_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
-
-    # Estimation of heigth
-    # Supposed to be low
+    # ==============================
+    # HEIGHT LAYER
+    # ==============================
+    height_layer = np.zeros((1, h, w), dtype=np.uint8)
     height_layer[0][clean_bare_ground] = LOW
     height_layer[0][clean_low_veg] = LOW
-
-    # Supposed to be high
     height_layer[0][clean_buildings] = HIGH
     height_layer[0][clean_high_veg] = HIGH
+    height_layer[0][watermask == 1] = 0
+    height_layer[0][shadowmask == 2] = 0
+    height_layer[0][valid_stack != 0] = NODATA_INT8
 
-    # No confidence in heigh
-    height_layer[0][watermask[0] == 1] = 0
-    height_layer[0][shadowmask[0] == 2] = 0
-
-    height_layer[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
-
-    markers_layer = np.zeros((1, input_image.shape[1], input_image.shape[2]))
-    # Markers
+    # ==============================
+    # MARKERS
+    # ==============================
+    markers_layer = np.zeros((1, h, w), dtype=np.uint8)
     markers_layer[0] = markers
-    markers_layer[0][np.where(valid_stack[0] != 0)] = NODATA_INT8
+    markers_layer[0][valid_stack != 0] = NODATA_INT8
 
-    return [stack, height_layer, markers_layer]
+    return stack[0], height_layer[0], markers_layer[0]
 
 
 def getarguments():
@@ -492,7 +561,6 @@ def getarguments():
 
     return vars(args)
 
-
 def slurp_stackmask(
     main_config: str,
     logs_to_file: bool,
@@ -528,10 +596,7 @@ def slurp_stackmask(
     categorized_watermask: bool,
     minimal_size_water_area: int,
 ):
-    """
-    Main API to compute urban mask.
-    """
-    # Read the JSON files
+
     keys = [
         "input",
         "prepare",
@@ -541,11 +606,10 @@ def slurp_stackmask(
         "post_process",
         "stack",
     ]
+
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
-        # If the parameter from the CLI is not None,
-        # we update argsdict with the value from the CLI
         if locals()[param] is not None:
             argsdict[param] = locals()[param]
 
@@ -554,133 +618,157 @@ def slurp_stackmask(
     logger.info(f"JSON data loaded: {main_config}")
 
     args = argparse.Namespace(**argsdict)
+
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG)
-    logger.debug(f"{argsdict=}")
 
-    # Mask calculation
-    with eom.EOContextManager(
-        nb_workers=args.n_workers,
-        tile_mode=True,
-        tile_max_size=args.tile_max_size,
-    ) as eoscale_manager:
+    params = {
+        "nb_max_workers": args.n_workers,
+        "developer_mode": args.debug,
+        "method": "mem",
+        "mp_context": multiproc_context,
+        "output_dir": path.dirname(args.file_vhr),
+    }
+
+    with slurpContextManager(params, tile_mode=True) as slurp_manager:
+
         try:
+
             t0 = time.time()
-            key_image = eoscale_manager.open_raster(raster_path=args.file_vhr)
 
-            key_watermask = eoscale_manager.open_raster(
-                raster_path=args.watermask
-            )
-            key_vegmask = eoscale_manager.open_raster(
-                raster_path=args.vegetationmask
-            )
-            key_urbanmask = eoscale_manager.open_raster(
-                raster_path=args.urbanmask
-            )
-            key_shadowmask = eoscale_manager.open_raster(
-                raster_path=args.shadowmask
-            )
-            key_wsf = eoscale_manager.open_raster(
-                raster_path=args.extracted_wsf
-            )
-            key_validstack = eoscale_manager.open_raster(
-                raster_path=args.valid_stack
-            )
-            inputs_final = [
-                key_image,
-                key_validstack,
-                key_watermask,
-                key_vegmask,
-                key_urbanmask,
-                key_shadowmask,
-                key_wsf,
-            ]
-            args.nodata_vhr = 0  # TODO : get nodata value from image profile
+            # ==============================
+            # BUILD STACK
+            # ==============================
 
-            logger.info("Before post process")
-            key_final_mask = eoexe.n_images_to_m_images_filter(
-                inputs=inputs_final,
-                image_filter=post_process,
-                filter_parameters=vars(args),
-                generate_output_profiles=eo_utils.three_uint8_profile,
-                stable_margin=100,  # TODO : add a stability margin parameter ?
-                context_manager=eoscale_manager,
-                multiproc_context=args.multiproc_context,
-                filter_desc="Post processing...",
+            logger.info("[0] Step: Build stack")
+
+            (
+                image,
+                validstack,
+                watermask,
+                vegmask,
+                urbanmask,
+                shadowmask,
+                wsf,
+                margin,
+                image_profile,
+            ) = build_stack_stackmask(args, slurp_manager)
+
+            # ==============================
+            # POST PROCESS
+            # ==============================
+
+            logger.info("[1] Step: Post processing")
+
+            input_profile = deepcopy(image_profile)
+            output_profile = eo_utils.three_uint8_profile(
+                [deepcopy(image_profile)]
             )
 
-            # 1st layer : stack mask
-            logger.debug(f"{args.categorized_watermask=}")
+            stack, height, markers  = mp_n_to_m_images(
+                inputs=[
+                    image[0][0],  # phr1
+                    image[0][1],  # phr2
+                    image[0][2],  # phr3
+                    image[0][3],  # phr4
+                    validstack[0][0],
+                    watermask[0][0],
+                    vegmask[0][0],
+                    urbanmask[0][0],
+                    shadowmask[0][0],
+                    wsf[0][0],
+                ],
+                image_height=input_profile["height"],
+                image_width=input_profile["width"],
+                output_profiles=output_profile,
+                output_keys=["stack", "height", "markers"],
+                func=post_process,
+                func_parameters=dict(
+                    winter_vegetation=args.winter_vegetation,
+                    value_classif_bare_ground=args.value_classif_bare_ground,
+                    value_classif_buildings=args.value_classif_buildings,
+                    value_classif_water=args.value_classif_water,
+                    value_classif_low_veg=args.value_classif_low_veg,
+                    value_classif_high_veg=args.value_classif_high_veg,
+                    value_classif_false_positive_buildings=args.value_classif_false_positive_buildings,
+                    value_classif_background=args.value_classif_background,
+                    sobel_image=args.sobel_image,
+                    regul_type=args.regul_type,
+                    building_threshold=args.building_threshold,
+                    building_erosion=args.building_erosion,
+                    erosion_radius=args.erosion_radius,
+                    bonus_gt=args.bonus_gt,
+                    malus_shadow=args.malus_shadow,
+                    binary_closing=args.binary_closing,
+                    binary_opening=args.binary_opening,
+                    remove_small_holes=args.remove_small_holes,
+                    remove_small_objects=args.remove_small_objects,
+                ),
+                context_manager=slurp_manager,
+                stable_margin=margin,
+            )
+
+            # ==============================
+            # WRITE STACK
+            # ==============================
+
             if args.categorized_watermask:
-                key_wbm = eoscale_manager.open_raster(
-                    raster_path=args.extracted_wbm
+
+                key_wbm = read(args.extracted_wbm)
+                wbm = key_wbm[0]
+                water = watermask[0][0]
+
+                categorized = infer_waterbodies_type(
+                    wbm,
+                    water,
+                    vars(args),
                 )
-                wbm = eoscale_manager.get_array(key_wbm)  # input_buffer[7]
-                watermask = eoscale_manager.get_array(key_watermask)
-                categorized_watermask = infer_waterbodies_type(
-                    wbm, watermask, vars(args)
-                )
-                stack = eoscale_manager.get_array(key_final_mask[0])
-                stack[0] = np.where(
-                    categorized_watermask != 0, categorized_watermask, stack[0]
-                )
-                profile_stack = eoscale_manager.get_profile(key_final_mask[0])
+
+                stack[:] = np.where(categorized != 0, categorized, stack)
                 io_utils.save_image(
-                    stack[0],
+                    stack,
                     args.stackmask,
-                    crs=profile_stack["crs"],
-                    transform=profile_stack["transform"],
+                    crs=output_profile[0]["crs"],
+                    transform=output_profile[0]["transform"],
                 )
             else:
-                eoscale_manager.write(
-                    key=key_final_mask[0], img_path=args.stackmask
+                slurp_manager.write_tif(
+                    data=stack,
+                    path=args.stackmask,
+                    target_profile=output_profile[0],
                 )
 
             if args.debug:
-                # 2nd layer : mask of (supposed) ground areas / (supposed) structures
-                stackmask_filename = path.basename(args.stackmask)
-                height_mask = str.replace(
-                    args.stackmask,
-                    path.splitext(stackmask_filename)[0],
-                    path.splitext(stackmask_filename)[0] + "_height",
-                )
-                eoscale_manager.write(
-                    key=key_final_mask[1], img_path=height_mask
+
+                base = path.splitext(args.stackmask)[0]
+
+                slurp_manager.write_tif(
+                    data=height,
+                    path=base + "_height.tif",
+                    target_profile=output_profile[1],
                 )
 
-                # 3rd layer : mask of markers (debug purpose)
-                markers_mask = str.replace(
-                    args.stackmask,
-                    path.splitext(stackmask_filename)[0],
-                    path.splitext(stackmask_filename)[0] + "_markers",
-                )
-                eoscale_manager.write(
-                    key=key_final_mask[2], img_path=markers_mask
+                slurp_manager.write_tif(
+                    data=markers,
+                    path=base + "_markers.tif",
+                    target_profile=output_profile[2],
                 )
 
             t1 = time.time()
+
             logger.info(
-                f"**** Stack masks for {args.file_vhr} (saved as {args.stackmask}) ****"
+                f"**** Stack masks saved as {args.stackmask} ****"
             )
             logger.info(
-                "Total time (user)       :\t" + utils.convert_time(t1 - t0)
+                "Total time (user):\t"
+                + utils.convert_time(t1 - t0)
             )
 
-        except FileNotFoundError as fnfe_exception:
-            logger.error("FileNotFoundError", fnfe_exception)
-
-        except PermissionError as pe_exception:
-            logger.error("PermissionError", pe_exception)
-
-        except ArithmeticError as ae_exception:
-            logger.error("ArithmeticError", ae_exception)
-
-        except MemoryError as me_exception:
-            logger.error("MemoryError", me_exception)
-
-        except Exception as exception:  # pylint: disable=broad-except
-            logger.error("oups...", exception)
+        except Exception:
+            logger.error("Unexpected error:", exc_info=True)
             traceback.print_exc()
+
+    logger.info("End of stackmask step\n")
 
 
 def main():
