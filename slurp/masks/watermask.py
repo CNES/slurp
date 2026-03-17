@@ -19,7 +19,7 @@
 # limitations under the License.
 
 
-"""Compute water mask of PHR image with help of Pekel and Hand images."""
+"""Compute water mask of VHR image with help of Pekel and Hand images."""
 
 import argparse
 import gc
@@ -235,10 +235,10 @@ def build_samples(
     valid_stack: np.ndarray,
     mask_hand: np.ndarray,
     mask_pekel: np.ndarray,
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     ndwi_threshold: float,
@@ -265,7 +265,7 @@ def build_samples(
         valid_stack (np.ndarray): Tile of the validity mask (0=valid, 1=invalid).
         mask_hand (np.ndarray): Tile mask for hand pixels.
         mask_pekel (np.ndarray): Tile mask for candidate water pixels.
-        phr1, phr2, phr3, phr4 (np.ndarray): Tiles of spectral bands.
+        vhr1, vhr2, vhr3, vhr4 (np.ndarray): Tiles of spectral bands.
         ndvi (np.ndarray): Tile of NDVI index.
         ndwi (np.ndarray): Tile of NDWI index.
         ndwi_threshold (float): NDWI threshold for water detection.
@@ -340,7 +340,7 @@ def build_samples(
     cols = np.concatenate((cols_pekel, cols_hand))
 
     # ---- stack features ----
-    base_features = [mask_pekel, phr1, phr2, phr3, phr4, ndvi, ndwi]
+    base_features = [mask_pekel, vhr1, vhr2, vhr3, vhr4, ndvi, ndwi]
     features = base_features + list(aux_inputs)
     im_stack = np.stack(features, axis=0)
 
@@ -351,10 +351,10 @@ def build_samples(
 
 def rf_prediction(
     valid_stack: np.ndarray,
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     aux_inputs=None,
@@ -368,8 +368,8 @@ def rf_prediction(
     ----------
     valid_stack : np.ndarray
         Validity mask (1, H, W)
-    phr : np.ndarray
-        PHR features
+    vhr : np.ndarray
+        VHR features
     ndvi : np.ndarray
         NDVI layer(s)
     ndwi : np.ndarray
@@ -396,10 +396,10 @@ def rf_prediction(
         aux_inputs = [aux_inputs]
     # ---- build feature stack ----------------------------------------------
     feature_layers = [
-        phr1,
-        phr2,
-        phr3,
-        phr4,
+        vhr1,
+        vhr2,
+        vhr3,
+        vhr4,
         ndvi,
         ndwi,
     ] + aux_inputs
@@ -565,7 +565,7 @@ def build_stack_water(args, slurp_manager):
             - file_ndvi : str
             - file_ndwi : str
         The following attributes will be updated in-place:
-            - nodata_phr
+            - nodata_vhr
             - shape
             - crs
             - transform
@@ -578,21 +578,21 @@ def build_stack_water(args, slurp_manager):
     -------
     key_ndvi : list
     key_ndwi : list
-    key_phr : list
+    key_vhr : list
     key_valid_stack : list
     margin : int
     """
 
     # ==============================
-    # PHR (VHR image)
+    # VHR (VHR image)
     # ==============================
 
-    key_phr, profile_phr = read_and_get_profile(args.file_vhr)
+    key_vhr, profile_vhr = read_and_get_profile(args.file_vhr)
 
-    args.nodata_phr = profile_phr.get("nodata")
-    args.shape = (profile_phr["height"], profile_phr["width"])
-    args.crs = profile_phr["crs"]
-    args.transform = profile_phr["transform"]
+    args.nodata_vhr = profile_vhr.get("nodata")
+    args.shape = (profile_vhr["height"], profile_vhr["width"])
+    args.crs = profile_vhr["crs"]
+    args.transform = profile_vhr["transform"]
     args.rpc = None  # Not handled in slurp mode
 
     # ==============================
@@ -620,10 +620,10 @@ def build_stack_water(args, slurp_manager):
     return (
         [key_ndvi],
         [key_ndwi],
-        [key_phr],
+        [key_vhr],
         [key_valid_stack], 
         margin,
-        profile_phr,
+        profile_vhr,
         profile_ndwi
     )
 
@@ -819,13 +819,13 @@ def nominal_case_predict(
     slurp_manager,
     ndvi,
     ndwi,
-    phr,
+    vhr,
     valid_stack,
     local_mask_pekel,
     margin,
     mask_hand,
     mask_pekel0,
-    phr_profile
+    vhr_profile
 ):
     """
     Perform supervised classification to predict a water mask using Random Forest.
@@ -841,13 +841,13 @@ def nominal_case_predict(
         slurp_manager (slurpContextManager): SLURP execution context for multiprocessing.
         ndvi (List[np.ndarray]): NDVI tiles.
         ndwi (List[np.ndarray]): NDWI tiles.
-        phr (List[List[np.ndarray]]): List of spectral band tiles (phr1 to phr4).
+        vhr (List[List[np.ndarray]]): List of spectral band tiles (vhr1 to vhr4).
         valid_stack (List[np.ndarray]): Validity mask tiles (0=valid, else=invalid).
         local_mask_pekel (np.ndarray): Mask tile of candidate water pixels.
         margin (int): Stable margin for tile processing.
         mask_hand (np.ndarray): Mask tile for valid "other" pixels.
         mask_pekel0 (np.ndarray): Mask of candidate water pixels for reference.
-        phr_profile (dict): Raster profile for the spectral bands.
+        vhr_profile (dict): Raster profile for the spectral bands.
 
     Returns:
         Tuple containing:
@@ -880,9 +880,9 @@ def nominal_case_predict(
     args.nb_valid_water_pixels = np.count_nonzero(
         np.logical_and(local_mask_pekel, valid_stack[0][0] == 0)
     )
-    input_profile = deepcopy(phr_profile)
+    input_profile = deepcopy(vhr_profile)
     output_profile = eo_utils.single_uint8_profile(
-        [deepcopy(phr_profile)]
+        [deepcopy(vhr_profile)]
     )
 
     args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
@@ -890,10 +890,10 @@ def nominal_case_predict(
         valid_stack[0][0],
         mask_hand[0],
         local_mask_pekel,
-        phr[0][0],
-        phr[0][1],
-        phr[0][2],
-        phr[0][3],
+        vhr[0][0],
+        vhr[0][1],
+        vhr[0][2],
+        vhr[0][3],
         ndvi[0][0],
         ndwi[0][0],
     ]
@@ -945,10 +945,10 @@ def nominal_case_predict(
     # -- Predict full tile -- #
     input_for_prediction = [
         valid_stack[0][0],
-        phr[0][0],
-        phr[0][1],
-        phr[0][2],
-        phr[0][3],
+        vhr[0][0],
+        vhr[0][1],
+        vhr[0][2],
+        vhr[0][3],
         ndvi[0][0],
         ndwi[0][0],
     ]
@@ -1373,7 +1373,7 @@ def slurp_watermask(
             # BUILD STACK
             # ==============================
 
-            ndvi, ndwi, phr, valid_stack, margin, phr_profile, ndwi_profile = (
+            ndvi, ndwi, vhr, valid_stack, margin, vhr_profile, ndwi_profile = (
                 build_stack_water(args, slurp_manager)
             )
 
@@ -1442,13 +1442,13 @@ def slurp_watermask(
                     slurp_manager,
                     ndvi,
                     ndwi,
-                    phr,
+                    vhr,
                     valid_stack,
                     local_mask_pekel,
                     margin,
                     mask_hand,
                     mask_pekel0,
-                    phr_profile
+                    vhr_profile
                 )
 
             # ==============================
