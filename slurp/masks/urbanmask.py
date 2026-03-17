@@ -63,7 +63,7 @@ def apply_vegetationmask(
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments, must contain the keys
     "vegmask_min_value" and "veg_binary_dilation"
-    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
+    :returns: valid_vhr (boolean numpy array, True = valid data, False = no data)
     """
     non_veg = np.where(
         vegmask < vegmask_min_value, True, False
@@ -85,7 +85,7 @@ def apply_watermask(
     :param list input_buffer: VHR input image [valid_stack, watermask]
     :param list input_profiles: image profile (not used but necessary for eoscale)
     :param dict params: dictionary of arguments (not used but necessary for eoscale)
-    :returns: valid_phr (boolean numpy array, True = valid data, False = no data)
+    :returns: valid_vhr (boolean numpy array, True = valid data, False = no data)
     """
     valid_stack = np.logical_and(valid_stack == 0, watermask == 0)
 
@@ -122,10 +122,10 @@ def get_grid_indexes_from_mask(nb_samples, valid_mask, mask_ground_truth):
 def build_samples(
     valid_stack: np.ndarray,
     gt: np.ndarray,
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     value_classif: int,
@@ -237,10 +237,10 @@ def build_samples(
 
     features = [
         gt,
-        phr1,
-        phr2,
-        phr3,
-        phr4,
+        vhr1,
+        vhr2,
+        vhr3,
+        vhr4,
         ndvi,
         ndwi,
     ] + list(aux_inputs)
@@ -261,10 +261,10 @@ def build_samples(
 def rf_prediction(
     original_valid_stack: np.ndarray,
     current_valid_stack: np.ndarray,
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     aux_inputs=None,
@@ -294,10 +294,10 @@ def rf_prediction(
 
     # VHR stack equivalent to input_buffer[2:]
     feature_layers = [
-        phr1,
-        phr2,
-        phr3,
-        phr4,
+        vhr1,
+        vhr2,
+        vhr3,
+        vhr4,
         ndvi,
         ndwi,
     ] + aux_inputs
@@ -367,14 +367,14 @@ def nominal_case_urbanmask(
     gt,
     ndvi,
     ndwi,
-    phr,
+    vhr,
     valid_stack,
     original_valid_stack,
     files_layers,
     margin,
     t0,
     time_stack,
-    phr_profile,
+    vhr_profile,
     valid_stack_profile
 ):
     """
@@ -414,10 +414,10 @@ def nominal_case_urbanmask(
     input_for_samples = [
         valid_stack[0][0],
         gt[0][0],
-        phr[0][0],
-        phr[0][1],
-        phr[0][2],
-        phr[0][3],
+        vhr[0][0],
+        vhr[0][1],
+        vhr[0][2],
+        vhr[0][3],
         ndvi[0][0],
         ndwi[0][0],
     ]
@@ -509,10 +509,10 @@ def nominal_case_urbanmask(
     input_for_prediction = [
         original_valid_stack[0][0],
         valid_stack[0][0],
-        phr[0][0],
-        phr[0][1],
-        phr[0][2],
-        phr[0][3],
+        vhr[0][0],
+        vhr[0][1],
+        vhr[0][2],
+        vhr[0][3],
         ndvi[0][0],
         ndwi[0][0]
     ]
@@ -596,24 +596,24 @@ def build_stack_urban(args, slurp_manager):
     gt : list
     ndvi : list
     ndwi : list
-    phr : list
+    vhr : list
     valid_stack : list
     margin : int
-    phr_profile : dict
+    vhr_profile : dict
     """
 
     logger.info("Loading base rasters")
 
     # ==============================
-    # PHR (VHR image)
+    # vhr (VHR image)
     # ==============================
 
-    key_phr, phr_profile = read_and_get_profile(args.file_vhr)
+    key_vhr, vhr_profile = read_and_get_profile(args.file_vhr)
 
-    args.nodata_phr = phr_profile.get("nodata")
-    args.shape = (phr_profile["height"], phr_profile["width"])
-    args.crs = phr_profile["crs"]
-    args.transform = phr_profile["transform"]
+    args.nodata_vhr = vhr_profile.get("nodata")
+    args.shape = (vhr_profile["height"], vhr_profile["width"])
+    args.crs = vhr_profile["crs"]
+    args.transform = vhr_profile["transform"]
     args.rpc = None
 
     # ==============================
@@ -708,11 +708,11 @@ def build_stack_urban(args, slurp_manager):
         [key_gt],
         [key_ndvi],
         [key_ndwi],
-        [key_phr],
+        [key_vhr],
         [valid_stack],
         [original_valid_stack],
         margin,
-        phr_profile,
+        vhr_profile,
         valid_stack_profile
     )
 
@@ -961,11 +961,11 @@ def slurp_urbanmask(
                 gt,
                 ndvi,
                 ndwi,
-                phr,
+                vhr,
                 valid_stack,
                 original_valid_stack,
                 margin,
-                phr_profile,
+                vhr_profile,
                 valid_stack_profile
             ) = build_stack_urban(args, slurp_manager)
 
@@ -1007,14 +1007,14 @@ def slurp_urbanmask(
                     gt,
                     ndvi,
                     ndwi,
-                    phr,
+                    vhr,
                     valid_stack,
                     original_valid_stack,
                     files_layers,
                     margin,
                     t0,
                     time_stack,
-                    phr_profile,
+                    vhr_profile,
                     valid_stack_profile
                 )
 
@@ -1030,9 +1030,9 @@ def slurp_urbanmask(
                     f"-> mask saved as {args.urbanmask} ****"
                 )
 
-                input_profile = deepcopy(phr_profile)
+                input_profile = deepcopy(vhr_profile)
                 output_profile = eo_utils.single_uint8_profile(
-                    [deepcopy(phr_profile)]
+                    [deepcopy(vhr_profile)]
                 )
 
                 predict = mp_n_to_m_images(
@@ -1059,9 +1059,9 @@ def slurp_urbanmask(
                     f"-> void mask saved as {args.urbanmask} ****"
                 )
 
-                input_profile = deepcopy(phr_profile)
+                input_profile = deepcopy(vhr_profile)
                 output_profile = eo_utils.single_uint8_profile(
-                    [deepcopy(phr_profile)]
+                    [deepcopy(vhr_profile)]
                 )
 
                 predict = mp_n_to_m_images(
