@@ -225,16 +225,16 @@ def compute_mp_tiles(
 
     return strips
 
-
 def mp_n_to_m_images(
     inputs: list,
     image_height: int,
     image_width: int,
     output_keys: List[str],
     output_profiles: List[dict],
-    context_manager: slurpContextManager,
+    context_manager,
     func: Callable,
     func_parameters: Union[dict, None] = None,
+    aux_inputs: Optional[List[np.ndarray]] = None,
     stable_margin: int = 0,
     tile_mode: Union[bool, None] = None,
     specific_tile_size: Union[int, None] = None,
@@ -243,159 +243,352 @@ def mp_n_to_m_images(
     debug: bool = False,
 ) -> Union[List[str], List[np.ndarray], Tuple[np.ndarray]]:
     """
-    Process n input images to produce m output images using a multiprocessing
-    map/reduce-like paradigm.
-
-    The input images are split into tiles or strips depending on the chosen
-    parallelization strategy. Each tile is processed independently by the
-    provided function ``func`` and the results are then merged to reconstruct
-    the final output images.
-
-    Args:
-        inputs (list): List of input images. These can be numpy arrays
-            (in-memory mode) or file paths (streaming mode).
-        image_height (int): Height of the input images.
-        image_width (int): Width of the input images.
-        output_keys (List[str]): List of output identifiers used by the
-            context manager to generate output file paths.
-        output_profiles (List[dict]): Raster profiles describing the
-            metadata of each output image.
-        context_manager (slurpContextManager): Context manager responsible
-            for multiprocessing management and I/O handling.
-        func (Callable): Processing function applied to each tile. The
-            function must return either a numpy array or a tuple of arrays
-            corresponding to the output images.
-        func_parameters (Union[dict, None]): Optional dictionary of
-            parameters passed to the processing function.
-        stable_margin (int): Margin added around each tile to ensure stable
-            computations near tile borders.
-        tile_mode (Union[bool, None]): If True, the image is split into
-            square tiles. If False, the image is split into strips. If None,
-            the default value from the context manager is used.
-        specific_tile_size (Union[int, None]): Optional fixed tile or strip
-            size. If None, the size is automatically computed based on the
-            image dimensions and the number of workers.
-        strip_along_lines (bool): When using strip mode (tile_mode=False),
-            controls the orientation of the strips: horizontal (True) or
-            vertical (False).
-        binary (bool): If True, outputs are written as binary rasters.
-        debug (bool): If True and development mode is enabled, intermediate
-            outputs are written to disk for debugging purposes.
-
-    Returns:
-        Union[List[str], List[np.ndarray], Tuple[np.ndarray]]:
-            - List[str]: Paths to output images when processing is done
-              using file streaming.
-            - List[np.ndarray]: Output images stored in memory when
-              processing in in-memory mode.
-            - Tuple[np.ndarray]: Returned when the processing function
-              directly outputs multiple arrays.
+    Process n input images to produce m outputs using optional multiprocessing.
     """
+
+    func_parameters, aux_inputs, has_aux = _validate_inputs(
+        inputs,
+        func,
+        context_manager,
+        func_parameters,
+        aux_inputs,
+        image_height,
+        image_width,
+    )
+
+    # --------------------------------------------------------
+    # SINGLE PROCESS MODE
+    # --------------------------------------------------------
+    if context_manager.pool is None:
+        return _run_singleprocess(
+            inputs,
+            func,
+            func_parameters,
+            aux_inputs,
+            has_aux,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+            debug,
+        )
+
+    # --------------------------------------------------------
+    # MULTIPROCESSING
+    # --------------------------------------------------------
+    tiles = _compute_tiles(
+        image_height,
+        image_width,
+        stable_margin,
+        context_manager,
+        tile_mode,
+        specific_tile_size,
+        strip_along_lines,
+    )
+
+    if context_manager.in_memory:
+        return _run_in_memory(
+            inputs,
+            aux_inputs,
+            has_aux,
+            tiles,
+            func,
+            func_parameters,
+            context_manager,
+            image_height,
+            image_width,
+            output_profiles,
+            output_keys,
+            binary,
+            debug,
+        )
+
+    return _run_streaming(
+        inputs,
+        aux_inputs,
+        has_aux,
+        tiles,
+        func,
+        func_parameters,
+        context_manager,
+        output_profiles,
+        output_keys,
+        binary,
+        debug,
+    )
+
+
+# ============================================================
+# VALIDATION
+# ============================================================
+
+def _validate_inputs(
+    inputs,
+    func,
+    context_manager,
+    func_parameters,
+    aux_inputs,
+    h,
+    w,
+):
     if len(inputs) < 1:
         raise ValueError("At least one input image must be given.")
 
     if func is None:
-        raise ValueError("A filter must be set !")
+        raise ValueError("A filter must be set!")
 
     if context_manager is None:
-        raise ValueError("The Context Manager must be given !")
+        raise ValueError("The Context Manager must be given!")
 
-    # Sometimes filter does not need parameters
-    if func_parameters is None:
-        func_parameters = {}
+    func_parameters = func_parameters or {}
 
-    if context_manager.pool is None:
-        # no multiprocessing
-        for input_file in inputs:
-            if isinstance(input_file, str):
-                raise ValueError("Without multiprocessing the inputs must be a numpy arrays.")
+    has_aux = aux_inputs is not None and len(aux_inputs) > 0
+    aux_inputs = aux_inputs or []
 
-        output = func(*inputs, **func_parameters)
+    for arr in aux_inputs:
+        if arr.shape != (h, w):
+            raise ValueError("All aux_inputs must match image dimensions")
 
-        if isinstance(output, np.ndarray):  # One output
-            if debug and context_manager.dev_mode:  # Write output
-                context_manager.write_tif(output, output_keys[0], output_profiles[0], binary)
-            return [output]
+    return func_parameters, aux_inputs, has_aux
 
-        if isinstance(output, tuple):  # Multiple outputs
-            if debug and context_manager.dev_mode:  # Write output
-                for i, data in enumerate(output):
-                    context_manager.write_tif(data, output_keys[i], output_profiles[i], binary)
-            return list(output)
 
-        # else
-        raise ValueError(f"Wrong output, type {type(output)} is not recognized.")
+# ============================================================
+# HELPERS
+# ============================================================
 
-    else:  # multiprocessing
-        # compute the strips
-        tiles = compute_mp_tiles(
-            image_height=image_height,
-            image_width=image_width,
-            stable_margin=stable_margin,
-            nb_workers=context_manager.nb_workers,
-            tile_mode=tile_mode if tile_mode is not None else context_manager.tile_mode,
-            specific_tile_size=specific_tile_size,
-            strip_along_lines=strip_along_lines,
-        )
+def _build_params(base_params, aux, has_aux):
+    params = dict(base_params)
+    if has_aux:
+        params["aux_inputs"] = aux
+    return params
 
-        out: Union[List[str], List[np.ndarray]]
-        if context_manager.in_memory:
-            # inputs are numpy arrays
-            list_input = [
-                (
-                    [
-                        inputs[i][
-                            tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
-                            tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
-                        ]
-                        for i in range(len(inputs))
-                    ],
-                    func,
-                    func_parameters,
-                    tile,
-                )
-                for tile in tiles
-            ]
 
-            out_chunks = context_manager.pool.starmap(
-                mp_execute_from_arrays, tqdm.tqdm(list_input, total=len(list_input))
+def _compute_tiles(
+    image_height,
+    image_width,
+    stable_margin,
+    context_manager,
+    tile_mode,
+    specific_tile_size,
+    strip_along_lines,
+):
+    return compute_mp_tiles(
+        image_height=image_height,
+        image_width=image_width,
+        stable_margin=stable_margin,
+        nb_workers=context_manager.nb_workers,
+        tile_mode=tile_mode
+        if tile_mode is not None
+        else context_manager.tile_mode,
+        specific_tile_size=specific_tile_size,
+        strip_along_lines=strip_along_lines,
+    )
+
+
+# ============================================================
+# SINGLE PROCESS
+# ============================================================
+
+def _run_singleprocess(
+    inputs,
+    func,
+    func_parameters,
+    aux_inputs,
+    has_aux,
+    context_manager,
+    output_keys,
+    output_profiles,
+    binary,
+    debug,
+):
+    for inp in inputs:
+        if isinstance(inp, str):
+            raise ValueError(
+                "Without multiprocessing the inputs must be numpy arrays."
             )
 
-            out = [
-                np.zeros((image_height, image_width), dtype=output_profiles[i]["dtype"])
-                for i in range(len(output_profiles))
-            ]
+    params = _build_params(func_parameters, aux_inputs, has_aux)
+    output = func(*inputs, **params)
 
-            for chunk_res_dict in out_chunks:
-                tile = chunk_res_dict["tile"]
-                for i in range(len(output_profiles)):
-                    out[i][tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1] = chunk_res_dict["data"][
-                        i
-                    ].copy()
+    outputs = _normalize_output(output)
 
-            if debug and context_manager.dev_mode:
-                # Write output
-                for i, data in enumerate(out):
-                    context_manager.write_tif(data, output_keys[i], output_profiles[i], binary)
+    if debug and context_manager.dev_mode:
+        _write_debug_outputs(
+            outputs,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+        )
 
-        else:
-            # inputs are paths
-            if debug and context_manager.dev_mode:
-                output_paths = [
-                    context_manager.get_path(output_key, key=context_manager.debug_key) for output_key in output_keys
-                ]
-            else:
-                output_paths = [
-                    context_manager.get_path(output_key, key=context_manager.tmp_key) for output_key in output_keys
-                ]
-            list_input = [
-                (inputs, output_paths, func, func_parameters, output_profiles, context_manager.lock, tile, binary)
-                for tile in tiles
-            ]
-            context_manager.pool.starmap(mp_execute_from_paths, tqdm.tqdm(list_input))
-            out = output_paths
+    return outputs
 
-    return out
+
+# ============================================================
+# IN MEMORY MULTIPROCESSING
+# ============================================================
+
+def _run_in_memory(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    image_height,
+    image_width,
+    output_profiles,
+    output_keys,
+    binary,
+    debug,
+):
+
+    jobs = []
+
+    for tile in tiles:
+        tile_inputs = [_slice_array(arr, tile) for arr in inputs]
+
+        tile_aux = None
+        if has_aux:
+            tile_aux = [_slice_array(arr, tile) for arr in aux_inputs]
+
+        params = _build_params(func_parameters, tile_aux, has_aux)
+
+        jobs.append((tile_inputs, func, params, tile))
+
+    out_chunks = context_manager.pool.starmap(
+        mp_execute_from_arrays,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+    outputs = _reconstruct_outputs(
+        out_chunks,
+        image_height,
+        image_width,
+        output_profiles,
+    )
+
+    if debug and context_manager.dev_mode:
+        _write_debug_outputs(
+            outputs,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+        )
+
+    return outputs
+
+
+# ============================================================
+# STREAMING MODE
+# ============================================================
+
+def _run_streaming(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    output_profiles,
+    output_keys,
+    binary,
+    debug,
+):
+
+    key = (
+        context_manager.debug_key
+        if debug and context_manager.dev_mode
+        else context_manager.tmp_key
+    )
+
+    output_paths = [
+        context_manager.get_path(k, key) for k in output_keys
+    ]
+
+    params = _build_params(
+        func_parameters,
+        aux_inputs if has_aux else None,
+        has_aux,
+    )
+
+    jobs = [
+        (
+            inputs,
+            output_paths,
+            func,
+            params,
+            output_profiles,
+            context_manager.lock,
+            tile,
+            binary,
+        )
+        for tile in tiles
+    ]
+
+    context_manager.pool.starmap(
+        mp_execute_from_paths,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+    return output_paths
+
+
+# ============================================================
+# UTILITIES
+# ============================================================
+
+def _slice_array(arr, tile):
+    return arr[
+        tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
+        tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
+    ]
+
+
+def _normalize_output(output):
+    if isinstance(output, np.ndarray):
+        return [output]
+
+    if isinstance(output, tuple):
+        return list(output)
+
+    raise ValueError(f"Wrong output type {type(output)}.")
+
+
+def _reconstruct_outputs(chunks, h, w, output_profiles):
+    outputs = [
+        np.zeros((h, w), dtype=output_profiles[i]["dtype"])
+        for i in range(len(output_profiles))
+    ]
+
+    for chunk in chunks:
+        tile = chunk["tile"]
+        for i in range(len(outputs)):
+            outputs[i][
+                tile.start_y : tile.end_y + 1,
+                tile.start_x : tile.end_x + 1,
+            ] = chunk["data"][i].copy()
+
+    return outputs
+
+
+def _write_debug_outputs(
+    outputs,
+    context_manager,
+    output_keys,
+    output_profiles,
+    binary,
+):
+    for i, data in enumerate(outputs):
+        context_manager.write_tif(
+            data,
+            output_keys[i],
+            output_profiles[i],
+            binary,
+        )
 
 
 def mp_execute_from_paths(
