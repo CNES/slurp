@@ -31,8 +31,6 @@ import traceback
 from os import path
 from copy import deepcopy
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 import numpy as np
 
 from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars

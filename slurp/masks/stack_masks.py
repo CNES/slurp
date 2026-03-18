@@ -35,8 +35,6 @@ import traceback
 from os import path
 from copy import deepcopy
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
