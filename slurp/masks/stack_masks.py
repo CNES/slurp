@@ -58,7 +58,29 @@ RIVER = 3
 
 def build_stack_stackmask(args, slurp_manager):
     """
-    Prepare inputs for stack mask post-processing.
+    Prepare inputs required for stack mask post-processing.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Input arguments containing paths to required rasters.
+    slurp_manager : object
+        SLURP manager instance (unused but kept for interface consistency).
+
+    Returns
+    -------
+    tuple
+        (
+            vhr_image_list,
+            valid_stack_list,
+            watermask_list,
+            vegmask_list,
+            urbanmask_list,
+            shadowmask_list,
+            wsf_list,
+            margin,
+            image_profile,
+        )
     """
 
     logger.info("Loading base rasters")
@@ -125,7 +147,53 @@ def watershed_regul_buildings(
     value_classif_background: int,
 ):
     """
-    Clean and apply watershed regulation for buildings
+    Apply watershed-based regularization to refine building classification.
+
+    Parameters
+    ----------
+    input_image : np.ndarray
+        Multi-band VHR image (bands, height, width).
+    urbanmask : np.ndarray
+        Urban probability or classification mask.
+    wsf : np.ndarray
+        World Settlement Footprint mask used as building ground truth.
+    vegmask : np.ndarray
+        Vegetation classification mask.
+    watermask : np.ndarray
+        Binary water mask.
+    shadowmask : np.ndarray
+        Shadow classification mask.
+    sobel_image : str
+        Image type used for edge detection ("ndvi", "nir", or "rgb").
+    regul_type : str
+        Regulation mode controlling which classes are enforced.
+    building_threshold : int
+        Percentile threshold applied to urbanmask.
+    building_erosion : int
+        Erosion radius applied to detected buildings.
+    erosion_radius : int
+        Morphological erosion radius for marker generation.
+    bonus_gt : int
+        Bonus value applied to ground-truth building pixels.
+    malus_shadow : int
+        Penalty applied to shadow pixels.
+    value_classif_bare_ground : int
+        Output value for bare ground class.
+    value_classif_buildings : int
+        Output value for buildings class.
+    value_classif_low_veg : int
+        Output value for low vegetation class.
+    value_classif_high_veg : int
+        Output value for high vegetation class.
+    value_classif_false_positive_buildings : int
+        Output value for false positive buildings.
+    value_classif_background : int
+        Output value for background class.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        (segmentation_map, markers)
     """
 
     # Mono image for edge detection
@@ -276,8 +344,67 @@ def post_process(
     remove_small_objects: int | None = None,
 ):
     """
-    SLURP post-processing kernel (explicit inputs version)
-    phr1..phr4 correspond to the 4 bands of the input VHR image.
+    Perform SLURP post-processing to generate final classification layers.
+
+    Parameters
+    ----------
+    phr1, phr2, phr3, phr4 : np.ndarray
+        Four spectral bands of the VHR image.
+    valid_stack : np.ndarray
+        Validity mask defining nodata regions.
+    watermask : np.ndarray
+        Binary water mask.
+    vegmask : np.ndarray
+        Vegetation classification mask.
+    urbanmask : np.ndarray
+        Urban probability or classification mask.
+    shadowmask : np.ndarray
+        Shadow classification mask.
+    wsf : np.ndarray
+        World Settlement Footprint mask.
+    winter_vegetation : bool
+        Enable winter vegetation correction.
+    value_classif_bare_ground : int
+        Output value for bare ground class.
+    value_classif_buildings : int
+        Output value for buildings class.
+    value_classif_water : int
+        Output value for water class.
+    value_classif_low_veg : int
+        Output value for low vegetation class.
+    value_classif_high_veg : int
+        Output value for high vegetation class.
+    value_classif_false_positive_buildings : int
+        Output value for false positive buildings.
+    value_classif_background : int
+        Output value for background class.
+    sobel_image : str
+        Image type used for watershed edge detection.
+    regul_type : str
+        Regulation mode applied during watershed segmentation.
+    building_threshold : int
+        Percentile threshold for building detection.
+    building_erosion : int
+        Morphological erosion radius for buildings.
+    erosion_radius : int
+        Radius used for marker erosion.
+    bonus_gt : int
+        Bonus applied to ground-truth buildings.
+    malus_shadow : int
+        Penalty applied to shadow areas.
+    binary_closing : int | None, optional
+        Closing kernel size for morphological cleaning.
+    binary_opening : int | None, optional
+        Opening kernel size for morphological cleaning.
+    remove_small_holes : int | None, optional
+        Minimum hole size removed during cleaning.
+    remove_small_objects : int | None, optional
+        Minimum object size removed during cleaning.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        (classification_layer, height_layer, markers_layer)
     """
 
     # Combine bands into a single array for watershed input

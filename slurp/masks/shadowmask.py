@@ -179,6 +179,11 @@ def build_stack_shadow(args, slurp_manager):
     """
     Prepare inputs for shadow mask processing.
 
+    Parameters
+    ----------
+    slurp_manager : object
+        SLURP manager instance (unused but kept for interface consistency).
+
     Returns
     -------
     phr : list
