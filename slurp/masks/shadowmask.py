@@ -45,10 +45,10 @@ logger = logging.getLogger("slurp")
 
 
 def compute_thresholds(
-    absolute_threshold, local_phr, nodata, percentile, th_rgb, th_nir
+    absolute_threshold, local_vhr, nodata, percentile, th_rgb, th_nir
 ):
     """
-    Compute thresholds for each band in the provided PHR image.
+    Compute thresholds for each band in the provided VHR image.
     If `absolute_threshold` is provided, the function will use the
     specified value as the threshold for all bands. If not, it calculates thresholds based on the
     specified percentile for each band, with different thresholds for RGB bands and NIR band.
@@ -58,22 +58,22 @@ def compute_thresholds(
         th_bands = np.zeros(4)
         for cpt in range(3):
             min_band = np.percentile(
-                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                local_vhr[cpt][np.where(local_vhr[cpt] != nodata)],
                 percentile,
             )
             max_percentile = np.percentile(
-                local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+                local_vhr[cpt][np.where(local_vhr[cpt] != nodata)],
                 100 - percentile,
             )
             th_bands[cpt] = min_band + th_rgb * (max_percentile - min_band)
 
         cpt = 3
         min_band = np.percentile(
-            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            local_vhr[cpt][np.where(local_vhr[cpt] != nodata)],
             percentile,
         )
         max_percentile = np.percentile(
-            local_phr[cpt][np.where(local_phr[cpt] != nodata)],
+            local_vhr[cpt][np.where(local_vhr[cpt] != nodata)],
             100 - percentile,
         )
         th_bands[cpt] = min_band + th_nir * (max_percentile - min_band)
@@ -87,10 +87,10 @@ def compute_thresholds(
 
 
 def compute_shadowmask(
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     valid_stack: np.ndarray,
     watermask: np.ndarray,
     thresholds: list,
@@ -102,7 +102,7 @@ def compute_shadowmask(
 
     Parameters
     ----------
-    phr1, phr2, phr3, phr4 : np.ndarray
+    vhr1, vhr2, vhr3, vhr4 : np.ndarray
         Spectral bands.
     valid_stack : np.ndarray
         Validity mask.
@@ -124,10 +124,10 @@ def compute_shadowmask(
     # ------------------------------
 
     raw_shadow_mask = (
-        (phr1 < thresholds[0])
-        & (phr2 < thresholds[1])
-        & (phr3 < thresholds[2])
-        & (phr4 < thresholds[3])
+        (vhr1 < thresholds[0])
+        & (vhr2 < thresholds[1])
+        & (vhr3 < thresholds[2])
+        & (vhr4 < thresholds[3])
     )
 
     # Remove water shadows
@@ -186,25 +186,25 @@ def build_stack_shadow(args, slurp_manager):
 
     Returns
     -------
-    phr : list
+    vhr : list
     valid_stack : list
     watermask : list
     margin : int
-    phr_profile : dict
+    vhr_profile : dict
     """
 
     logger.info("Loading base rasters")
 
     # ==============================
-    # PHR
+    # VHR
     # ==============================
 
-    key_phr, phr_profile = read_and_get_profile(args.file_vhr)
+    key_vhr, vhr_profile = read_and_get_profile(args.file_vhr)
 
-    args.nodata_phr = phr_profile.get("nodata")
-    args.shape = (phr_profile["height"], phr_profile["width"])
-    args.crs = phr_profile["crs"]
-    args.transform = phr_profile["transform"]
+    args.nodata_vhr = vhr_profile.get("nodata")
+    args.shape = (vhr_profile["height"], vhr_profile["width"])
+    args.crs = vhr_profile["crs"]
+    args.transform = vhr_profile["transform"]
 
     # ==============================
     # VALID STACK
@@ -223,7 +223,7 @@ def build_stack_shadow(args, slurp_manager):
     else:
         logger.info("No watermask provided ? creating empty mask")
 
-        empty_profile = deepcopy(phr_profile)
+        empty_profile = deepcopy(vhr_profile)
         empty_profile["count"] = 1
         empty_profile["dtype"] = np.uint8
 
@@ -234,11 +234,11 @@ def build_stack_shadow(args, slurp_manager):
     logger.info("Shadow stack ready")
 
     return (
-        [key_phr],
+        [key_vhr],
         [key_valid_stack],
         [key_watermask],
         margin,
-        phr_profile,
+        vhr_profile,
     )
 
 def getarguments() -> dict:
@@ -401,11 +401,11 @@ def slurp_shadowmask(
             logger.info("[0] Step: Build stack")
 
             (
-                phr,
+                vhr,
                 valid_stack,
                 watermask,
                 margin,
-                phr_profile,
+                vhr_profile,
             ) = build_stack_shadow(args, slurp_manager)
 
             # ==============================
@@ -414,12 +414,12 @@ def slurp_shadowmask(
 
             logger.info("[1] Step: Compute thresholds")
 
-            local_phr = phr[0]
+            local_vhr = vhr[0]
 
             th_bands = compute_thresholds(
                 args.absolute_threshold,
-                local_phr,
-                args.nodata_phr,
+                local_vhr,
+                args.nodata_vhr,
                 args.percentile,
                 args.th_rgb,
                 args.th_nir,
@@ -437,18 +437,18 @@ def slurp_shadowmask(
 
             logger.info("[2] Step: Shadow mask")
 
-            input_profile = deepcopy(phr_profile)
+            input_profile = deepcopy(vhr_profile)
             output_profile = eo_utils.single_uint8_profile(
-                [deepcopy(phr_profile)]
+                [deepcopy(vhr_profile)]
             )
             
 
             predict = mp_n_to_m_images(
                 inputs=[
-                    phr[0][0],
-                    phr[0][1],
-                    phr[0][2],
-                    phr[0][3],
+                    vhr[0][0],
+                    vhr[0][1],
+                    vhr[0][2],
+                    vhr[0][3],
                     valid_stack[0][0],
                     watermask[0][0],
                 ],

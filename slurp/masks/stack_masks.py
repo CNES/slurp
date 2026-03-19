@@ -312,10 +312,10 @@ def choose_wb(kind_waterbodies):
 
 
 def post_process(
-    phr1: np.ndarray,
-    phr2: np.ndarray,
-    phr3: np.ndarray,
-    phr4: np.ndarray,
+    vhr1: np.ndarray,
+    vhr2: np.ndarray,
+    vhr3: np.ndarray,
+    vhr4: np.ndarray,
     valid_stack: np.ndarray,
     watermask: np.ndarray,
     vegmask: np.ndarray,
@@ -348,7 +348,7 @@ def post_process(
 
     Parameters
     ----------
-    phr1, phr2, phr3, phr4 : np.ndarray
+    vhr1, vhr2, vhr3, vhr4 : np.ndarray
         Four spectral bands of the VHR image.
     valid_stack : np.ndarray
         Validity mask defining nodata regions.
@@ -408,8 +408,8 @@ def post_process(
     """
 
     # Combine bands into a single array for watershed input
-    input_image = np.stack([phr1, phr2, phr3, phr4], axis=0)
-    h, w = phr1.shape
+    input_image = np.stack([vhr1, vhr2, vhr3, vhr4], axis=0)
+    h, w = vhr1.shape
 
     stack = np.zeros((1, h, w), dtype=np.uint8)
 
@@ -792,10 +792,10 @@ def slurp_stackmask(
 
             stack, height, markers  = mp_n_to_m_images(
                 inputs=[
-                    image[0][0],  # phr1
-                    image[0][1],  # phr2
-                    image[0][2],  # phr3
-                    image[0][3],  # phr4
+                    image[0][0],  # vhr1
+                    image[0][1],  # vhr2
+                    image[0][2],  # vhr3
+                    image[0][3],  # vhr4
                     validstack[0][0],
                     watermask[0][0],
                     vegmask[0][0],
