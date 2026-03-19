@@ -25,6 +25,7 @@ This module contains some utils function for slurp processing.
 import os
 from collections import namedtuple
 from typing import Any, Dict, Tuple
+from copy import deepcopy
 
 import numpy as np
 import rasterio
@@ -106,3 +107,46 @@ def read_window(img_path: str, tile: MpTile) -> np.ndarray:
             data = src.read(1, window=Window(col_off, row_off, tile.width_margin, tile.height_margin))
 
     return data
+
+def create_image(
+    profile: Dict[str, Any],
+    fill_value: Any = 0,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """
+    Create an empty image ndarray from an existing raster profile.
+
+    The returned profile is identical (deep copy) to the input profile.
+
+    Parameters
+    ----------
+    profile : dict
+        Rasterio profile used as template.
+    fill_value : Any, optional
+        Initial value used to fill the image (default: 0).
+
+    Returns
+    -------
+    Tuple[np.ndarray, dict]
+        (image_array, copied_profile)
+
+    Notes
+    -----
+    - Shape follows rasterio convention: (count, height, width)
+    - dtype strictly follows profile["dtype"]
+    """
+
+    new_profile = deepcopy(profile)
+
+    height = new_profile["height"]
+    width = new_profile["width"]
+    count = new_profile.get("count", 1)
+    dtype = np.dtype(new_profile["dtype"])
+
+    # Create ndarray
+    image = np.full(
+        (count, height, width),
+        fill_value,
+        dtype=dtype,
+    )
+
+    return image, new_profile
