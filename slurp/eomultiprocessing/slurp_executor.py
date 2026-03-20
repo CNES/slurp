@@ -346,8 +346,10 @@ def _validate_inputs(
     aux_inputs = aux_inputs or []
 
     for arr in aux_inputs:
-        if arr.shape != (h, w):
-            raise ValueError("All aux_inputs must match image dimensions")
+        if arr.shape[0] != h or arr.shape[1] != w:
+            raise ValueError(
+                "All aux_inputs must match image spatial dimensions"
+        )
 
     return func_parameters, aux_inputs, has_aux
 
@@ -542,10 +544,24 @@ def _run_streaming(
 # ============================================================
 
 def _slice_array(arr, tile):
-    return arr[
-        tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
-        tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
-    ]
+    ys = slice(
+        tile.start_y - tile.top_margin,
+        tile.end_y + tile.bottom_margin + 1,
+    )
+    xs = slice(
+        tile.start_x - tile.left_margin,
+        tile.end_x + tile.right_margin + 1,
+    )
+
+    if arr.ndim == 2:
+        return arr[ys, xs]
+
+    elif arr.ndim >= 3:
+        # keep all extra dims (bands, features, etc.)
+        return arr[ys, xs, ...]
+
+    else:
+        raise ValueError("Unsupported array dimensions")
 
 
 def _normalize_output(output):
@@ -559,18 +575,35 @@ def _normalize_output(output):
 
 
 def _reconstruct_outputs(chunks, h, w, output_profiles):
-    outputs = [
-        np.zeros((h, w), dtype=output_profiles[i]["dtype"])
-        for i in range(len(output_profiles))
-    ]
+
+    outputs = []
+
+    # infer shape from first chunk
+    first = chunks[0]["data"]
+
+    for i in range(len(first)):
+        chunk_arr = first[i]
+
+        if chunk_arr.ndim == 2:
+            shape = (h, w)
+        else:
+            shape = (h, w) + chunk_arr.shape[2:]
+
+        outputs.append(
+            np.zeros(shape, dtype=output_profiles[i]["dtype"])
+        )
 
     for chunk in chunks:
         tile = chunk["tile"]
+
+        ys = slice(tile.start_y, tile.end_y + 1)
+        xs = slice(tile.start_x, tile.end_x + 1)
+
         for i in range(len(outputs)):
-            outputs[i][
-                tile.start_y : tile.end_y + 1,
-                tile.start_x : tile.end_x + 1,
-            ] = chunk["data"][i].copy()
+            if outputs[i].ndim == 2:
+                outputs[i][ys, xs] = chunk["data"][i]
+            else:
+                outputs[i][ys, xs, ...] = chunk["data"][i]
 
     return outputs
 

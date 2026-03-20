@@ -268,7 +268,7 @@ def create_valid_stack(
     # ==========================================================
     # Take the first band as it's the only one required for calc mask
     # ==========================================================
-    input_keys = [key_vhr[0]]
+    input_keys = [key_vhr]
     
     input_profile = deepcopy(profile)
     output_profile = eo_utils.single_uint8_profile(
@@ -277,7 +277,7 @@ def create_valid_stack(
 
     if args.cloud_mask:
         key_cloud_mask = read(args.cloud_mask)
-        input_keys = [key_vhr[0], key_cloud_mask[0]]
+        input_keys = [key_vhr, key_cloud_mask[0]]
 
     valid_stack_key = mp_n_to_m_images(
         inputs=input_keys,
