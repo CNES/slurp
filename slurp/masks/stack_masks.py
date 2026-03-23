@@ -603,7 +603,7 @@ def slurp_stackmask(
                 image_filter=post_process,
                 filter_parameters=vars(args),
                 generate_output_profiles=eo_utils.three_uint8_profile,
-                stable_margin=100,  # TODO : add a stability margin parameter ?
+                stable_margin=0,  # TODO : add a stability margin parameter ?
                 context_manager=eoscale_manager,
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",

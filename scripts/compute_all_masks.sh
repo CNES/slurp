@@ -36,6 +36,7 @@ otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/PEKEL/d
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/WSF/WSF2019_v1/WSF2019_v1.vrt -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/CAMPUS/etudes/Masques_CO3D/Data/WBM/wbm.vrt -out "out/wbm.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/CAMPUS/DATA/ESA_WORLDCOVER/ESA_WorldCover.vrt -out "out/esa_lc.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 
 
 # Prepare
