@@ -317,7 +317,33 @@ def mp_n_to_m_images(
         debug,
     )
 
+def _find_spatial_axes(arr: np.ndarray, h: int, w: int):
+    """
+    Find which axes correspond to spatial dimensions (H, W)
+    regardless of axis order.
 
+    Returns:
+        (h_axis, w_axis)
+    """
+
+    matches = []
+
+    for i, size_i in enumerate(arr.shape):
+        for j, size_j in enumerate(arr.shape):
+            if i == j:
+                continue
+
+            if size_i == h and size_j == w:
+                matches.append((i, j))
+
+    if not matches:
+        raise ValueError(
+            f"Cannot find spatial axes matching ({h},{w}) "
+            f"in array shape {arr.shape}"
+        )
+
+    # take first valid match
+    return matches[0]
 # ============================================================
 # VALIDATION
 # ============================================================
@@ -346,10 +372,11 @@ def _validate_inputs(
     aux_inputs = aux_inputs or []
 
     for arr in aux_inputs:
-        if arr.shape[0] != h or arr.shape[1] != w:
+        if not _has_spatial_dims(arr, h, w):
             raise ValueError(
-                "All aux_inputs must match image spatial dimensions"
-        )
+                f"Aux input shape {arr.shape} "
+                f"does not contain spatial dims ({h},{w})"
+            )
 
     return func_parameters, aux_inputs, has_aux
 
@@ -364,6 +391,12 @@ def _build_params(base_params, aux, has_aux):
         params["aux_inputs"] = aux
     return params
 
+def _has_spatial_dims(arr, h, w):
+    try:
+        _find_spatial_axes(arr, h, w)
+        return True
+    except ValueError:
+        return False
 
 def _compute_tiles(
     image_height,
@@ -449,11 +482,11 @@ def _run_in_memory(
     jobs = []
 
     for tile in tiles:
-        tile_inputs = [_slice_array(arr, tile) for arr in inputs]
+        tile_inputs = [_slice_array(arr, tile, image_height, image_width) for arr in inputs]
 
         tile_aux = None
         if has_aux:
-            tile_aux = [_slice_array(arr, tile) for arr in aux_inputs]
+            tile_aux = [_slice_array(arr, tile, image_height, image_width) for arr in aux_inputs]
 
         params = _build_params(func_parameters, tile_aux, has_aux)
 
@@ -543,25 +576,23 @@ def _run_streaming(
 # UTILITIES
 # ============================================================
 
-def _slice_array(arr, tile):
-    ys = slice(
+def _slice_array(arr, tile, h, w):
+
+    h_axis, w_axis = _find_spatial_axes(arr, h, w)
+
+    slices = [slice(None)] * arr.ndim
+
+    slices[h_axis] = slice(
         tile.start_y - tile.top_margin,
         tile.end_y + tile.bottom_margin + 1,
     )
-    xs = slice(
+
+    slices[w_axis] = slice(
         tile.start_x - tile.left_margin,
         tile.end_x + tile.right_margin + 1,
     )
 
-    if arr.ndim == 2:
-        return arr[ys, xs]
-
-    elif arr.ndim >= 3:
-        # keep all extra dims (bands, features, etc.)
-        return arr[ys, xs, ...]
-
-    else:
-        raise ValueError("Unsupported array dimensions")
+    return arr[tuple(slices)]
 
 
 def _normalize_output(output):
@@ -575,35 +606,87 @@ def _normalize_output(output):
 
 
 def _reconstruct_outputs(chunks, h, w, output_profiles):
+    """
+    Reconstruct outputs from spatial chunks.
+
+    Works with chunked datasets where worker outputs
+    are tile-sized instead of full-image sized.
+    """
 
     outputs = []
-
-    # infer shape from first chunk
     first = chunks[0]["data"]
 
-    for i in range(len(first)):
-        chunk_arr = first[i]
+    spatial_axes_cache = []
 
-        if chunk_arr.ndim == 2:
-            shape = (h, w)
-        else:
-            shape = (h, w) + chunk_arr.shape[2:]
+    # --------------------------------------------------
+    # Detect spatial axes from FIRST CHUNK
+    # --------------------------------------------------
+    first_tile = chunks[0]["tile"]
+
+    for i, arr in enumerate(first):
+
+        if arr.ndim < 2:
+            raise RuntimeError(
+                f"Invalid output dimension {arr.shape}"
+            )
+
+        # spatial dims = dims matching tile size
+        candidate_axes = []
+
+        for ax, size in enumerate(arr.shape):
+            if size in (
+                first_tile.end_y - first_tile.start_y + 1,
+                first_tile.end_x - first_tile.start_x + 1,
+            ):
+                candidate_axes.append(ax)
+
+        if len(candidate_axes) < 2:
+            raise RuntimeError(
+                f"Cannot infer spatial axes from chunk shape {arr.shape}"
+            )
+
+        h_axis, w_axis = candidate_axes[:2]
+        spatial_axes_cache.append((h_axis, w_axis))
+
+        # allocate full output
+        shape = list(arr.shape)
+        shape[h_axis] = h
+        shape[w_axis] = w
 
         outputs.append(
-            np.zeros(shape, dtype=output_profiles[i]["dtype"])
+            np.zeros(
+                tuple(shape),
+                dtype=output_profiles[i]["dtype"],
+            )
         )
 
+    # --------------------------------------------------
+    # Reconstruct tiles
+    # --------------------------------------------------
     for chunk in chunks:
         tile = chunk["tile"]
 
-        ys = slice(tile.start_y, tile.end_y + 1)
-        xs = slice(tile.start_x, tile.end_x + 1)
+        for i, out in enumerate(outputs):
 
-        for i in range(len(outputs)):
-            if outputs[i].ndim == 2:
-                outputs[i][ys, xs] = chunk["data"][i]
-            else:
-                outputs[i][ys, xs, ...] = chunk["data"][i]
+            data = chunk["data"][i]
+            h_axis, w_axis = spatial_axes_cache[i]
+
+            hh = data.shape[h_axis]
+            ww = data.shape[w_axis]
+
+            slices = [slice(None)] * out.ndim
+
+            slices[h_axis] = slice(
+                tile.start_y,
+                tile.start_y + hh,
+            )
+
+            slices[w_axis] = slice(
+                tile.start_x,
+                tile.start_x + ww,
+            )
+
+            out[tuple(slices)] = data
 
     return outputs
 
@@ -844,7 +927,8 @@ def mp_n_to_m_scalars(
     if context_manager.pool is None:
 
         params = dict(func_parameters)
-        params["aux_inputs"] = aux_inputs
+        if len(aux_inputs) != 0:
+            params["aux_inputs"] = aux_inputs
 
         result = func(*inputs, **params)
         return result
