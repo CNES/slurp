@@ -105,48 +105,79 @@ def segmentation_task(
     input_buffers: list, input_profiles: list, params: dict
 ) -> np.ndarray:
     """
-    Segments NDVI with SLIC algorithm, masks invalid pxels with 0
+    Segments NDVI with SLIC algorithm and masks invalid pixels.
 
-    :param list input_buffers: [ndvi, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments
-    :returns: segments
+    Parameters
+    ----------
+    ndvi : np.ndarray
+        NDVI image tile
+    valid_stack : np.ndarray
+        Validity mask (0 = valid pixel)
+    slic_seg_size : int
+        Target SLIC segment size
+    slic_compactness : float
+        SLIC compactness parameter
+
+    Returns
+    -------
+    np.ndarray
+        Segmentation labels
     """
-    # Count NO_DATA pixels in the current tile
-    nb_val_zero = len(np.where(input_buffers[1] == 0)[0])
+
+    # count valid pixels
+    nb_val_zero = len(np.where(valid_stack == 0)[0])
+
     if nb_val_zero == 0:
-        # The input image is only NODATA !!
-        # We don't compute segmentation
-        segments = np.zeros_like(input_buffers[1])
-    else:
-        segments = compute_segmentation(params, input_buffers[0])
-        # minimum segment is 1, attribute 0 to no_data pixel
-        # valid_stack contains valid pixels (0) and invalid pixels (any other value)
-        segments = np.where(input_buffers[1] == 0, segments, 0)
+        return np.zeros_like(valid_stack)
+
+    params = {
+        "slic_seg_size": slic_seg_size,
+        "slic_compactness": slic_compactness,
+    }
+    segments = compute_segmentation(params, ndvi)
+
+    # mask invalid pixels
+    segments = np.where(valid_stack == 0, segments, 0)
 
     return segments
 
 
-def concat_seg(previous_result, output_algo_computer, tile):
+def concat_seg(global_seg, tile_seg, tile, current_offset):
     """
-    Concatenates SLIC segmentation in a single segmentation
+    Merge one tile segmentation into global segmentation
+    with globally unique labels.
+
+    Parameters
+    ----------
+    global_seg : np.ndarray
+        Final segmentation image (modified in-place)
+    tile_seg : np.ndarray
+        Segmentation result of the tile
+    tile : Tile
+        Tile spatial definition
+    current_offset : int
+        Current global label offset
+
+    Returns
+    -------
+    int
+        Updated offset
     """
-    # Computes max of previous result and adds this value to the current result :
-    # prevents from computing a map with several identical labels !!
-    num_seg = np.max(previous_result[0])
 
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = (output_algo_computer[0][:, :, :] + num_seg)
+    ys = slice(tile.start_y, tile.end_y + 1)
+    xs = slice(tile.start_x, tile.end_x + 1)
 
-    # TODO : check if we can keep only this statement
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = np.where(
-        output_algo_computer[0][:, :, :] == 0,
-        0,
-        output_algo_computer[0][:, :, :] + num_seg,
-    )
+    seg = tile_seg.copy()
+
+    mask = seg > 0
+    seg[mask] += current_offset
+
+    global_seg[:, ys, xs] = np.where(mask, seg, 0)
+
+    # compute next offset ONLY from tile
+    next_offset = current_offset + seg.max()
+
+    return next_offset
 
 
 # Stats #
@@ -179,17 +210,16 @@ def compute_stats_image(
 
 def stats_concatenate(output_scalars, chunk_output_scalars, tile):
     """
-    Concatenate the differents statistics on different sub-tiles parallelyzed by eoscale
-
-    :param list output_scalars:
-    :param list chunk_output_scalars:
-    :param tile: bounding box of tile (not used but necessary for eoscale)
+    Reduce partial statistics from tiles.
     """
 
-    # output_scalars[0] : sums of each segment
-    output_scalars[0] += chunk_output_scalars[0]
-    # output_scalars[1] : counter of each segment (nb pixels/segment)
-    output_scalars[1] += chunk_output_scalars[1]
+    sums = np.stack([c[0] for c in chunks_output_scalars], axis=0)
+    counts = np.stack([c[1] for c in chunks_output_scalars], axis=0)
+
+    global_sum = sums.sum(axis=0)
+    global_count = counts.sum(axis=0)
+
+    return [global_sum, global_count]
 
 
 def clustering_vegetation(
@@ -649,42 +679,78 @@ def clean_task(
     return im_classif
 
 
-def segmentation(args, eoscale_manager, key_ndvi, key_valid_stack):
-    """
-    Perform image segmentation on the NDVI layer, and apply valid stack at the end
-    If the save mode is set to "all" or "debug", the segmentation result
-    is saved as a .tif file.
+def segmentation(
+    args,
+    slurp_manager,
+    key_ndvi,
+    key_valid_stack,
+    ndvi_profile,
+):
 
-    Parameters
-    ----------
-    args : Namespace
-        Runtime configuration and file paths.
-    eoscale_manager : EOScaleManager
-        The context manager responsible for managing raster I/O operations.
-    key_ndvi : RasterData
-        The NDVI raster data.
-    key_vhr : RasterData
-        The VHR raster data.
-    key_valid_stack : RasterData
-        The valid stack raster data.
-    """
-    future_seg = eoexe.n_images_to_m_images_filter(
-        inputs=[key_ndvi, key_valid_stack],
-        image_filter=segmentation_task,
-        filter_parameters=vars(args),
-        generate_output_profiles=eo_utils.single_int32_profile,
-        stable_margin=0,
-        context_manager=eoscale_manager,
-        concatenate_filter=concat_seg,
-        multiproc_context=args.multiproc_context,
-        filter_desc="Segmentation processing...",
+    logger.info("Segmentation processing...")
+
+    input_keys = [
+        key_ndvi[0][0],
+        key_valid_stack[0][0],
+    ]
+
+    input_profile = deepcopy(ndvi_profile)
+
+    output_profile = eo_utils.single_int32_profile(
+        [deepcopy(ndvi_profile)]
     )
-    if args.save_mode in ["all", "debug"]:
-        eoscale_manager.write(
-            key=future_seg[0],
-            img_path=args.vegetationmask.replace(".tif", "_slic.tif"),
-        )
-    return future_seg
+
+    # -------------------------------
+    # RUN PARALLEL SEGMENTATION
+    # -------------------------------
+    future_seg = mp_n_to_m_images(
+        inputs=input_keys,
+        image_height=input_profile["height"],
+        image_width=input_profile["width"],
+        output_profiles=[output_profile],
+        output_keys=["segmentation_slic"],
+        func=segmentation_task,
+        func_parameters={
+            "slic_seg_size": args.slic_seg_size,
+            "slic_compactness": args.slic_compactness,
+        },
+        context_manager=slurp_manager,
+        stable_margin=0,
+        binary=False,
+    )
+
+    # ==========================================================
+    # POST PROCESS ? GLOBAL RELABELING
+    # ==========================================================
+
+    logger.info("Re-label segmentation globally...")
+
+    seg = future_seg[0]
+
+    unique_vals = np.unique(seg)
+    unique_vals = unique_vals[unique_vals > 0]
+
+    # Fast relabeling
+    new_labels = np.arange(1, len(unique_vals) + 1)
+
+    lut = np.zeros(unique_vals.max() + 1, dtype=np.int32)
+    lut[unique_vals] = new_labels
+
+    seg[:] = lut[seg]
+
+    # ==========================================================
+    # SAVE
+    # ==========================================================
+
+    output_path = args.vegetationmask.replace(".tif", "_slic.tif")
+
+    slurp_manager.write_tif(
+        data=seg,
+        path=output_path,
+        target_profile=output_profile,
+    )
+
+    return [seg]
 
 
 def build_stack(args, eoscale_manager):
@@ -759,23 +825,28 @@ def process_stats(
     Then, the statistics are processed to generate data for clustering or classification.
     """
     params_stats = {"nb_lab": size_result}
-    stats = eoexe.n_images_to_m_scalars(
-        inputs=[future_seg[0], key_ndvi, key_ndwi, key_texture],
-        image_filter=compute_stats_image,
-        filter_parameters=params_stats,
-        nb_output_scalars=size_result,
-        context_manager=eoscale_manager,
-        concatenate_filter=stats_concatenate,
-        multiproc_context=args.multiproc_context,
-        filter_desc="Stats ",
+    # ======================================================
+    # SLURP EXECUTION
+    # ======================================================
+    stats = mp_n_to_m_scalars(
+        inputs=[
+            future_seg[0],
+            key_ndvi[0][0],
+            key_ndwi[0][0],
+            key_texture[0][0],
+        ],
+        image_height=input_profile["height"],
+        image_width=input_profile["width"],
+        func=compute_stats_image,
+        func_parameters=params_stats,
+        context_manager=slurp_manager,
+        reducer=stats_concatenate,
     )
-    # stats[0] : sum of each primitive [ <- NDVI -><- NDWI -><- texture -> ]
-    # stats[1] : nb pixels by segment   [ counter  ]
-    # Once the sum of each primitive is computed,
-    # we compute the mean by dividing by the size of each segment
 
-    # TODO : maybe we could delete this np.seterr
-    # (except in the very weird case where sum of NDVI is 0)
+    # ======================================================
+    # COMPUTE MEAN PER SEGMENT
+    # ======================================================
+
     np.seterr(divide="ignore", invalid="ignore")
 
     mean_ndvi = stats[0][:size_result]

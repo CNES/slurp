@@ -131,6 +131,7 @@ def compute_mp_tiles(
     tile_mode: bool,
     specific_tile_size: Union[int, None] = None,
     strip_along_lines: bool = False,
+    tile_max_size: int = 0
 ) -> List[MpTile]:
     """
     Compute multiprocessing tiles or strips based on the input image geometry.
@@ -164,12 +165,20 @@ def compute_mp_tiles(
 
     if tile_mode:
 
-        # Force to make square tiles (except the last one unfortunately)
         nb_pixels_per_worker: int = (image_width * image_height) // nb_workers
+
         if specific_tile_size:
+            # User override always wins
             tile_size = specific_tile_size
+
         else:
-            tile_size = int(math.sqrt(nb_pixels_per_worker))
+            auto_tile_size = int(math.sqrt(nb_pixels_per_worker))
+
+            if tile_max_size > 0:
+                # Memory protection
+                tile_size = min(auto_tile_size, tile_max_size)
+            else:
+                tile_size = auto_tile_size
 
         nb_tiles_x = image_width // tile_size
         nb_tiles_y = image_height // tile_size
@@ -417,6 +426,7 @@ def _compute_tiles(
         else context_manager.tile_mode,
         specific_tile_size=specific_tile_size,
         strip_along_lines=strip_along_lines,
+        tile_max_size=context_manager.tile_max_size
     )
 
 
