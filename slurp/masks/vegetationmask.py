@@ -36,7 +36,7 @@ import numpy as np
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
+from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars, mp_n_to_m_images_with_mapping
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
 from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
 
@@ -884,7 +884,7 @@ def segmentation(
     # ==========================================================
     # SEGMENTATION EXECUTION
     # ==========================================================
-    future_seg = mp_n_to_m_images(
+    future_seg = mp_n_to_m_images_with_mapping(
         inputs=input_keys,
         image_height=input_profile["height"],
         image_width=input_profile["width"],
@@ -896,8 +896,6 @@ def segmentation(
             "slic_compactness": args.slic_compactness,
         },
         context_manager=slurp_manager,
-        stable_margin=0,
-        binary=False,
     )
 
     # ==========================================================
