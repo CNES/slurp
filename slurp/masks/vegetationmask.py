@@ -881,7 +881,6 @@ def segmentation(
     output_profile = eo_utils.single_int32_profile(
         [deepcopy(ndvi_profile)]
     )
-
     # ==========================================================
     # SEGMENTATION EXECUTION
     # ==========================================================
@@ -1433,7 +1432,7 @@ def slurp_vegetationmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True) as slurp_manager:
+    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
 
         try:
 
@@ -1479,8 +1478,7 @@ def slurp_vegetationmask(
             # =====================================================
 
             logger.info("[2] Step: Segment validity")
-
-            res_seg = segments[0] 
+            res_seg = segments[0]
             size_result = np.max(res_seg) + 1
 
             ts_stats = ts.PyStats()
