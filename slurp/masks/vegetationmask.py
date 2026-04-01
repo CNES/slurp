@@ -1080,7 +1080,7 @@ def process_stats(
     np.seterr(divide="ignore", invalid="ignore")
 
     # NDVI
-    mean_ndvi = stats[0][:size_result].copy()
+    mean_ndvi = stats[0][:size_result]
     mean_ndvi[np.where(mask_valid_indices == 0)] = NODATA_INT16
     mean_ndvi[np.where(mask_valid_indices)] = (
         mean_ndvi[np.where(mask_valid_indices)]
@@ -1088,7 +1088,7 @@ def process_stats(
     )
 
     # NDWI
-    mean_ndwi = stats[0][size_result : 2 * size_result].copy()
+    mean_ndwi = stats[0][size_result : 2 * size_result]
     mean_ndwi[np.where(mask_valid_indices == 0)] = NODATA_INT16
     mean_ndwi[np.where(mask_valid_indices)] = (
         mean_ndwi[np.where(mask_valid_indices)]
@@ -1096,7 +1096,7 @@ def process_stats(
     )
 
     # Texture
-    mean_texture = stats[0][2 * size_result : 3 * size_result].copy()
+    mean_texture = stats[0][2 * size_result : 3 * size_result]
     mean_texture[np.where(mask_valid_indices == 0)] = NODATA_INT16
     mean_texture[np.where(mask_valid_indices)] = (
         mean_texture[np.where(mask_valid_indices)]
