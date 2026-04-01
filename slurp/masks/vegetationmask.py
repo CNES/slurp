@@ -815,7 +815,10 @@ def clean_task(
     # --- NDVI filtering
     im_classif = np.where(
         im_classif == LOW_VEG_CLASS,
-        np.where(im_ndvi > min_ndvi_veg, LOW_VEG_CLASS, 0),
+        np.where(im_ndvi > min_ndvi_veg, 
+            LOW_VEG_CLASS, 
+            UNDEFINED_VEG + LOW_VEG_CLASS,
+        ),
         im_classif,
     )
 
@@ -824,7 +827,7 @@ def clean_task(
         np.where(
             im_ndvi > min_ndvi_veg,
             VEG_CODE + MIDDLE_TEXTURE_CODE,
-            0,
+            UNDEFINED_VEG + MIDDLE_TEXTURE_CODE,
         ),
         im_classif,
     )
