@@ -1570,16 +1570,18 @@ def slurp_vegetationmask(
                 context_manager=slurp_manager,
                 binary=True,
             )
-            output_path = args.vegetationmask.replace(
-                ".tif", "_before_clean.tif"
-            )
-            slurp_manager.write_tif(
-                data=final_mask[0],
-                path=output_path,
-                target_profile=eo_utils.single_uint8_profile(
-                    [vhr_profile]
-                ),
-            )
+            if args.save_mode == "debug":
+                # Save intermediate masks
+                output_path = args.vegetationmask.replace(
+                    ".tif", "_before_clean.tif"
+                )
+                slurp_manager.write_tif(
+                    data=final_mask[0],
+                    path=output_path,
+                    target_profile=eo_utils.single_uint8_profile(
+                        [vhr_profile]
+                    ),
+                )
 
             time_final = time.time()
 
