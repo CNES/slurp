@@ -755,7 +755,7 @@ def slurp_stackmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True) as slurp_manager:
+    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
 
         try:
 
