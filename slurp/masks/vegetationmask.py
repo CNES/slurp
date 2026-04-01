@@ -30,8 +30,6 @@ from os import path
 from copy import deepcopy
 from math import ceil, sqrt
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 import numpy as np
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
@@ -278,7 +276,7 @@ def compute_stats_image(
     Parameters
     ----------
     segments : np.ndarray
-        Segmentation labels (H,W) or (H,W,C)
+        Segmentation labels
     ndvi : np.ndarray
         NDVI tile (H,W)
     ndwi : np.ndarray
@@ -331,11 +329,11 @@ def stats_concatenate(chunks_output_scalars):
     :return: [global_sum, global_count]
     """
 
-    # Initialisation avec le premier chunk
+    # Init with first chunk
     global_sum = np.array(chunks_output_scalars[0][0], copy=True)
     global_count = np.array(chunks_output_scalars[0][1], copy=True)
 
-    # Agrégation des autres chunks
+    # Concatenate other chunks
     for chunk_sum, chunk_count in chunks_output_scalars[1:]:
         global_sum += chunk_sum
         global_count += chunk_count
@@ -715,11 +713,12 @@ def finalize_task(segments, valid_stack, data):
     Finalize mask : for each pixel in input segmentation,
     return class (low / high vegetation, etc.)
 
-    :param list input_buffers: [segments, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: {"data": clusters} with clusters an array
+    :param np.ndarray segments: image segments
+    :param np.ndarray valid_stack: valid_stack array
+    :param np.ndarray data: final cluster data
     :returns: final mask
     """
+    
     clustering = data
     # Load Cython module and launch C++ function
     ts_stats = ts.PyStats()
@@ -736,7 +735,6 @@ def clean_task(
     im_classif: np.ndarray,
     valid_stack: np.ndarray,
     im_ndvi: np.ndarray,
-    *,
     remove_small_objects: int,
     remove_small_holes: int,
     binary_dilation: int,
@@ -843,7 +841,7 @@ def segmentation(
     slurp_manager: slurpContextManager,
     key_ndvi: list,
     key_valid_stack: list,
-    ndvi_profile
+    ndvi_profile: dict,
 ):
     """
     Perform SLIC segmentation on NDVI layer using SLURP framework.
@@ -858,7 +856,8 @@ def segmentation(
         NDVI raster key.
     key_valid_stack : list[str]
         Valid stack raster key.
-
+    ndvi_profile : dict
+        NDVI raster profile.
     Returns
     -------
     List[str]
@@ -1019,7 +1018,7 @@ def process_stats(
     key_texture: list,
     size_result: int,
     mask_valid_indices: np.ndarray,
-    input_profile
+    input_profile: dict,
 ):
     """
     Computes per-segment statistics (mean NDVI, NDWI, texture)
@@ -1043,7 +1042,8 @@ def process_stats(
         Total number of segments.
     mask_valid_indices : np.ndarray
         Boolean array marking valid segment indices.
-
+    input_profile : dict
+        Input raster profile.
     Returns
     -------
     Tuple[np.ndarray, np.ndarray]
@@ -1071,8 +1071,6 @@ def process_stats(
         context_manager=slurp_manager,
         reducer=stats_concatenate,
     )
-    print(stats)
-
     # ======================================================
     # COMPUTE MEAN PER SEGMENT
     # ======================================================
