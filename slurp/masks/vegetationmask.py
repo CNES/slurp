@@ -267,8 +267,7 @@ def compute_stats_image(
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     texture: np.ndarray,
-    nb_lab: int,
-    aux_inputs
+    nb_lab: int
 ) -> list:
     """
     Compute the sum of each primitive and the number of pixels for each segment.
