@@ -906,112 +906,69 @@ def mp_n_to_m_scalars(
           and the results are merged by the reducer.
     """
 
-    if len(inputs) < 1:
-        raise ValueError("At least one input image must be given.")
-
-    if func is None:
-        raise ValueError("A function must be provided.")
-
-    if reducer is None:
-        raise ValueError("A reducer function must be provided.")
-
-    if context_manager is None:
-        raise ValueError("Context manager must be provided.")
-
-    if func_parameters is None:
-        func_parameters = {}
-
-    if aux_inputs is None:
-        aux_inputs = []
-
-    # ---- dimension checks ----
-    for arr in inputs:
-        if arr.shape != (image_height, image_width):
-            raise ValueError("All inputs must match image dimensions")
-
-    for arr in aux_inputs:
-        if arr.shape != (image_height, image_width):
-            raise ValueError("All aux_inputs must match image dimensions")
-
-    # ---- NO MULTIPROCESSING ----
-    if context_manager.pool is None:
-
-        params = dict(func_parameters)
-        if len(aux_inputs) != 0:
-            params["aux_inputs"] = aux_inputs
-
-        result = func(*inputs, **params)
-        return result
-
-    # ---- MULTIPROCESSING ----
-    tiles = compute_mp_tiles(
-        image_height=image_height,
-        image_width=image_width,
-        stable_margin=stable_margin,
-        nb_workers=context_manager.nb_workers,
-        tile_mode=tile_mode if tile_mode is not None else context_manager.tile_mode,
-        specific_tile_size=specific_tile_size,
-        strip_along_lines=strip_along_lines,
+    func_parameters, aux_inputs, has_aux = _validate_inputs(
+        inputs,
+        func,
+        context_manager,
+        func_parameters,
+        aux_inputs,
+        image_height,
+        image_width,
     )
 
-    list_input = []
+    if reducer is None:
+        raise ValueError("Reducer must be provided.")
+
+    # ------------------------
+    # SINGLE PROCESS
+    # ------------------------
+    if context_manager.pool is None:
+        return _run_scalar_singleprocess(
+            inputs,
+            func,
+            reducer,
+            func_parameters,
+            aux_inputs,
+            has_aux,
+        )
+
+    # ------------------------
+    # MULTIPROCESS
+    # ------------------------
+    tiles = _compute_tiles(
+        image_height,
+        image_width,
+        stable_margin,
+        context_manager,
+        tile_mode,
+        specific_tile_size,
+        strip_along_lines,
+    )
 
     if context_manager.in_memory:
-
-        for tile in tiles:
-
-            # slice main inputs
-            tile_inputs = [
-                arr[
-                    tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
-                    tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
-                ]
-                for arr in inputs
-            ]
-
-            # slice aux inputs
-            tile_aux_inputs = [
-                arr[
-                    tile.start_y - tile.top_margin : tile.end_y + tile.bottom_margin + 1,
-                    tile.start_x - tile.left_margin : tile.end_x + tile.right_margin + 1,
-                ]
-                for arr in aux_inputs
-            ]
-
-            tile_params = dict(func_parameters)
-            tile_params["aux_inputs"] = tile_aux_inputs
-
-            list_input.append(
-                (
-                    tile_inputs,
-                    func,
-                    tile_params,
-                    tile,
-                )
-            )
-
-        chunk_results = context_manager.pool.starmap(
-            mp_execute_scalar_from_arrays,
-            tqdm.tqdm(list_input, total=len(list_input)),
+        results = _run_scalar_in_memory(
+            inputs,
+            aux_inputs,
+            has_aux,
+            tiles,
+            func,
+            func_parameters,
+            context_manager,
+            image_height,
+            image_width,
         )
-
     else:
-
-        list_input = [
-            (inputs, func, func_parameters, tile)
-            for tile in tiles
-        ]
-
-        chunk_results = context_manager.pool.starmap(
-            mp_execute_scalar_from_paths,
-            tqdm.tqdm(list_input, total=len(list_input)),
+        results = _run_scalar_streaming(
+            inputs,
+            aux_inputs,
+            has_aux,
+            tiles,
+            func,
+            func_parameters,
+            context_manager,
         )
 
-    # ---- REDUCE ----
-    final_result = reducer(chunk_results)
-
-    return final_result
-
+    return reducer(results)
 def mp_execute_scalar_from_arrays(
     inputs: List[np.ndarray],
     func: Callable,
@@ -1030,3 +987,273 @@ def mp_execute_scalar_from_paths(
     inputs = [read_window(path, tile) for path in input_paths]
     outputs = func(*inputs, **func_parameters)
     return outputs
+
+def _run_scalar_singleprocess(
+    inputs,
+    func,
+    reducer,
+    func_parameters,
+    aux_inputs,
+    has_aux,
+):
+    params = _build_params(func_parameters, aux_inputs, has_aux)
+
+    result = func(*inputs, **params)
+
+    return reducer([result])
+
+def _run_scalar_in_memory(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    h,
+    w,
+):
+
+    jobs = []
+
+    for tile in tiles:
+
+        tile_inputs = [
+            _slice_array(arr, tile, h, w)
+            for arr in inputs
+        ]
+
+        tile_aux = None
+        if has_aux:
+            tile_aux = [
+                _slice_array(arr, tile, h, w)
+                for arr in aux_inputs
+            ]
+
+        params = _build_params(func_parameters, tile_aux, has_aux)
+
+        jobs.append(
+            (tile_inputs, func, params, tile)
+        )
+
+    return context_manager.pool.starmap(
+        mp_execute_scalar_from_arrays,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+def _run_scalar_streaming(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+):
+
+    params = _build_params(
+        func_parameters,
+        aux_inputs if has_aux else None,
+        has_aux,
+    )
+
+    jobs = [
+        (inputs, func, params, tile)
+        for tile in tiles
+    ]
+
+    return context_manager.pool.starmap(
+        mp_execute_scalar_from_paths,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+# ============================================================
+# MAP-REDUCE LABEL REINDEXING
+# ============================================================
+
+def _apply_global_label_mapping(chunks):
+    """
+    Ensure global uniqueness of labels across tiles.
+
+    Each tile segmentation is independently indexed.
+    This function applies a cumulative offset so that
+    labels become globally unique before reconstruction.
+    """
+
+    global_offset = 0
+
+    for chunk in chunks:
+
+        data_list = chunk["data"]
+
+        new_data_list = []
+
+        for arr in data_list:
+
+            if not np.issubdtype(arr.dtype, np.integer):
+                new_data_list.append(arr)
+                continue
+
+            mask = arr > 0
+
+            if np.any(mask):
+                arr = arr.copy()
+                arr[mask] += global_offset
+                global_offset = arr.max()
+
+            new_data_list.append(arr)
+
+        chunk["data"] = new_data_list
+
+    return chunks
+
+
+# ============================================================
+# IN MEMORY MULTIPROCESSING WITH MAP-REDUCE
+# ============================================================
+
+def _run_in_memory_with_mapping(
+    inputs,
+    aux_inputs,
+    has_aux,
+    tiles,
+    func,
+    func_parameters,
+    context_manager,
+    image_height,
+    image_width,
+    output_profiles,
+    output_keys,
+    binary,
+    debug,
+):
+
+    jobs = []
+
+    for tile in tiles:
+
+        tile_inputs = [
+            _slice_array(arr, tile, image_height, image_width)
+            for arr in inputs
+        ]
+
+        tile_aux = None
+        if has_aux:
+            tile_aux = [
+                _slice_array(arr, tile, image_height, image_width)
+                for arr in aux_inputs
+            ]
+
+        params = _build_params(func_parameters, tile_aux, has_aux)
+
+        jobs.append((tile_inputs, func, params, tile))
+
+    # ---------------- MAP ----------------
+    out_chunks = context_manager.pool.starmap(
+        mp_execute_from_arrays,
+        tqdm.tqdm(jobs, total=len(jobs)),
+    )
+
+    # ---------------- REDUCE ----------------
+    out_chunks = _apply_global_label_mapping(out_chunks)
+
+    # ---------------- MERGE ----------------
+    outputs = _reconstruct_outputs(
+        out_chunks,
+        image_height,
+        image_width,
+        output_profiles,
+    )
+
+    if debug and context_manager.dev_mode:
+        _write_debug_outputs(
+            outputs,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+        )
+
+    return outputs
+
+
+def mp_n_to_m_images_with_mapping(
+    inputs: list,
+    image_height: int,
+    image_width: int,
+    output_keys: List[str],
+    output_profiles: List[dict],
+    context_manager,
+    func: Callable,
+    func_parameters: Union[dict, None] = None,
+    aux_inputs: Optional[List[np.ndarray]] = None,
+    stable_margin: int = 0,
+    tile_mode: Union[bool, None] = None,
+    specific_tile_size: Union[int, None] = None,
+    strip_along_lines: bool = False,
+    binary: bool = False,
+    debug: bool = False,
+):
+    """
+    Same as mp_n_to_m_images but applies a Map-Reduce
+    global mapping step before reconstruction.
+
+    Designed for algorithms producing local labels
+    (segmentation, clustering, connected components).
+    """
+
+    func_parameters, aux_inputs, has_aux = _validate_inputs(
+        inputs,
+        func,
+        context_manager,
+        func_parameters,
+        aux_inputs,
+        image_height,
+        image_width,
+    )
+
+    if context_manager.pool is None:
+        return _run_singleprocess(
+            inputs,
+            func,
+            func_parameters,
+            aux_inputs,
+            has_aux,
+            context_manager,
+            output_keys,
+            output_profiles,
+            binary,
+            debug,
+        )
+
+    tiles = _compute_tiles(
+        image_height,
+        image_width,
+        stable_margin,
+        context_manager,
+        tile_mode,
+        specific_tile_size,
+        strip_along_lines,
+    )
+
+    if context_manager.in_memory:
+        return _run_in_memory_with_mapping(
+            inputs,
+            aux_inputs,
+            has_aux,
+            tiles,
+            func,
+            func_parameters,
+            context_manager,
+            image_height,
+            image_width,
+            output_profiles,
+            output_keys,
+            binary,
+            debug,
+        )
+
+    raise RuntimeError(
+        "Mapping mode currently supported only in-memory."
+    )
+
+
