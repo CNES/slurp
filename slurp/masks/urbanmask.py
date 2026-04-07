@@ -30,8 +30,6 @@ from os import path
 from copy import deepcopy
 from typing import List, Optional
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
@@ -54,24 +52,35 @@ except ModuleNotFoundError:
 
 
 def apply_vegetationmask(
-    valid_stack: np.ndarray, vegmask: np.ndarray, vegmask_min_value: int, veg_binary_dilation: int
+    valid_stack: np.ndarray,
+    vegmask: np.ndarray,
+    vegmask_min_value: int,
+    veg_binary_dilation: int,
 ) -> np.ndarray:
     """
-    Calculation of the valid pixels of a given image outside vegetation mask
+    Compute a validity mask excluding vegetation areas.
 
-    :param list input_buffer: VHR input image [valid_stack, vegetationmask]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys
-    "vegmask_min_value" and "veg_binary_dilation"
-    :returns: valid_vhr (boolean numpy array, True = valid data, False = no data)
+    Pixels are considered valid when they are marked as valid in the
+    input valid_stack (value equal to 0) and belong to non-vegetated
+    areas defined by the vegetation mask threshold. A binary dilation
+    is applied to non-vegetation areas to reduce vegetation mask
+    over-detection on urban regions.
+
+    :param valid_stack: Input validity mask where 0 indicates valid pixels.
+    :param vegmask: Vegetation mask image.
+    :param vegmask_min_value: Threshold below which pixels are considered non-vegetated.
+    :param veg_binary_dilation: Radius/iterations used for binary dilation.
+    :return: Boolean array where True represents valid non-vegetated pixels.
     """
     non_veg = np.where(
         vegmask < vegmask_min_value, True, False
     )
-    # dilate non vegetation areas, because sometimes the vegetation mask can cover urban areas
+
+    # Dilate non-vegetation areas because vegetation masks may cover urban pixels
     non_veg_dilated = apply_morpho(
         non_veg, "binary_dilation", veg_binary_dilation
     )
+
     valid_stack = np.logical_and(valid_stack == 0, [non_veg_dilated])
     return valid_stack[0]
 
@@ -80,12 +89,15 @@ def apply_watermask(
     valid_stack: np.ndarray, watermask: np.ndarray
 ) -> np.ndarray:
     """
-    Calculation of the valid pixels of a given image outside water mask
+    Compute a validity mask excluding water areas.
 
-    :param list input_buffer: VHR input image [valid_stack, watermask]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments (not used but necessary for eoscale)
-    :returns: valid_vhr (boolean numpy array, True = valid data, False = no data)
+    Pixels are considered valid when they are marked as valid in the
+    input valid_stack (value equal to 0) and are not classified as
+    water in the watermask (value equal to 0).
+
+    :param valid_stack: Input validity mask where 0 indicates valid pixels.
+    :param watermask: Water mask image where non-zero values represent water.
+    :return: Boolean array where True represents valid non-water pixels.
     """
     valid_stack = np.logical_and(valid_stack == 0, watermask == 0)
 
@@ -137,8 +149,71 @@ def build_samples(
     aux_inputs: Optional[List[np.ndarray]] = None,
 ) -> np.ndarray:
     """
-    Build training samples for urban detection.
-    Algorithmically equivalent to eoscale implementation.
+    Build training samples used for urban / non-urban classification.
+
+    It extracts representative pixels from valid areas using ground-truth 
+    information and builds a feature matrix suitable for machine learning training.
+
+    The workflow is composed of the following steps:
+
+    1. Compute a validity mask from ``valid_stack``.
+    2. Extract building pixels from the ground truth and apply a binary
+       erosion to reduce border uncertainty.
+    3. Extract non-building pixels.
+    4. Estimate sampling ratios according to the proportion of valid
+       pixels available in the current tile.
+    5. Select spatially distributed sample indices.
+    6. Stack spectral indices and auxiliary inputs.
+    7. Extract sampled feature vectors.
+
+    Parameters
+    ----------
+    valid_stack : np.ndarray
+        Validity mask where 0 indicates valid pixels.
+    gt : np.ndarray
+        Ground truth classification raster.
+    vhr1, vhr2, vhr3, vhr4 : np.ndarray
+        VHR spectral bands used as input features.
+    ndvi : np.ndarray
+        NDVI index image.
+    ndwi : np.ndarray
+        NDWI index image.
+    value_classif : int
+        Ground-truth label corresponding to buildings.
+    gt_binary_erosion : int
+        Radius of binary erosion applied to building masks to remove
+        uncertain border pixels.
+    nb_valid_built_pixels : int
+        Total number of valid building pixels in the full dataset.
+    nb_valid_other_pixels : int
+        Total number of valid non-building pixels in the full dataset.
+    nb_samples_urban : int
+        Target number of building samples.
+    nb_samples_other : int
+        Target number of non-building samples.
+    aux_inputs : Optional[List[np.ndarray]], optional
+        Additional feature rasters appended to the feature stack
+        (e.g. auxiliary masks or indices).
+
+    Returns
+    -------
+    np.ndarray
+        Training samples array of shape:
+
+            (N_samples, N_features)
+
+        where each row corresponds to one sampled pixel and columns
+        contain:
+
+        [gt, vhr1, vhr2, vhr3, vhr4, ndvi, ndwi, *aux_inputs].
+
+    Notes
+    -----
+    - Sampling is proportional to the amount of valid pixels available
+      in the processed subset.
+    - Spatial sampling relies on grid-based index selection to avoid
+      spatial clustering.
+    - The first feature column always corresponds to the ground-truth label.
     """
 
     if aux_inputs is None:
@@ -232,7 +307,6 @@ def build_samples(
 
     # ----------------------------------
     # FEATURE STACK
-    # Equivalent to concatenate(input_buffer[1:])
     # ----------------------------------
 
     features = [
@@ -272,8 +346,67 @@ def rf_prediction(
     debug: bool = False,
 ) -> list:
     """
-    Random Forest prediction for urban mask.
-    Strict equivalent of legacy eoscale RF implementation.
+    Perform Random Forest inference to generate an urban classification mask.
+
+    It builds a feature stack from spectral bands and indices,
+    extracts valid pixels, performs classification using a trained
+    Random Forest model, and reconstructs prediction rasters in image space.
+
+    Processing steps
+    ----------------
+    1. Normalize auxiliary inputs and build the feature stack.
+    2. Select pixels eligible for prediction using validity masks.
+    3. Convert image data into a 2D feature matrix.
+    4. Run Random Forest probability prediction.
+    5. Reproject predictions back into raster geometry.
+    6. Restore nodata regions using the original validity mask.
+
+    Parameters
+    ----------
+    original_valid_stack : np.ndarray
+        Initial validity mask defining nodata regions.
+        Non-zero values are treated as nodata pixels.
+    current_valid_stack : np.ndarray
+        Updated validity mask defining pixels eligible for prediction.
+        Pixels equal to 0 are considered valid.
+    vhr1, vhr2, vhr3, vhr4 : np.ndarray
+        VHR spectral bands used as classification features.
+    ndvi : np.ndarray
+        NDVI index image.
+    ndwi : np.ndarray
+        NDWI index image.
+    aux_inputs : np.ndarray or list[np.ndarray], optional
+        Additional feature layers appended to the feature stack.
+        Can be a single array or a list of arrays.
+    classifier : sklearn-like estimator
+        Trained Random Forest classifier implementing
+        ``predict_proba`` and exposing ``classes_``.
+    debug : bool, default=False
+        If True, logs intermediate debugging information.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        A tuple containing:
+
+        proba_buildings : np.ndarray
+            Probability map (0?100) representing building likelihood.
+            Nodata pixels are set to ``NODATA_INT8``.
+
+        prediction : np.ndarray
+            Final classification raster reconstructed in image space,
+            with nodata restored from ``original_valid_stack``.
+
+    Notes
+    -----
+    - Feature stacking strictly follows the legacy ordering:
+      [vhr1, vhr2, vhr3, vhr4, ndvi, ndwi, *aux_inputs].
+    - Prediction is performed only on pixels where
+      ``current_valid_stack == 0``.
+    - The function safely handles empty tiles (no valid pixels)
+      by returning nodata-filled outputs.
+    - Class label value 255 is normalized to class 1 to match
+      historical label conventions.
     """
 
     # -------------------------------------------------
@@ -285,14 +418,6 @@ def rf_prediction(
     if isinstance(aux_inputs, np.ndarray):
         aux_inputs = [aux_inputs]
 
-    # -------------------------------------------------
-    # REBUILD input_buffer SEMANTICS (algo reference)
-    # -------------------------------------------------
-    # In legacy algo:
-    # input_buffer =
-    # [original_valid_stack, valid_stack, vhr_image, ndvi, ndwi] + aux
-
-    # VHR stack equivalent to input_buffer[2:]
     feature_layers = [
         vhr1,
         vhr2,
@@ -721,12 +846,14 @@ def fill_constant_mask(
     valid_stack: np.ndarray, fill_value: int
 ) -> np.ndarray:
     """
-    Add nodata to the predicted mask
+    Create a constant mask using a validity stack.
 
-    :param list input_buffer: [original_valid_stack (without water and veg masks)]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments
-    :returns: updated predicted mask (proba)
+    Pixels marked as valid (value equal to 0 in valid_stack) are assigned
+    the provided fill_value, while invalid pixels are set to NODATA_INT8.
+
+    :param valid_stack: Input validity mask where 0 indicates valid pixels.
+    :param fill_value: Constant value assigned to valid pixels.
+    :return: Output mask with fill_value on valid pixels and NODATA_INT8 elsewhere.
     """
 
     proba_buildings = np.where(
@@ -859,7 +986,7 @@ def getarguments():
     group5.add_argument(
         "-multiproc_context",
         default="spawn",
-        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+        help="Multiprocessing strategy: 'fork' or 'spawn'",
     )
     args = parser.parse_args()
 

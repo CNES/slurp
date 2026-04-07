@@ -319,7 +319,7 @@ def compute_stats_image(
 
 def stats_concatenate(chunks_output_scalars):
     """
-    Concatenate statistics coming from multiple sub-tiles parallelized by eoscale.
+    Concatenate statistics coming from multiple sub-tiles.
 
     Each entry of chunks_output_scalars is:
         [sum_array, count_array]
@@ -724,7 +724,6 @@ def finalize_task(segments, valid_stack, data):
 
     final_mask = ts_stats.finalize(segments, clustering)
 
-    # Add nodata in final_mask (input_buffers[1] : valid mask)
     final_mask = np.where(valid_stack[0] == 0, final_mask, NODATA_INT8)
 
     return final_mask
@@ -915,23 +914,6 @@ def segmentation(
     )
 
     return future_seg
-
-
-def build_stack(args, eoscale_manager):
-    """
-    Build the required stack of input raster layers for processing.
-    """
-    # Image VHR
-    key_vhr = eoscale_manager.open_raster(raster_path=args.file_vhr)
-    args.nodata_vhr = eoscale_manager.get_profile(key_vhr)["nodata"]
-    # Valid stack
-    key_valid_stack = eoscale_manager.open_raster(raster_path=args.valid_stack)
-    # NDXI
-    key_ndvi = eoscale_manager.open_raster(raster_path=args.file_ndvi)
-    key_ndwi = eoscale_manager.open_raster(raster_path=args.file_ndwi)
-    # Texture file
-    key_texture = eoscale_manager.open_raster(raster_path=args.file_texture)
-    return key_ndvi, key_ndwi, key_vhr, key_texture, key_valid_stack
 
 
 def postprocess(
@@ -1334,7 +1316,7 @@ def getarguments():
     group6.add_argument(
         "-multiproc_context",
         default="spawn",
-        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+        help="Multiprocessing strategy: 'fork' or 'spawn'",
     )
     args = parser.parse_args()
 

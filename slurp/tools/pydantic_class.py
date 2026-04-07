@@ -11,11 +11,11 @@ class Resources(BaseModel):
     n_workers: Optional[int] = Field(default=8, description="Number of CPU")
     tile_max_size: Optional[int] = Field(
         default=0,
-        description="Maximum size of tiles to process (0 : let EOScale choose max size per CPU",
+        description="Maximum size of tiles to process (0 : choose max size per CPU",
     )
     multiproc_context: Optional[str] = Field(
         default="spawn",
-        description="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+        description="Multiprocessing strategy: 'fork' or 'spawn'",
     )
     n_jobs: Optional[int] = Field(
         default=1,

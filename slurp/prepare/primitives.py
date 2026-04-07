@@ -48,8 +48,8 @@ def compute_ndxi(
     the theoretical range [-1000, 1000]. In that case, values are clipped
     to -1000 or 1000.
 
-    :param np.ndarray input_buffer: Multi-band image array
-        Shape expected: (bands, height, width)
+    :param np.ndarray input_buffer_b1: One-band image array B1
+    :param np.ndarray input_buffer_b2: One-band image array B2
     :param np.ndarray valid_stack: Validity mask
         Non-zero values indicate invalid pixels
     :param int im_b1: 1-based index of band B1

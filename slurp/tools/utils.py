@@ -104,15 +104,19 @@ def compute_mask(im_ref: np.ndarray, thresh_ref: float) -> list:
 
 
 def compute_mask_threshold(
-    ndwi: np.ndarray, valid_stack: np.ndarray ,ndwi_threshold: float
+    ndwi: np.ndarray, valid_stack: np.ndarray, ndwi_threshold: float
 ) -> np.ndarray:
     """
-    Compute boolean mask with threshold value
+    Compute a binary mask from an NDWI image using a threshold.
 
-    :param list input_buffers: Input image and valid stack [input_image, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the key "threshold"
-    :returns: computed mask
+    Pixels with NDWI values greater than the given threshold are set to 1,
+    otherwise to 0. Pixels marked as invalid in the valid_stack are assigned
+    the NODATA_INT8 value.
+
+    :param ndwi: NDWI image array.
+    :param valid_stack: Validity mask where non-zero values indicate invalid pixels.
+    :param ndwi_threshold: Threshold applied to the NDWI image.
+    :return: Binary mask array with NODATA values applied on invalid pixels.
     """
     mask = np.where(ndwi > ndwi_threshold, 1, 0)
     mask[np.where(valid_stack != 0)] = NODATA_INT8

@@ -30,8 +30,6 @@ from os import makedirs, path
 from copy import deepcopy
 from typing import List, Optional
 
-import eoscale.eo_executors as eoexe
-import eoscale.manager as eom
 import numpy as np
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
@@ -64,22 +62,27 @@ def compute_pekel_mask(
     pekel_nodata: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Compute Pekel mask regarding entry arguments.
+    Compute Pekel-based water masks according to input parameters.
 
-    Parameters
-    ----------
-    input_buffer : np.ndarray
-        Pekel image
-    thresh_pekel : float
-    hand_strict : bool
-    strict_thresh : float
-    no_pekel_filter : bool
-    pekel_nodata : float
+    A primary water mask is computed using ``thresh_pekel``. Depending on
+    configuration, a secondary mask is also produced:
+      - if ``hand_strict`` is True, a stricter mask based on
+        ``strict_thresh`` is returned;
+      - otherwise, a secondary mask is computed using a default threshold
+        (30) unless ``no_pekel_filter`` is True, in which case an empty
+        mask is returned.
 
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        (mask_pekel, secondary_mask)
+    :param pekel_img: Input Pekel occurrence image.
+    :param thresh_pekel: Threshold used to compute the main water mask.
+    :param hand_strict: If True, compute a strict secondary mask.
+    :param strict_thresh: Threshold used for the strict mask when
+        ``hand_strict`` is enabled.
+    :param no_pekel_filter: If True, disables the secondary Pekel filtering.
+    :param pekel_nodata: Nodata value of the Pekel image (not used internally
+        but kept for interface consistency).
+    :return: Tuple containing:
+        - mask_pekel: primary Pekel water mask
+        - secondary_mask: strict mask or auxiliary mask depending on options
     """
     # Main water mask
     mask_pekel = utils.compute_mask(pekel_img, [thresh_pekel])
@@ -99,23 +102,26 @@ def compute_pekel_mask(
 
 
 def compute_hand_mask(
-    hand_array: np.ndarray, thresh_hand: int,
-) -> bool:
+    hand_array: np.ndarray,
+    thresh_hand: int,
+) -> np.ndarray:
     """
-    Compute Hand mask with one or multiple threshold values.
+    Compute a HAND-based mask using an elevation threshold.
 
-    :param np.ndarray input_buffer: Hand image passed as an numpy ndarray
-    :param int thresh_hand: Hand array threshold
-    :returns: Hand mask (true if pixels are below a "thresh_hand" altitude)
+    Pixels with HAND values lower than or equal to ``thresh_hand`` are
+    considered valid (True in the output mask). Higher values are rejected.
+
+    :param hand_array: Input HAND (Height Above Nearest Drainage) raster
+        as a NumPy array.
+    :param thresh_hand: Threshold applied to the HAND values.
+    :return: Boolean mask where:
+        - True indicates pixels below or equal to the threshold
+          (potentially valid areas),
+        - False indicates pixels above the threshold.
     """
     mask_hand = hand_array > thresh_hand
 
-    # Do not learn in water surface (useful if image contains big water surfaces)
-    # Add some robustness if hand_strict is not used
-    # if args.hand_strict:
-    # np.logical_not(np.logical_or(mask_hand, inputBuffer[1]), out=mask_hand)
-    # else:
-    # np.logical_not(mask_hand, out=mask_hand)
+    # Invert mask so that low HAND values become True
     mask_hand = np.logical_not(mask_hand, out=mask_hand)
 
     return mask_hand
@@ -1260,7 +1266,7 @@ def getarguments():
     group6.add_argument(
         "-multiproc_context",
         default="spawn",
-        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+        help="Multiprocessing strategy: 'fork' or 'spawn'",
     )
     args = parser.parse_args()
 

@@ -312,7 +312,7 @@ def getarguments() -> dict:
     group5.add_argument(
         "-multiproc_context",
         default="spawn",
-        help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
+        help="Multiprocessing strategy: 'fork' or 'spawn'",
     )
     args = parser.parse_args()
 
