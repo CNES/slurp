@@ -41,6 +41,7 @@ from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
+from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -50,6 +51,12 @@ def getarguments():
 
     parser = argparse.ArgumentParser(
         description="Compute auxiliary files needed for mask computation"
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"SLURP {__version__}",
     )
 
     parser.add_argument(

@@ -40,6 +40,7 @@ from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils, utils
 from slurp.tools.constant import NODATA_INT8
+from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -868,6 +869,12 @@ def getarguments():
 
     parser = argparse.ArgumentParser(description="Compute Urban Mask.")
 
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"SLURP {__version__}",
+    )
+    
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )

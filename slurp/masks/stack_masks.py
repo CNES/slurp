@@ -47,6 +47,7 @@ from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import io_utils, utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
+from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -511,6 +512,11 @@ def getarguments():
 
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"SLURP {__version__}",
     )
     parser.add_argument(
         "-log_f",

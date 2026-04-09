@@ -45,6 +45,8 @@ from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils, utils
 from slurp.tools import utils
 from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
+from slurp import __version__
+
 
 logger = logging.getLogger("slurp")
 
@@ -1152,6 +1154,12 @@ def getarguments():
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Vegetation Mask.")
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"SLURP {__version__}",
+    )
 
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
