@@ -1157,6 +1157,7 @@ def getarguments():
 
     parser.add_argument(
         "--version",
+        default=None,
         action="version",
         version=f"SLURP {__version__}",
     )
@@ -1342,6 +1343,7 @@ def getarguments():
 def slurp_vegetationmask(
     main_config: str,
     debug: bool,
+    version: bool,
     logs_to_file: bool,
     user_config: str,
     file_vhr: str,

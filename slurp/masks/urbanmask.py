@@ -871,6 +871,7 @@ def getarguments():
 
     parser.add_argument(
         "--version",
+        default=None,
         action="version",
         version=f"SLURP {__version__}",
     )
@@ -1012,6 +1013,7 @@ def slurp_urbanmask(
     main_config: str,
     logs_to_file: bool,
     debug: bool,
+    version: bool,
     user_config: str,
     file_vhr: str,
     valid_stack: bool,

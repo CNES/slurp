@@ -54,16 +54,16 @@ def getarguments():
     )
 
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"SLURP {__version__}",
-    )
-
-    parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
     parser.add_argument(
         "-d", "--debug", default=None, action="store_true", help="Debug flag"
+    )
+    parser.add_argument(
+        "--version",
+        default=None,
+        action="version",
+        version=f"SLURP {__version__}",
     )
     parser.add_argument(
         "-mode",
@@ -776,6 +776,7 @@ def update_and_save_used_config(args_dict: dict, args: argparse.Namespace):
 def slurp_prepare(
     main_config: str,
     debug: bool,
+    version: bool,
     mode: str,
     overwrite: bool,
     effective_used_config: str,
