@@ -480,6 +480,9 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn' for EOScale",
     )
+    group5.add_argument(
+        "-margin", type=int, help="Margin parameter (0 by default)"
+    )
     args = parser.parse_args()
 
     arglist = []
@@ -525,6 +528,7 @@ def slurp_stackmask(
     n_workers: int,
     tile_max_size: int,
     multiproc_context: str,
+    margin: int,
     categorized_watermask: bool,
     minimal_size_water_area: int,
 ):
@@ -603,7 +607,7 @@ def slurp_stackmask(
                 image_filter=post_process,
                 filter_parameters=vars(args),
                 generate_output_profiles=eo_utils.three_uint8_profile,
-                stable_margin=100,  # TODO : add a stability margin parameter ?
+                stable_margin=args.margin,
                 context_manager=eoscale_manager,
                 multiproc_context=args.multiproc_context,
                 filter_desc="Post processing...",
