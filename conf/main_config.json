@@ -149,6 +149,7 @@
 	"minimal_size_water_area": 10000,
 	"binary_closing":0,
 	"binary_opening":0,
-      "categorized_watermask": true
+	"categorized_watermask": true,
+	"margin": 0
     }
 }
