@@ -21,8 +21,9 @@
 
 """Brings together functions that create valid mask"""
 
-import numpy as np
 from typing import Optional
+
+import numpy as np
 
 
 def compute_valid_stack_clouds(

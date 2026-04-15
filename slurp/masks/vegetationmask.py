@@ -26,27 +26,28 @@ import json
 import logging
 import time
 import traceback
-from os import path
 from copy import deepcopy
 from math import ceil, sqrt
+from os import path
 
 import numpy as np
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars, mp_n_to_m_images_with_mapping
-from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
-
 # Cython module to compute stats
 import stats as ts
+from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import (
+    mp_n_to_m_images,
+    mp_n_to_m_images_with_mapping,
+    mp_n_to_m_scalars,
+)
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read, read_and_get_profile, write
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils, utils
-from slurp.tools import utils
 from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
-from slurp import __version__
-
 
 logger = logging.getLogger("slurp")
 
@@ -67,8 +68,6 @@ UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 
 def apply_map(pred, map_centroids):
     return np.array([map_centroids[n] for n in pred])
-
-
 
 
 def build_stack_vegetation(args, slurp_manager):
@@ -137,10 +136,7 @@ def build_stack_vegetation(args, slurp_manager):
     # TEXTURE LAYER
     # ======================================================
 
-    key_texture, profile_texture = read_and_get_profile(
-        args.file_texture
-    )
-
+    key_texture, profile_texture = read_and_get_profile(args.file_texture)
 
     # ======================================================
     # RETURN (SLURP FORMAT)
@@ -154,10 +150,12 @@ def build_stack_vegetation(args, slurp_manager):
         [key_valid_stack],
         profile_vhr,
         profile_texture,
-        profile_ndvi
+        profile_ndvi,
     )
 
+
 # Segmentation #
+
 
 def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     """
@@ -168,19 +166,13 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     :returns: SLIC segments
     """
     # computes nb of expected segments taking account NO_DATA
-    """
-    nseg = int(len(ndvi[ndvi!=NODATA_INT16]) / params["slic_seg_size"])
-    if nseg == 0:
-        logger.debug(f"Taille de segments : 0 !!  attention, risque de div par zero {ndvi.shape=}")
-    TODO : clean / choose right way. 
-    print(f"Nseg - X*Y / slic_seg_size (do not take into account NODATA) : {nseg}\n"
-          f"Alternative count : {int(len(ndvi[ndvi!=NODATA_INT16]) / params['slic_seg_size'])=}")
 
-    """
     # nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
     # nseg cannot be equal to 0, because calling function already checked
     # there were valid pixels to segment...
     nseg = int(len(ndvi[ndvi != NODATA_INT16]) / params["slic_seg_size"])
+    if nseg == 0:
+        logger.debug(f"Segments number : 0 !! Divide by zero {ndvi.shape=}")
 
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)
@@ -239,37 +231,13 @@ def segmentation_task(
     return segments
 
 
-def concat_seg(previous_result, output_algo_computer, tile):
-    """
-    Concatenates SLIC segmentation in a single segmentation
-    """
-    # Computes max of previous result and adds this value to the current result :
-    # prevents from computing a map with several identical labels !!
-    num_seg = np.max(previous_result[0])
-
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = (output_algo_computer[0][:, :, :] + num_seg)
-
-    # TODO : check if we can keep only this statement
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = np.where(
-        output_algo_computer[0][:, :, :] == 0,
-        0,
-        output_algo_computer[0][:, :, :] + num_seg,
-    )
-
-
 # Stats #
-
-
 def compute_stats_image(
     segments: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     texture: np.ndarray,
-    nb_lab: int
+    nb_lab: int,
 ) -> list:
     """
     Compute the sum of each primitive and the number of pixels for each segment.
@@ -292,9 +260,7 @@ def compute_stats_image(
     list
         [accumulator (sum per segment), counter (number of pixels per segment)]
     """
-
     ts_stats = ts.PyStats()
-    nb_primitives = 3  # NDVI, NDWI, Texture
 
     # Normalize inputs in case they come as (1,H,W)
     def ensure_2d(arr):
@@ -316,7 +282,7 @@ def compute_stats_image(
         nb_lab,
     )
 
-    return [accumulator, counter] 
+    return [accumulator, counter]
 
 
 def stats_concatenate(chunks_output_scalars):
@@ -719,8 +685,8 @@ def finalize_task(segments, valid_stack, data):
     :param np.ndarray data: final cluster data
     :returns: final mask
     """
-    
     clustering = data
+
     # Load Cython module and launch C++ function
     ts_stats = ts.PyStats()
 
@@ -816,9 +782,10 @@ def clean_task(
     # --- NDVI filtering
     im_classif = np.where(
         im_classif == LOW_VEG_CLASS,
-        np.where(im_ndvi > min_ndvi_veg, 
-            LOW_VEG_CLASS, 
-            UNDEFINED_VEG + LOW_VEG_CLASS,
+        np.where(
+            im_ndvi > min_ndvi_veg,
+            LOW_VEG_CLASS,
+            UNDEFINED_VEG + LOW_TEXTURE_CODE,
         ),
         im_classif,
     )
@@ -852,7 +819,7 @@ def segmentation(
     Parameters
     ----------
     args : Namespace
-        Runtime configuration and parameters.
+    Runtime configuration and parameters.
     slurp_manager : slurpContextManager
         SLURP execution context.
     key_ndvi : list[str]
@@ -880,9 +847,7 @@ def segmentation(
 
     input_profile = deepcopy(ndvi_profile)
 
-    output_profile = eo_utils.single_int32_profile(
-        [deepcopy(ndvi_profile)]
-    )
+    output_profile = eo_utils.single_int32_profile([deepcopy(ndvi_profile)])
     # ==========================================================
     # SEGMENTATION EXECUTION
     # ==========================================================
@@ -904,16 +869,14 @@ def segmentation(
     # OPTIONAL DEBUG SAVE
     # ==========================================================
 
-    #if args.save_mode in ["all", "debug"]:
-    output_path = args.vegetationmask.replace(
-        ".tif", "_slic.tif"
-    )
+    if args.save_mode in ["all", "debug"]:
+        output_path = args.vegetationmask.replace(".tif", "_slic.tif")
 
-    slurp_manager.write_tif(
-        data=future_seg[0],
-        path=output_path,
-        target_profile=output_profile,
-    )
+        slurp_manager.write_tif(
+            data=future_seg[0],
+            path=output_path,
+            target_profile=output_profile,
+        )
 
     return future_seg
 
@@ -1036,7 +999,6 @@ def process_stats(
         stats[0] : sum of each primitive (NDVI, NDWI, texture) per segment
         stats[1] : count of pixels per segment
     """
-
     logger.info("Computing per-segment statistics...")
 
     params_stats = {"nb_lab": size_result}
@@ -1095,56 +1057,6 @@ def process_stats(
     # stats[1] = count per segment
     # downstream clustering uses these arrays
     return stats
-
-
-def display_infos(
-    args,
-    end_time,
-    t0,
-    time_closing,
-    time_cluster,
-    time_final,
-    time_seg,
-    time_stack,
-    time_stats,
-):
-    """
-    Display information on the time spent on each stage of the processing pipeline.
-    """
-    logger.info(
-        f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
-    )
-    logger.info(
-        "Total time (user)       :\t" + utils.convert_time(end_time - t0)
-    )
-    logger.info(
-        "- Build_stack           :\t" + utils.convert_time(time_stack - t0)
-    )
-    logger.info(
-        "- Segmentation          :\t"
-        + utils.convert_time(time_seg - time_stack)
-    )
-    logger.info(
-        "- Stats                 :\t"
-        + utils.convert_time(time_stats - time_seg)
-    )
-    logger.info(
-        "- Clustering            :\t"
-        + utils.convert_time(time_cluster - time_stats)
-    )
-    logger.info(
-        "- Finalize Cython       :\t"
-        + utils.convert_time(time_final - time_cluster)
-    )
-    logger.info(
-        "- Post-processing       :\t"
-        + utils.convert_time(time_closing - time_final)
-    )
-    logger.info(
-        "- Write final image     :\t"
-        + utils.convert_time(end_time - time_closing)
-    )
-    logger.info("***")
 
 
 # MAIN #
@@ -1422,7 +1334,9 @@ def slurp_vegetationmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
 
@@ -1431,7 +1345,6 @@ def slurp_vegetationmask(
             # =====================================================
             # BUILD STACK
             # =====================================================
-
             logger.info("[0] Step: Build stack")
 
             (
@@ -1442,7 +1355,7 @@ def slurp_vegetationmask(
                 valid_stack,
                 vhr_profile,
                 valid_stack_profile,
-                ndvi_profile
+                ndvi_profile,
             ) = build_stack_vegetation(args, slurp_manager)
 
             time_stack = time.time()
@@ -1454,11 +1367,7 @@ def slurp_vegetationmask(
             logger.info("[1] Step: Segmentation")
 
             segments = segmentation(
-                args,
-                slurp_manager,
-                ndvi,
-                valid_stack,
-                ndvi_profile
+                args, slurp_manager, ndvi, valid_stack, ndvi_profile
             )
 
             time_seg = time.time()
@@ -1493,7 +1402,7 @@ def slurp_vegetationmask(
                 texture,
                 size_result,
                 mask_valid_indices,
-                ndvi_profile
+                ndvi_profile,
             )
 
             time_stats = time.time()
@@ -1511,6 +1420,10 @@ def slurp_vegetationmask(
                 mask_valid_indices,
             )
 
+            logger.debug(
+                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
+            )
+
             if args.autolabel:
                 clusters_veg = vegetation_labeling_with_LCM(
                     vars(args), pred_veg
@@ -1520,7 +1433,7 @@ def slurp_vegetationmask(
                     vars(args), pred_veg
                 )
 
-            pred_texture, _ = clustering_texture(
+            pred_texture, sorted_texture_centroids = clustering_texture(
                 vars(args),
                 size_result,
                 stats[0],
@@ -1548,17 +1461,13 @@ def slurp_vegetationmask(
             # final tab
             final_clusters = np.zeros(size_result)
             final_clusters[np.where(mask_valid_indices)] = clusters
-            final_clusters[np.where(mask_valid_indices == 0)] = (
-                0  # TODO : -1 or 0 ? it will be masked by valid_stack at the end
-            )
+            final_clusters[np.where(mask_valid_indices == 0)] = 0
 
             final_mask = mp_n_to_m_images(
                 inputs=[segments[0], valid_stack[0][0]],
                 image_height=vhr_profile["height"],
                 image_width=vhr_profile["width"],
-                output_profiles=[
-                    eo_utils.single_uint8_profile([vhr_profile])
-                ],
+                output_profiles=[eo_utils.single_uint8_profile([vhr_profile])],
                 output_keys=[path.basename(args.vegetationmask)],
                 func=finalize_task,
                 func_parameters={"data": final_clusters},
@@ -1573,9 +1482,7 @@ def slurp_vegetationmask(
                 slurp_manager.write_tif(
                     data=final_mask[0],
                     path=output_path,
-                    target_profile=eo_utils.single_uint8_profile(
-                        [vhr_profile]
-                    ),
+                    target_profile=eo_utils.single_uint8_profile([vhr_profile]),
                 )
 
             time_final = time.time()
@@ -1596,7 +1503,7 @@ def slurp_vegetationmask(
                 final_mask,
                 valid_stack,
                 ndvi,
-                eo_utils.single_uint8_profile([vhr_profile])
+                eo_utils.single_uint8_profile([vhr_profile]),
             )
 
             time_post = time.time()
@@ -1607,16 +1514,12 @@ def slurp_vegetationmask(
             slurp_manager.write_tif(
                 data=final_mask[0],
                 path=args.vegetationmask,
-                target_profile=eo_utils.single_uint8_profile(
-                    [vhr_profile]
-                ),
+                target_profile=eo_utils.single_uint8_profile([vhr_profile]),
             )
 
             t1 = time.time()
 
-            logger.info(
-                "Total time (user):\t" + utils.convert_time(t1 - t0)
-            )
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)

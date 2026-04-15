@@ -26,23 +26,26 @@ import gc
 import logging
 import time
 import traceback
-from os import makedirs, path
 from copy import deepcopy
+from os import makedirs, path
 from typing import List, Optional
 
 import numpy as np
 from skimage.measure import label, regionprops
 from sklearn.ensemble import RandomForestClassifier
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
+from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import (
+    mp_n_to_m_images,
+    mp_n_to_m_scalars,
+)
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
+from slurp.eomultiprocessing.utils import read, read_and_get_profile, write
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils as rf_utils
 from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
-from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -89,9 +92,7 @@ def compute_pekel_mask(
     mask_pekel = utils.compute_mask(pekel_img, [thresh_pekel])
 
     if hand_strict:
-        mask_pekel_strict = utils.compute_mask(
-            pekel_img, [strict_thresh]
-        )
+        mask_pekel_strict = utils.compute_mask(pekel_img, [strict_thresh])
         return mask_pekel, mask_pekel_strict
 
     if not no_pekel_filter:
@@ -121,6 +122,9 @@ def compute_hand_mask(
         - False indicates pixels above the threshold.
     """
     mask_hand = hand_array > thresh_hand
+    # HAND (Height Above Nearest Drainage) is used to select "ground" pixels
+    # quite close to the known water areas.
+    # HAND mask are valid pixels, below an altitude "thresh_hand"
 
     # Invert mask so that low HAND values become True
     mask_hand = np.logical_not(mask_hand, out=mask_hand)
@@ -281,11 +285,13 @@ def build_samples(
         nb_samples_water (int): Target number of water samples.
         nb_samples_other (int): Target number of "other" samples.
         samples_method (str): Sampling method for water pixels: 'random', 'smart', or 'grid'.
-        nb_samples_auto (bool): Whether to automatically determine number of samples based on auto_pct.
+        nb_samples_auto (bool): Whether to automatically determine number
+                                of samples based on auto_pct.
         auto_pct (float): Percentage of valid pixels to sample if nb_samples_auto is True.
         smart_area_pct (float): Area fraction used for 'smart' sampling method.
         smart_minimum (int): Minimum number of pixels per smart sample.
-        aux_inputs (Optional[List[np.ndarray]]): Optional additional tiles to include in the feature stack.
+        aux_inputs (Optional[List[np.ndarray]]): Optional additional tiles
+                                                 to include in the feature stack.
 
     Returns:
         np.ndarray: Array of shape (nb_samples, n_features), where features include
@@ -300,7 +306,7 @@ def build_samples(
         aux_inputs = []
 
     # ---- validity mask ----
-    validity_mask = (valid_stack == 0)
+    validity_mask = valid_stack == 0
 
     # ---- valid water pixels ----
     valid_water_pixels = np.logical_and(mask_pekel, ndwi > ndwi_threshold)
@@ -330,17 +336,28 @@ def build_samples(
         )
     elif samples_method == "smart":
         rows_pekel, cols_pekel = get_smart_indexes_from_mask(
-            nb_water_subsamples, smart_area_pct, smart_minimum, np.logical_and(mask_pekel, validity_mask)
+            nb_water_subsamples,
+            smart_area_pct,
+            smart_minimum,
+            np.logical_and(mask_pekel, validity_mask),
         )
     elif samples_method == "grid":
         rows_pekel, cols_pekel = get_grid_indexes_from_mask(
             nb_water_subsamples, validity_mask, valid_water_pixels
         )
     else:
-        raise ValueError("samples_method must be 'random', 'smart' or 'grid'")
+        raise Exception(
+            "Sample method not accepted : use 'random', 'smart' or 'grid'"
+        )
+    # Always use grid indexes method for ground pixels (selected in HAND mask)
+    rows_hand, cols_hand = get_grid_indexes_from_mask(
+        nb_other_subsamples, validity_mask, mask_hand
+    )
 
     # ---- OTHER SAMPLES ----
-    rows_hand, cols_hand = get_random_indexes_from_masks(nb_other_subsamples, validity_mask, mask_hand)
+    rows_hand, cols_hand = get_random_indexes_from_masks(
+        nb_other_subsamples, validity_mask, mask_hand
+    )
 
     # ---- merge indices ----
     rows = np.concatenate((rows_pekel, rows_hand))
@@ -352,9 +369,12 @@ def build_samples(
     im_stack = np.stack(features, axis=0)
 
     # ---- select sampled pixels ----
-    samples = np.transpose(im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)])
+    samples = np.transpose(
+        im_stack[:, rows.astype(np.uint16), cols.astype(np.uint16)]
+    )
 
     return samples
+
 
 def rf_prediction(
     valid_stack: np.ndarray,
@@ -366,7 +386,7 @@ def rf_prediction(
     ndwi: np.ndarray,
     aux_inputs=None,
     classifier=None,
-    debug: bool =False,
+    debug: bool = False,
 ):
     """
     Random Forest prediction
@@ -454,7 +474,6 @@ def mask_filter(im_in, mask_ref):
     return im_filtered
 
 
-
 def post_process(
     im_predict,
     mask_hand,
@@ -524,7 +543,7 @@ def post_process(
     # ---- Morphological operations ----
     if binary_closing:
         im_classif[:, :] = apply_morpho(
-            im_classif[  :, :].astype(bool), "binary_closing", binary_closing
+            im_classif[:, :].astype(bool), "binary_closing", binary_closing
         ).astype(np.uint8)
 
     if binary_opening:
@@ -539,12 +558,16 @@ def post_process(
 
     if remove_small_holes:
         im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool), "remove_small_holes", remove_small_holes
+            im_classif[:, :].astype(bool),
+            "remove_small_holes",
+            remove_small_holes,
         ).astype(np.uint8)
 
     if remove_small_objects:
         im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool), "remove_small_objects", remove_small_objects
+            im_classif[:, :].astype(bool),
+            "remove_small_objects",
+            remove_small_objects,
         ).astype(np.uint8)
 
     # ---- Add nodata ----
@@ -628,10 +651,10 @@ def build_stack_water(args, slurp_manager):
         [key_ndvi],
         [key_ndwi],
         [key_vhr],
-        [key_valid_stack], 
+        [key_valid_stack],
         margin,
         profile_vhr,
-        profile_ndwi
+        profile_ndwi,
     )
 
 
@@ -730,9 +753,7 @@ def process_pekel(args, slurp_manager, margin):
     args.pekel_nodata = pekel_profile.get("nodata")
 
     input_profile = deepcopy(pekel_profile)
-    output_profile = eo_utils.double_uint8_profile(
-        [deepcopy(pekel_profile)]
-    )
+    output_profile = eo_utils.double_uint8_profile([deepcopy(pekel_profile)])
     # ==============================
     # COMPUTE PEKEL MASK
     # ==============================
@@ -740,7 +761,7 @@ def process_pekel(args, slurp_manager, margin):
         inputs=[pekel_array[0]],
         image_height=input_profile["height"],
         image_width=input_profile["width"],
-        output_profiles = [output_profile[0], output_profile[0]],
+        output_profiles=[output_profile[0], output_profile[0]],
         output_keys=["pekel_mask"],
         func=compute_pekel_mask,
         func_parameters={
@@ -796,9 +817,7 @@ def process_hand(args, slurp_manager, margin):
     hand_array, hand_profile = read_and_get_profile(args.extracted_hand)
 
     input_profile = deepcopy(hand_profile)
-    output_profile = eo_utils.single_float_profile(
-        [deepcopy(hand_profile)]
-    )
+    output_profile = eo_utils.single_float_profile([deepcopy(hand_profile)])
 
     # ==============================
     # COMPUTE HAND MASK
@@ -810,9 +829,7 @@ def process_hand(args, slurp_manager, margin):
         output_profiles=[output_profile],
         output_keys=["hand_mask"],
         func=compute_hand_mask,
-        func_parameters={
-            "thresh_hand": args.thresh_hand
-        },
+        func_parameters={"thresh_hand": args.thresh_hand},
         context_manager=slurp_manager,
         stable_margin=margin,
         binary=False,
@@ -832,7 +849,7 @@ def nominal_case_predict(
     margin,
     mask_hand,
     mask_pekel0,
-    vhr_profile
+    vhr_profile,
 ):
     """
     Perform supervised classification to predict a water mask using Random Forest.
@@ -868,7 +885,8 @@ def nominal_case_predict(
         - Sampling ratios are computed using valid pixels and optional auto mode.
         - The feature stack includes spectral bands, indices, and auxiliary layers.
         - Random Forest classifier is trained on the sampled pixels.
-        - Multiprocessing is used for sampling and prediction using `mp_n_to_m_scalars` and `mp_n_to_m_images`.
+        - Multiprocessing is used for sampling and prediction
+          using `mp_n_to_m_scalars` and `mp_n_to_m_images`.
         - Memory is managed and garbage collected between training and prediction steps.
     """
     if args.files_layers is None:
@@ -876,21 +894,15 @@ def nominal_case_predict(
         keys_files_layers = []
     else:
         keys_files_layers = [
-            band
-            for path in args.files_layers
-            for band in read(path)
+            band for path in args.files_layers for band in read(path)
         ]
-    
-    nb_valid_pixels = len(
-        np.where(valid_stack[0][0] == 0)[0]
-    )
+
+    nb_valid_pixels = len(np.where(valid_stack[0][0] == 0)[0])
     args.nb_valid_water_pixels = np.count_nonzero(
         np.logical_and(local_mask_pekel, valid_stack[0][0] == 0)
     )
     input_profile = deepcopy(vhr_profile)
-    output_profile = eo_utils.single_uint8_profile(
-        [deepcopy(vhr_profile)]
-    )
+    output_profile = eo_utils.single_uint8_profile([deepcopy(vhr_profile)])
 
     args.nb_valid_other_pixels = nb_valid_pixels - args.nb_valid_water_pixels
     input_for_samples = [
@@ -931,7 +943,7 @@ def nominal_case_predict(
     del local_mask_pekel
     logger.info("[3.2] Step: Learn model")
     time_samples = time.time()
-    
+
     # -- Train Random Forest classifier -- #
     classifier = RandomForestClassifier(
         n_estimators=args.nb_estimators,
@@ -939,10 +951,14 @@ def nominal_case_predict(
         random_state=712,
         n_jobs=1,
     )
-    logger.debug("RandomForest parameters: \n%s\n", str(classifier.get_params()))
+    logger.debug(
+        "RandomForest parameters: \n%s\n", str(classifier.get_params())
+    )
 
-    x_samples = samples[:, 1:]  # features: spectral bands, indices, auxiliary layers
-    y_samples = samples[:, 0]   # labels: mask_pekel
+    x_samples = samples[
+        :, 1:
+    ]  # features: spectral bands, indices, auxiliary layers
+    y_samples = samples[:, 0]  # labels: mask_pekel
     rf_utils.train_classifier(classifier, x_samples, y_samples)
     rf_utils.print_feature_importance(classifier, args.files_layers)
 
@@ -981,6 +997,7 @@ def nominal_case_predict(
 
     return predict, output_profile, time_random_forest, time_samples
 
+
 def launch_postprocess(
     args,
     slurp_manager,
@@ -989,14 +1006,15 @@ def launch_postprocess(
     margin,
     mask_hand,
     mask_pekel0,
-    predict_profile
+    predict_profile,
 ):
     """
     Apply post-processing to the predicted water mask using additional masks and validity mask.
 
     This function:
     1. Combines the predicted mask with hand-made masks, Pekel mask, and validity mask.
-    2. Applies the `post_process` function via SLURP executor (`mp_n_to_m_images`) for parallel processing.
+    2. Applies the `post_process` function via SLURP executor (`mp_n_to_m_images`)
+       for parallel processing.
     3. Writes the final post-processed mask to `args.watermask`.
     4. Optionally writes the raw prediction in debug mode.
 
@@ -1014,16 +1032,17 @@ def launch_postprocess(
         None
 
     Notes:
-        - Uses `mp_n_to_m_images` to apply `post_process` function in a tiled/multiprocessing manner.
+        - Uses `mp_n_to_m_images` to apply `post_process` function in a
+          tiled/multiprocessing manner.
         - Writes the final mask using `slurp_manager.write_tif`.
         - Raw prediction is saved only if `args.save_mode` is set to "debug".
         - Output profiles are duplicated for post-processed and raw masks.
     """
     inputs_for_classif = [
-        predict[0],          # predicted RF mask
-        mask_hand[0],        # hand mask
-        mask_pekel0,         # Pekel mask
-        valid_stack[0][0],   # validity mask
+        predict[0],  # predicted RF mask
+        mask_hand[0],  # hand mask
+        mask_pekel0,  # Pekel mask
+        valid_stack[0][0],  # validity mask
     ]
 
     input_profile = deepcopy(predict_profile)
@@ -1054,9 +1073,7 @@ def launch_postprocess(
 
     # ---- write final mask ----
     slurp_manager.write_tif(
-        data=im_classif, 
-        path=args.watermask, 
-        target_profile=output_profile[0]
+        data=im_classif, path=args.watermask, target_profile=output_profile[0]
     )
 
     # ---- write raw prediction in debug mode ----
@@ -1064,7 +1081,7 @@ def launch_postprocess(
         slurp_manager.write_tif(
             data=im_predict,
             path=args.watermask.replace(".tif", "_raw_predict.tif"),
-            target_profile=output_profile[0]
+            target_profile=output_profile[0],
         )
 
 
@@ -1072,7 +1089,7 @@ def getarguments():
     """Parse command line arguments."""
 
     parser = argparse.ArgumentParser(description="Compute Water Mask.")
-    
+
     parser.add_argument(
         "--version",
         default=None,
@@ -1374,7 +1391,9 @@ def slurp_watermask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
             t0 = time.time()
@@ -1411,7 +1430,7 @@ def slurp_watermask(
                 input_profile = deepcopy(ndwi_profile)
                 output_profile = eo_utils.single_uint8_profile(
                     [deepcopy(ndwi_profile)]
-                ) 
+                )
                 predict = mp_n_to_m_images(
                     inputs=[ndwi[0][0], valid_stack[0][0]],
                     image_height=input_profile["height"],
@@ -1452,18 +1471,20 @@ def slurp_watermask(
 
             else:
                 logger.info("[3] Step: RF WATER")
-                predict, predict_profile, time_random_forest, time_samples = nominal_case_predict(
-                    args,
-                    slurp_manager,
-                    ndvi,
-                    ndwi,
-                    vhr,
-                    valid_stack,
-                    local_mask_pekel,
-                    margin,
-                    mask_hand,
-                    mask_pekel0,
-                    vhr_profile
+                predict, predict_profile, time_random_forest, time_samples = (
+                    nominal_case_predict(
+                        args,
+                        slurp_manager,
+                        ndvi,
+                        ndwi,
+                        vhr,
+                        valid_stack,
+                        local_mask_pekel,
+                        margin,
+                        mask_hand,
+                        mask_pekel0,
+                        vhr_profile,
+                    )
                 )
 
             # ==============================
@@ -1478,20 +1499,19 @@ def slurp_watermask(
                 margin,
                 mask_hand,
                 mask_pekel0,
-                predict_profile
+                predict_profile,
             )
 
             t1 = time.time()
 
-            logger.info(
-                "Total time (user):\t" + utils.convert_time(t1 - t0)
-            )
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)
             traceback.print_exc()
 
     logger.info("End of watermask step\n")
+
 
 def main():
     """
