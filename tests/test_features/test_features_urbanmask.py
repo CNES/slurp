@@ -125,3 +125,43 @@ def test_nb_samples_ci(
     ).split()
     sys.argv = command
     slurp.masks.urbanmask.main()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize(
+    "main_config,features_test_img,ref_dir,valid_stack,aux_layer",
+    [
+        (
+            "/work/scratch/data/amselln/uc_toulouse_with_MNH/MNH_config.json",
+            "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
+            "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref",
+            "/work/scratch/data/amselln/uc_toulouse_with_MNH/out/valid_stack.tif",
+            "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_MNH.tif",
+        ),
+    ],
+)
+def test_layers_aux_file(
+    main_config,
+    features_test_img,
+    output_dir,
+    ref_dir,
+    valid_stack,
+    aux_layer,
+):
+    """Tests the urban mask computation with auxiliary raster layers
+    to ensure the -layers argument correctly ingests external files."""
+
+    command = (
+        write_command_compute_urbanmask(
+            1,
+            main_config,
+            features_test_img,
+            output_dir,
+            ref_dir,
+            valid_stack,
+        )
+        + f"-layers {aux_layer} "
+    ).split()
+
+    sys.argv = command
+    slurp.masks.urbanmask.main()
