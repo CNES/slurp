@@ -34,8 +34,9 @@ from slurp.eomultiprocessing.utils import write
 
 def extract_param(params: dict, key: str) -> Any:
     if key not in params:
-        raise ValueError(f"Input parameters must contain the key '{key}'")
+        raise ValueError(f"Input parameters must contain the key {key!r}")
     return params[key]
+
 
 class slurpContextManager:
     """
@@ -51,7 +52,9 @@ class slurpContextManager:
         - Determines whether processing is in-memory or streaming based on params.
     """
 
-    def __init__(self, params: dict, tile_mode: bool = False, tile_max_size: int = 0):
+    def __init__(
+        self, params: dict, tile_mode: bool = False, tile_max_size: int = 0
+    ):
         """
         Initialize the SLURP context manager.
 
@@ -63,8 +66,10 @@ class slurpContextManager:
                 - "mp_context" (str, optional): multiprocessing start method
             tile_mode (bool): Whether to split images into tiles (True) or strips (False)
             tile_max_size : int, optional
-                If fixed, the maximum tile size won't be bigger than this limit (default is 0). 
-                This can help to limit memory usage, when a lot of memory is allocated in the multiprocessed function
+                If fixed, the maximum tile size won't be bigger than this limit
+                (default is 0).
+                This can help to limit memory usage, when a lot of memory is allocated
+                in the  multiprocessed function
         """
         self.nb_workers: int = extract_param(params, "nb_max_workers")
         self.dev_mode: bool = extract_param(params, "developer_mode")
@@ -93,7 +98,7 @@ class slurpContextManager:
 
             if self.context not in mp.get_all_start_methods():
                 raise ValueError(
-                    f"The multiprocessing context '{self.context}' "
+                    f"The multiprocessing context {self.context!r} "
                     f"is not supported by your OS. "
                     f"Please choose one among {mp.get_all_start_methods()}"
                 )

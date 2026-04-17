@@ -24,7 +24,7 @@ This module is used to run multiprocessing in slurp
 
 import math
 from multiprocessing.synchronize import Lock
-from typing import Callable, List, Tuple, Union, Optional
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import tqdm
@@ -83,7 +83,11 @@ def compute_mp_strips(
         start = t * strip_size
         end = min((t + 1) * strip_size - 1, total_size - 1)
         start_margin = stable_margin if start - stable_margin >= 0 else start
-        end_margin: int = stable_margin if end + stable_margin <= total_size - 1 else total_size - 1 - end
+        end_margin: int = (
+            stable_margin
+            if end + stable_margin <= total_size - 1
+            else total_size - 1 - end
+        )
 
         if along_line:
             strips.append(
@@ -99,7 +103,9 @@ def compute_mp_strips(
                     height=image_height,
                     width=end - start + 1,
                     height_margin=image_height,
-                    width_margin=(end + end_margin) - (start - start_margin) + 1,
+                    width_margin=(end + end_margin)
+                    - (start - start_margin)
+                    + 1,
                 )
             )
         else:
@@ -115,7 +121,9 @@ def compute_mp_strips(
                     left_margin=0,
                     height=end - start + 1,
                     width=image_width,
-                    height_margin=(end + end_margin) - (start - start_margin) + 1,
+                    height_margin=(end + end_margin)
+                    - (start - start_margin)
+                    + 1,
                     width_margin=image_width,
                 )
             )
@@ -131,7 +139,7 @@ def compute_mp_tiles(
     tile_mode: bool,
     specific_tile_size: Union[int, None] = None,
     strip_along_lines: bool = False,
-    tile_max_size: int = 0
+    tile_max_size: int = 0,
 ) -> List[MpTile]:
     """
     Compute multiprocessing tiles or strips based on the input image geometry.
@@ -200,10 +208,22 @@ def compute_mp_tiles(
                 end_x = min((tx + 1) * tile_size - 1, image_width - 1)
                 end_y = min((ty + 1) * tile_size - 1, image_height - 1)
 
-                top_margin = stable_margin if start_y - stable_margin >= 0 else start_y
-                left_margin = stable_margin if start_x - stable_margin >= 0 else start_x
-                bottom_margin = stable_margin if end_y + stable_margin <= image_height - 1 else image_height - 1 - end_y
-                right_margin = stable_margin if end_x + stable_margin <= image_width - 1 else image_width - 1 - end_x
+                top_margin = (
+                    stable_margin if start_y - stable_margin >= 0 else start_y
+                )
+                left_margin = (
+                    stable_margin if start_x - stable_margin >= 0 else start_x
+                )
+                bottom_margin = (
+                    stable_margin
+                    if end_y + stable_margin <= image_height - 1
+                    else image_height - 1 - end_y
+                )
+                right_margin = (
+                    stable_margin
+                    if end_x + stable_margin <= image_width - 1
+                    else image_width - 1 - end_x
+                )
 
                 strips.append(
                     MpTile(
@@ -217,8 +237,12 @@ def compute_mp_tiles(
                         left_margin=left_margin,
                         height=end_y - start_y + 1,
                         width=end_x - start_x + 1,
-                        height_margin=(end_y + bottom_margin) - (start_y - top_margin) + 1,
-                        width_margin=(end_x + right_margin) - (start_x - left_margin) + 1,
+                        height_margin=(end_y + bottom_margin)
+                        - (start_y - top_margin)
+                        + 1,
+                        width_margin=(end_x + right_margin)
+                        - (start_x - left_margin)
+                        + 1,
                     )
                 )
 
@@ -233,6 +257,7 @@ def compute_mp_tiles(
         )
 
     return strips
+
 
 def mp_n_to_m_images(
     inputs: list,
@@ -326,6 +351,7 @@ def mp_n_to_m_images(
         debug,
     )
 
+
 def _find_spatial_axes(arr: np.ndarray, h: int, w: int):
     """
     Find which axes correspond to spatial dimensions (H, W)
@@ -353,9 +379,12 @@ def _find_spatial_axes(arr: np.ndarray, h: int, w: int):
 
     # take first valid match
     return matches[0]
+
+
 # ============================================================
 # VALIDATION
 # ============================================================
+
 
 def _validate_inputs(
     inputs,
@@ -394,11 +423,13 @@ def _validate_inputs(
 # HELPERS
 # ============================================================
 
+
 def _build_params(base_params, aux, has_aux):
     params = dict(base_params)
     if has_aux:
         params["aux_inputs"] = aux
     return params
+
 
 def _has_spatial_dims(arr, h, w):
     try:
@@ -406,6 +437,7 @@ def _has_spatial_dims(arr, h, w):
         return True
     except ValueError:
         return False
+
 
 def _compute_tiles(
     image_height,
@@ -421,18 +453,19 @@ def _compute_tiles(
         image_width=image_width,
         stable_margin=stable_margin,
         nb_workers=context_manager.nb_workers,
-        tile_mode=tile_mode
-        if tile_mode is not None
-        else context_manager.tile_mode,
+        tile_mode=(
+            tile_mode if tile_mode is not None else context_manager.tile_mode
+        ),
         specific_tile_size=specific_tile_size,
         strip_along_lines=strip_along_lines,
-        tile_max_size=context_manager.tile_max_size
+        tile_max_size=context_manager.tile_max_size,
     )
 
 
 # ============================================================
 # SINGLE PROCESS
 # ============================================================
+
 
 def _run_singleprocess(
     inputs,
@@ -473,6 +506,7 @@ def _run_singleprocess(
 # IN MEMORY MULTIPROCESSING
 # ============================================================
 
+
 def _run_in_memory(
     inputs,
     aux_inputs,
@@ -492,11 +526,16 @@ def _run_in_memory(
     jobs = []
 
     for tile in tiles:
-        tile_inputs = [_slice_array(arr, tile, image_height, image_width) for arr in inputs]
+        tile_inputs = [
+            _slice_array(arr, tile, image_height, image_width) for arr in inputs
+        ]
 
         tile_aux = None
         if has_aux:
-            tile_aux = [_slice_array(arr, tile, image_height, image_width) for arr in aux_inputs]
+            tile_aux = [
+                _slice_array(arr, tile, image_height, image_width)
+                for arr in aux_inputs
+            ]
 
         params = _build_params(func_parameters, tile_aux, has_aux)
 
@@ -530,6 +569,7 @@ def _run_in_memory(
 # STREAMING MODE
 # ============================================================
 
+
 def _run_streaming(
     inputs,
     aux_inputs,
@@ -550,9 +590,7 @@ def _run_streaming(
         else context_manager.tmp_key
     )
 
-    output_paths = [
-        context_manager.get_path(k, key) for k in output_keys
-    ]
+    output_paths = [context_manager.get_path(k, key) for k in output_keys]
 
     params = _build_params(
         func_parameters,
@@ -585,6 +623,7 @@ def _run_streaming(
 # ============================================================
 # UTILITIES
 # ============================================================
+
 
 def _slice_array(arr, tile, h, w):
 
@@ -636,9 +675,7 @@ def _reconstruct_outputs(chunks, h, w, output_profiles):
     for i, arr in enumerate(first):
 
         if arr.ndim < 2:
-            raise RuntimeError(
-                f"Invalid output dimension {arr.shape}"
-            )
+            raise RuntimeError(f"Invalid output dimension {arr.shape}")
 
         # spatial dims = dims matching tile size
         candidate_axes = []
@@ -840,6 +877,7 @@ def mp_execute_from_arrays(
         "tile": tile,
     }
 
+
 def mp_n_to_m_scalars(
     inputs: list,
     image_height: int,
@@ -969,6 +1007,8 @@ def mp_n_to_m_scalars(
         )
 
     return reducer(results)
+
+
 def mp_execute_scalar_from_arrays(
     inputs: List[np.ndarray],
     func: Callable,
@@ -977,6 +1017,7 @@ def mp_execute_scalar_from_arrays(
 ):
     outputs = func(*inputs, **func_parameters)
     return outputs
+
 
 def mp_execute_scalar_from_paths(
     input_paths: List[str],
@@ -987,6 +1028,7 @@ def mp_execute_scalar_from_paths(
     inputs = [read_window(path, tile) for path in input_paths]
     outputs = func(*inputs, **func_parameters)
     return outputs
+
 
 def _run_scalar_singleprocess(
     inputs,
@@ -1001,6 +1043,7 @@ def _run_scalar_singleprocess(
     result = func(*inputs, **params)
 
     return reducer([result])
+
 
 def _run_scalar_in_memory(
     inputs,
@@ -1018,28 +1061,21 @@ def _run_scalar_in_memory(
 
     for tile in tiles:
 
-        tile_inputs = [
-            _slice_array(arr, tile, h, w)
-            for arr in inputs
-        ]
+        tile_inputs = [_slice_array(arr, tile, h, w) for arr in inputs]
 
         tile_aux = None
         if has_aux:
-            tile_aux = [
-                _slice_array(arr, tile, h, w)
-                for arr in aux_inputs
-            ]
+            tile_aux = [_slice_array(arr, tile, h, w) for arr in aux_inputs]
 
         params = _build_params(func_parameters, tile_aux, has_aux)
 
-        jobs.append(
-            (tile_inputs, func, params, tile)
-        )
+        jobs.append((tile_inputs, func, params, tile))
 
     return context_manager.pool.starmap(
         mp_execute_scalar_from_arrays,
         tqdm.tqdm(jobs, total=len(jobs)),
     )
+
 
 def _run_scalar_streaming(
     inputs,
@@ -1057,18 +1093,18 @@ def _run_scalar_streaming(
         has_aux,
     )
 
-    jobs = [
-        (inputs, func, params, tile)
-        for tile in tiles
-    ]
+    jobs = [(inputs, func, params, tile) for tile in tiles]
 
     return context_manager.pool.starmap(
         mp_execute_scalar_from_paths,
         tqdm.tqdm(jobs, total=len(jobs)),
     )
+
+
 # ============================================================
 # MAP-REDUCE LABEL REINDEXING
 # ============================================================
+
 
 def _apply_global_label_mapping(chunks):
     """
@@ -1111,6 +1147,7 @@ def _apply_global_label_mapping(chunks):
 # IN MEMORY MULTIPROCESSING WITH MAP-REDUCE
 # ============================================================
 
+
 def _run_in_memory_with_mapping(
     inputs,
     aux_inputs,
@@ -1132,8 +1169,7 @@ def _run_in_memory_with_mapping(
     for tile in tiles:
 
         tile_inputs = [
-            _slice_array(arr, tile, image_height, image_width)
-            for arr in inputs
+            _slice_array(arr, tile, image_height, image_width) for arr in inputs
         ]
 
         tile_aux = None
@@ -1252,8 +1288,4 @@ def mp_n_to_m_images_with_mapping(
             debug,
         )
 
-    raise RuntimeError(
-        "Mapping mode currently supported only in-memory."
-    )
-
-
+    raise RuntimeError("Mapping mode currently supported only in-memory.")

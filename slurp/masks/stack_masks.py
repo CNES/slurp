@@ -32,22 +32,25 @@ import json
 import logging
 import time
 import traceback
-from os import path
 from copy import deepcopy
+from os import path
 
 import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
 from skimage.measure import label
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
-from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
-from slurp.post_process.morphology import apply_morpho, morpho_clean
-from slurp.tools import profile_utils as eo_utils
-from slurp.tools import io_utils, utils
-from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import (
+    mp_n_to_m_images,
+)
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
+from slurp.post_process.morphology import apply_morpho, morpho_clean
+from slurp.tools import io_utils
+from slurp.tools import profile_utils as eo_utils
+from slurp.tools import utils
+from slurp.tools.constant import HIGH, LOW, NODATA_INT8
 
 logger = logging.getLogger("slurp")
 
@@ -125,6 +128,7 @@ def build_stack_stackmask(args, slurp_manager):
         image_profile,
     )
 
+
 def watershed_regul_buildings(
     input_image: np.ndarray,
     urbanmask: np.ndarray,
@@ -199,40 +203,77 @@ def watershed_regul_buildings(
 
     # Mono image for edge detection
     if sobel_image == "ndvi":
-        im_mono = (input_image[3] - input_image[0]) / (input_image[3] + input_image[0])
+        im_mono = (input_image[3] - input_image[0]) / (
+            input_image[3] + input_image[0]
+        )
     elif sobel_image == "nir":
         im_mono = input_image[3]
     else:
-        im_mono = 0.29 * input_image[0] + 0.58 * input_image[1] + 0.114 * input_image[2]
+        im_mono = (
+            0.29 * input_image[0]
+            + 0.58 * input_image[1]
+            + 0.114 * input_image[2]
+        )
 
     edges = sobel(im_mono)
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
 
     # Bare ground
-    eroded_bare_ground = apply_morpho(vegmask == 11, "binary_erosion", erosion_radius)
-    markers[0][eroded_bare_ground] = value_classif_bare_ground if regul_type == "all" else value_classif_background
+    eroded_bare_ground = apply_morpho(
+        vegmask == 11, "binary_erosion", erosion_radius
+    )
+    markers[0][eroded_bare_ground] = (
+        value_classif_bare_ground
+        if regul_type == "all"
+        else value_classif_background
+    )
 
     # Buildings
-    ground_truth_eroded = apply_morpho(wsf == 255, "binary_erosion", erosion_radius)
+    ground_truth_eroded = apply_morpho(
+        wsf == 255, "binary_erosion", erosion_radius
+    )
     normalized_building_threshold = np.percentile(urbanmask, building_threshold)
     urbanmask[ground_truth_eroded] += bonus_gt
     urbanmask[shadowmask == 2] -= malus_shadow
-    probable_buildings = np.logical_and(ground_truth_eroded, urbanmask > normalized_building_threshold)
-    probable_buildings = apply_morpho(probable_buildings, "binary_erosion", building_erosion)
-    false_positive = np.logical_and(apply_morpho(wsf == 255, "binary_dilation", 10) == 0, urbanmask > normalized_building_threshold)
+    probable_buildings = np.logical_and(
+        ground_truth_eroded, urbanmask > normalized_building_threshold
+    )
+    probable_buildings = apply_morpho(
+        probable_buildings, "binary_erosion", building_erosion
+    )
+    false_positive = np.logical_and(
+        apply_morpho(wsf == 255, "binary_dilation", 10) == 0,
+        urbanmask > normalized_building_threshold,
+    )
     markers[0][probable_buildings] = value_classif_buildings
     markers[0][false_positive] = value_classif_false_positive_buildings
 
     # Low vegetation
-    eroded_low_veg = apply_morpho(vegmask == 21, "binary_erosion", erosion_radius)
-    markers[0][eroded_low_veg] = value_classif_low_veg if regul_type == "all" else value_classif_background
+    eroded_low_veg = apply_morpho(
+        vegmask == 21, "binary_erosion", erosion_radius
+    )
+    markers[0][eroded_low_veg] = (
+        value_classif_low_veg
+        if regul_type == "all"
+        else value_classif_background
+    )
 
     # High vegetation
-    eroded_high_veg = apply_morpho(np.logical_or(vegmask == 23, vegmask == 22), "binary_erosion", erosion_radius)
-    markers[0][eroded_high_veg] = value_classif_high_veg if regul_type == "all" else value_classif_background
+    eroded_high_veg = apply_morpho(
+        np.logical_or(vegmask == 23, vegmask == 22),
+        "binary_erosion",
+        erosion_radius,
+    )
+    markers[0][eroded_high_veg] = (
+        value_classif_high_veg
+        if regul_type == "all"
+        else value_classif_background
+    )
 
     # Shadow
-    eroded_shadow = apply_morpho(shadowmask == 2, "binary_erosion", erosion_radius)
+    eroded_shadow = apply_morpho(
+        shadowmask == 2, "binary_erosion", erosion_radius
+    )
     markers[0][eroded_shadow] = value_classif_background
 
     # Water
@@ -454,23 +495,27 @@ def post_process(
     # Classes cleaning
     # ==============================
     clean_bare_ground = (
-    morpho_clean(
-        seg == value_classif_bare_ground,
-        binary_closing=binary_closing,
-        binary_opening=binary_opening,
-        remove_small_holes=remove_small_holes,
-        remove_small_objects=remove_small_objects,
-    ) == 1
-)
+        morpho_clean(
+            seg == value_classif_bare_ground,
+            binary_closing=binary_closing,
+            binary_opening=binary_opening,
+            remove_small_holes=remove_small_holes,
+            remove_small_objects=remove_small_objects,
+        )
+        == 1
+    )
     stack[0][clean_bare_ground] = value_classif_bare_ground
 
-    clean_buildings = morpho_clean(
-        seg == value_classif_buildings, 
-        binary_closing=binary_closing,
-        binary_opening=binary_opening,
-        remove_small_holes=remove_small_holes,
-        remove_small_objects=remove_small_objects,
-    ) == 1
+    clean_buildings = (
+        morpho_clean(
+            seg == value_classif_buildings,
+            binary_closing=binary_closing,
+            binary_opening=binary_opening,
+            remove_small_holes=remove_small_holes,
+            remove_small_objects=remove_small_objects,
+        )
+        == 1
+    )
     stack[0][clean_buildings] = value_classif_buildings
 
     stack[0][watermask == 1] = value_classif_water
@@ -693,6 +738,7 @@ def getarguments():
 
     return vars(args)
 
+
 def slurp_stackmask(
     main_config: str,
     logs_to_file: bool,
@@ -763,7 +809,9 @@ def slurp_stackmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
 
@@ -798,7 +846,7 @@ def slurp_stackmask(
                 [deepcopy(image_profile)]
             )
 
-            stack, height, markers  = mp_n_to_m_images(
+            stack, height, markers = mp_n_to_m_images(
                 inputs=[
                     image[0][0],  # vhr1
                     image[0][1],  # vhr2
@@ -816,27 +864,29 @@ def slurp_stackmask(
                 output_profiles=output_profile,
                 output_keys=["stack", "height", "markers"],
                 func=post_process,
-                func_parameters=dict(
-                    winter_vegetation=args.winter_vegetation,
-                    value_classif_bare_ground=args.value_classif_bare_ground,
-                    value_classif_buildings=args.value_classif_buildings,
-                    value_classif_water=args.value_classif_water,
-                    value_classif_low_veg=args.value_classif_low_veg,
-                    value_classif_high_veg=args.value_classif_high_veg,
-                    value_classif_false_positive_buildings=args.value_classif_false_positive_buildings,
-                    value_classif_background=args.value_classif_background,
-                    sobel_image=args.sobel_image,
-                    regul_type=args.regul_type,
-                    building_threshold=args.building_threshold,
-                    building_erosion=args.building_erosion,
-                    erosion_radius=args.erosion_radius,
-                    bonus_gt=args.bonus_gt,
-                    malus_shadow=args.malus_shadow,
-                    binary_closing=args.binary_closing,
-                    binary_opening=args.binary_opening,
-                    remove_small_holes=args.remove_small_holes,
-                    remove_small_objects=args.remove_small_objects,
-                ),
+                func_parameters={
+                    "winter_vegetation": args.winter_vegetation,
+                    "value_classif_bare_ground": args.value_classif_bare_ground,
+                    "value_classif_buildings": args.value_classif_buildings,
+                    "value_classif_water": args.value_classif_water,
+                    "value_classif_low_veg": args.value_classif_low_veg,
+                    "value_classif_high_veg": args.value_classif_high_veg,
+                    "value_classif_false_positive_buildings": (
+                        args.value_classif_false_positive_buildings
+                    ),
+                    "value_classif_background": args.value_classif_background,
+                    "sobel_image": args.sobel_image,
+                    "regul_type": args.regul_type,
+                    "building_threshold": args.building_threshold,
+                    "building_erosion": args.building_erosion,
+                    "erosion_radius": args.erosion_radius,
+                    "bonus_gt": args.bonus_gt,
+                    "malus_shadow": args.malus_shadow,
+                    "binary_closing": args.binary_closing,
+                    "binary_opening": args.binary_opening,
+                    "remove_small_holes": args.remove_small_holes,
+                    "remove_small_objects": args.remove_small_objects,
+                },
                 context_manager=slurp_manager,
                 stable_margin=margin,
             )
@@ -889,13 +939,8 @@ def slurp_stackmask(
 
             t1 = time.time()
 
-            logger.info(
-                f"**** Stack masks saved as {args.stackmask} ****"
-            )
-            logger.info(
-                "Total time (user):\t"
-                + utils.convert_time(t1 - t0)
-            )
+            logger.info(f"**** Stack masks saved as {args.stackmask} ****")
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)
