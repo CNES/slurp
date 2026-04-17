@@ -7,6 +7,7 @@
 #
 """Test urban mask with differents features and different arguments values"""
 
+import json
 import sys
 
 import pytest
@@ -129,38 +130,29 @@ def test_nb_samples_ci(
 
 @pytest.mark.features
 @pytest.mark.parametrize(
-    "main_config,features_test_img,ref_dir,valid_stack,aux_layer",
+    "params_file",
     [
-        (
-            "/work/scratch/data/amselln/uc_toulouse_with_MNH/MNH_config.json",
-            "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
-            "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref",
-            "/work/scratch/data/amselln/uc_toulouse_with_MNH/out/valid_stack.tif",
-            "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_MNH.tif",
-        ),
+        "tests/config_test_mnh.json",
     ],
 )
-def test_layers_aux_file(
-    main_config,
-    features_test_img,
-    output_dir,
-    ref_dir,
-    valid_stack,
-    aux_layer,
-):
+def test_layers_aux_file(params_file, output_dir):
     """Tests the urban mask computation with auxiliary raster layers
     to ensure the -layers argument correctly ingests external files."""
+
+    # Charger le JSON
+    with open(params_file, "r") as f:
+        params = json.load(f)
 
     command = (
         write_command_compute_urbanmask(
             1,
-            main_config,
-            features_test_img,
+            params["main_config"],
+            params["features_test_img"],
             output_dir,
-            ref_dir,
-            valid_stack,
+            params["ref_dir"],
+            params["valid_stack"],
         )
-        + f"-layers {aux_layer} "
+        + f"-layers {params['aux_layer']} "
     ).split()
 
     sys.argv = command

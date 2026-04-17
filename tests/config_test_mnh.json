@@ -1,0 +1,7 @@
+{
+  "main_config": "tests/main_MNH_config.json",
+  "features_test_img": "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
+  "ref_dir": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref",
+  "valid_stack": "/work/scratch/data/amselln/uc_toulouse_with_MNH/out/valid_stack.tif",
+  "aux_layer": "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_MNH.tif"
+}
