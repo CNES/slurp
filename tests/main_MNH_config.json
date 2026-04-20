@@ -1,26 +1,26 @@
 {
     "input": {
-        "file_vhr": "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
+        "file_vhr": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
         "sensor_mode": false
     },
     "aux_layers": {
-        "valid_stack": "/work/scratch/data/amselln/uc_toulouse_with_MNH/valid_stack.tif",
-        "file_ndvi": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/ndvi.tif",
-        "file_ndwi": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/ndwi.tif",
-        "extracted_pekel": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/pekel.tif",
-        "extracted_hand": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/hand.tif",
-        "extracted_wsf": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/wsf.tif",
-        "extracted_wbm": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/wbm.tif",
-        "file_texture": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref/texture.tif",
+        "valid_stack": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/valid_stack.tif",
+        "file_ndvi": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/ndvi.tif",
+        "file_ndwi": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/ndwi.tif",
+        "extracted_pekel": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/pekel.tif",
+        "extracted_hand": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/hand.tif",
+        "extracted_wsf": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/wsf.tif",
+        "extracted_wbm": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/wbm.tif",
+        "file_texture": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/texture.tif",
         "mnh": null,
         "file_cloud_gml": null
     },
     "masks": {
-        "watermask": "/work/scratch/data/amselln/uc_toulouse_with_MNH/test/watermask.tif",
-        "urbanmask": "/work/scratch/data/amselln/uc_toulouse_with_MNH/test/urbanmask.tif",
-        "vegetationmask": "/work/scratch/data/amselln/uc_toulouse_with_MNH/test/vegetationmask.tif",
-        "shadowmask": "/work/scratch/data/amselln/uc_toulouse_with_MNH/test/shadowmask.tif",
-        "stackmask": "/work/scratch/data/amselln/uc_toulouse_with_MNH/test/stackmask.tif"
+        "watermask": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/test/watermask.tif",
+        "urbanmask": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/test/urbanmask.tif",
+        "vegetationmask": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/test/vegetationmask.tif",
+        "shadowmask": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/test/shadowmask.tif",
+        "stackmask": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/test/stackmask.tif"
     },
     "resources": {
         "n_workers": 8,
