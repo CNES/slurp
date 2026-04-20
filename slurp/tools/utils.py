@@ -40,6 +40,7 @@ def concatenate_samples(chunk_results):
     samples = np.concatenate(chunk_results)
     return samples
 
+
 def store_arglist(parser):
     """
     Stores the list of argument names from the CLI parser into a JSON file.

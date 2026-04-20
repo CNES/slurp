@@ -26,22 +26,21 @@ import argparse
 import json
 import logging
 import time
-import traceback
+from copy import deepcopy
 from os import makedirs, path
 from typing import List, Union
-from copy import deepcopy
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images
-from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
 import numpy as np
 
+from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.prepare import analyse_glcm
 from slurp.prepare import aux_files as aux
 from slurp.prepare import geometry, primitives, validity
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
-from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -276,11 +275,9 @@ def create_valid_stack(
     # Take the first band as it's the only one required for calc mask
     # ==========================================================
     input_keys = [key_vhr]
-    
+
     input_profile = deepcopy(profile)
-    output_profile = eo_utils.single_uint8_profile(
-        [deepcopy(profile)]
-    )
+    output_profile = eo_utils.single_uint8_profile([deepcopy(profile)])
 
     if args.cloud_mask:
         key_cloud_mask = read(args.cloud_mask)
@@ -346,13 +343,15 @@ def compute_ndvi(
     # Ensure output directory exists
     makedirs(path.dirname(args.file_ndvi), exist_ok=True)
     input_profile = deepcopy(vhr_profile)
-    output_profile = eo_utils.single_int16_profile(
-        [deepcopy(vhr_profile)]
-    )
+    output_profile = eo_utils.single_int16_profile([deepcopy(vhr_profile)])
     [ndvi_key] = mp_n_to_m_images(
-        inputs=[key_vhr[args.nir - 1], key_vhr[args.red - 1], valid_stack_key[0]],
-        image_height=vhr_profile["height"],
-        image_width=vhr_profile["width"],
+        inputs=[
+            key_vhr[args.nir - 1],
+            key_vhr[args.red - 1],
+            valid_stack_key[0],
+        ],
+        image_height=input_profile["height"],
+        image_width=input_profile["width"],
         output_profiles=[output_profile],
         output_keys=[path.basename(args.file_ndvi)],
         func=primitives.compute_ndxi,
@@ -412,11 +411,13 @@ def compute_ndwi(
     # Ensure output directory exists
     makedirs(path.dirname(args.file_ndwi), exist_ok=True)
     input_profile = deepcopy(vhr_profile)
-    output_profile = eo_utils.single_int16_profile(
-        [deepcopy(vhr_profile)]
-    )
+    output_profile = eo_utils.single_int16_profile([deepcopy(vhr_profile)])
     [ndwi_key] = mp_n_to_m_images(
-        inputs=[key_vhr[args.green - 1], key_vhr[args.nir - 1], valid_stack_key[0]],
+        inputs=[
+            key_vhr[args.green - 1],
+            key_vhr[args.nir - 1],
+            valid_stack_key[0],
+        ],
         image_height=input_profile["height"],
         image_width=input_profile["width"],
         output_profiles=[output_profile],
@@ -648,13 +649,9 @@ def compute_texture(
     nir_band = key_vhr[args.nir - 1]
     if isinstance(nir_band, np.ndarray):
         valid_mask = valid_stack_key[0] == 0
-        percentiles = np.percentile(
-            nir_band[valid_mask], [2, 98]
-        )
+        percentiles = np.percentile(nir_band[valid_mask], [2, 98])
     input_profile = deepcopy(vhr_profile)
-    output_profile = eo_utils.single_uint16_profile(
-        [deepcopy(vhr_profile)]
-    )
+    output_profile = eo_utils.single_uint16_profile([deepcopy(vhr_profile)])
     [texture_key] = mp_n_to_m_images(
         inputs=[nir_band, valid_stack_key[0]],
         image_height=input_profile["height"],
@@ -710,9 +707,7 @@ def valid_stack_process(
             output_profile,
         )
     else:
-        logger.info(
-            "Not computing valid stack mask: file already exists."
-        )
+        logger.info("Not computing valid stack mask: file already exists.")
 
         valid_stack_key = read(args.valid_stack)
 
@@ -844,12 +839,14 @@ def slurp_prepare(
     params = {
         "nb_max_workers": args.n_workers,
         "developer_mode": args.debug,
-        "method": "mem",   
+        "method": "mem",
         "mp_context": multiproc_context,
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
             t0 = time.time()
@@ -925,11 +922,7 @@ def slurp_prepare(
             if args.mode != "water":
                 logger.info("[4/4] Step: TEXTURE")
                 compute_texture(
-                    args,
-                    slurp_manager,
-                    vhr,
-                    valid_stack_key,
-                    input_profile
+                    args, slurp_manager, vhr, valid_stack_key, input_profile
                 )
 
             # ==============================
@@ -945,13 +938,10 @@ def slurp_prepare(
             update_and_save_used_config(argsdict, args)
 
             t1 = time.time()
-            logger.info(
-                "Total time (user):\t" + utils.convert_time(t1 - t0)
-            )
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception as exception:
-            logger.error("Unexpected error:", exc_info=True)
-            traceback.print_exc()
+            logger.error(f"Unexpected error: {exception}", exc_info=True)
 
     logger.info("End of prepare step\n")
 

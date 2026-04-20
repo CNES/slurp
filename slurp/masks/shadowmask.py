@@ -28,19 +28,23 @@ import json
 import logging
 import time
 import traceback
-from os import path
 from copy import deepcopy
+from os import path
 
 import numpy as np
 
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
+from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read, create_image
+from slurp.eomultiprocessing.utils import (
+    create_image,
+    read,
+    read_and_get_profile,
+)
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
-from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -242,6 +246,7 @@ def build_stack_shadow(args, slurp_manager):
         vhr_profile,
     )
 
+
 def getarguments() -> dict:
     """Parse command line arguments."""
 
@@ -396,7 +401,9 @@ def slurp_shadowmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
 
@@ -449,7 +456,6 @@ def slurp_shadowmask(
             output_profile = eo_utils.single_uint8_profile(
                 [deepcopy(vhr_profile)]
             )
-            
 
             predict = mp_n_to_m_images(
                 inputs=[
@@ -483,12 +489,8 @@ def slurp_shadowmask(
 
             t1 = time.time()
 
-            logger.info(
-                f"**** Shadow mask saved as {args.shadowmask} ****"
-            )
-            logger.info(
-                "Total time (user):\t" + utils.convert_time(t1 - t0)
-            )
+            logger.info(f"**** Shadow mask saved as {args.shadowmask} ****")
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)

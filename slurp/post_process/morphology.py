@@ -88,15 +88,25 @@ def morpho_clean(
     im_classif = im_classif.astype(np.uint8)
 
     if binary_closing:
-        im_classif = apply_morpho(im_classif, "binary_closing", binary_closing).astype(np.uint8)
+        im_classif = apply_morpho(
+            im_classif, "binary_closing", binary_closing
+        ).astype(np.uint8)
 
     if binary_opening:
-        im_classif = apply_morpho(im_classif, "binary_opening", binary_opening).astype(np.uint8)
+        im_classif = apply_morpho(
+            im_classif, "binary_opening", binary_opening
+        ).astype(np.uint8)
 
     if remove_small_holes:
-        im_classif = apply_morpho(im_classif.astype(bool), "remove_small_holes", remove_small_holes).astype(np.uint8)
+        im_classif = apply_morpho(
+            im_classif.astype(bool), "remove_small_holes", remove_small_holes
+        ).astype(np.uint8)
 
     if remove_small_objects:
-        im_classif = apply_morpho(im_classif.astype(bool), "remove_small_objects", remove_small_objects).astype(np.uint8)
+        im_classif = apply_morpho(
+            im_classif.astype(bool),
+            "remove_small_objects",
+            remove_small_objects,
+        ).astype(np.uint8)
 
     return im_classif

@@ -43,10 +43,10 @@ from slurp.eomultiprocessing.slurp_executor import (
     mp_n_to_m_scalars,
 )
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read, read_and_get_profile, write
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
-from slurp.tools import random_forest_utils, utils
+from slurp.tools import utils
 from slurp.tools.constant import NB_CLUSTERS, NODATA_INT8, NODATA_INT16
 
 logger = logging.getLogger("slurp")
@@ -944,12 +944,12 @@ def postprocess(
             output_profiles=[output_profile],
             output_keys=["postprocess"],
             func=clean_task,
-            func_parameters=dict(
-                remove_small_objects=args.remove_small_objects,
-                remove_small_holes=args.remove_small_holes,
-                binary_dilation=args.binary_dilation,
-                min_ndvi_veg=args.min_ndvi_veg,
-            ),
+            func_parameters={
+                "remove_small_objects": args.remove_small_objects,
+                "remove_small_holes": args.remove_small_holes,
+                "binary_dilation": args.binary_dilation,
+                "min_ndvi_veg": args.min_ndvi_veg,
+            },
             context_manager=slurp_manager,
             stable_margin=margin,
             binary=True,
@@ -1506,7 +1506,7 @@ def slurp_vegetationmask(
                 eo_utils.single_uint8_profile([vhr_profile]),
             )
 
-            time_post = time.time()
+            time_closing = time.time()
             # =====================================================
             # WRITE OUTPUT
             # =====================================================
@@ -1519,7 +1519,17 @@ def slurp_vegetationmask(
 
             t1 = time.time()
 
-            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
+            display_infos(
+                args,
+                t1,
+                t0,
+                time_closing,
+                time_cluster,
+                time_final,
+                time_seg,
+                time_stack,
+                time_stats,
+            )
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)

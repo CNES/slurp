@@ -26,21 +26,24 @@ import json
 import logging
 import time
 import traceback
-from os import path
 from copy import deepcopy
+from os import path
 from typing import List, Optional
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from slurp.eomultiprocessing.slurp_executor import mp_n_to_m_images, mp_n_to_m_scalars
-from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read_and_get_profile, write, read
 
+from slurp import __version__
+from slurp.eomultiprocessing.slurp_executor import (
+    mp_n_to_m_images,
+    mp_n_to_m_scalars,
+)
+from slurp.eomultiprocessing.slurp_manager import slurpContextManager
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils, utils
 from slurp.tools.constant import NODATA_INT8
-from slurp import __version__
 
 logger = logging.getLogger("slurp")
 
@@ -73,9 +76,7 @@ def apply_vegetationmask(
     :param veg_binary_dilation: Radius/iterations used for binary dilation.
     :return: Boolean array where True represents valid non-vegetated pixels.
     """
-    non_veg = np.where(
-        vegmask < vegmask_min_value, True, False
-    )
+    non_veg = np.where(vegmask < vegmask_min_value, True, False)
 
     # Dilate non-vegetation areas because vegetation masks may cover urban pixels
     non_veg_dilated = apply_morpho(
@@ -152,7 +153,7 @@ def build_samples(
     """
     Build training samples used for urban / non-urban classification.
 
-    It extracts representative pixels from valid areas using ground-truth 
+    It extracts representative pixels from valid areas using ground-truth
     information and builds a feature matrix suitable for machine learning training.
 
     The workflow is composed of the following steps:
@@ -224,15 +225,13 @@ def build_samples(
     # VALIDITY MASK (same logic)
     # ----------------------------------
 
-    validity_mask = (valid_stack == 0)
+    validity_mask = valid_stack == 0
 
     # ----------------------------------
     # BUILDING MASK
     # ----------------------------------
 
-    mask_building_before_erosion = np.where(
-        gt == value_classif, True, False
-    )
+    mask_building_before_erosion = np.where(gt == value_classif, True, False)
 
     mask_building = apply_morpho(
         mask_building_before_erosion,
@@ -501,7 +500,7 @@ def nominal_case_urbanmask(
     t0,
     time_stack,
     vhr_profile,
-    valid_stack_profile
+    valid_stack_profile,
 ):
     """
     Perform supervised classification to predict an urban mask using Random Forest.
@@ -523,9 +522,7 @@ def nominal_case_urbanmask(
         keys_files_layers = []
     else:
         keys_files_layers = [
-            band
-            for path in files_layers
-            for band in read(path)
+            band for path in files_layers for band in read(path)
         ]
 
     input_profile = deepcopy(valid_stack_profile)
@@ -615,10 +612,7 @@ def nominal_case_urbanmask(
         n_jobs=args.n_jobs,
     )
 
-    logger.debug(
-        "RandomForest parameters:\n%s\n",
-        str(classifier.get_params())
-    )
+    logger.debug("RandomForest parameters:\n%s\n", str(classifier.get_params()))
 
     random_forest_utils.train_classifier(classifier, x_samples, y_samples)
 
@@ -640,10 +634,10 @@ def nominal_case_urbanmask(
         vhr[0][2],
         vhr[0][3],
         ndvi[0][0],
-        ndwi[0][0]
+        ndwi[0][0],
     ]
     logger.info("[2.3] Step: Predict")
-    proba_buildings, predict  = mp_n_to_m_images(
+    proba_buildings, predict = mp_n_to_m_images(
         inputs=input_for_prediction,
         aux_inputs=keys_files_layers,
         image_height=input_profile["height"],
@@ -658,7 +652,6 @@ def nominal_case_urbanmask(
         context_manager=slurp_manager,
         stable_margin=margin,
     )
-
 
     time_random_forest = time.time()
 
@@ -746,7 +739,9 @@ def build_stack_urban(args, slurp_manager):
     # VALID STACK
     # ==============================
 
-    original_valid_stack, valid_stack_profile = read_and_get_profile(args.valid_stack)
+    original_valid_stack, valid_stack_profile = read_and_get_profile(
+        args.valid_stack
+    )
     valid_stack = original_valid_stack
 
     # ==============================
@@ -779,7 +774,9 @@ def build_stack_urban(args, slurp_manager):
         vegmask = read(args.vegetationmask)
 
         input_profile = deepcopy(valid_stack_profile)
-        output_profile = eo_utils.single_bool_profile([deepcopy(valid_stack_profile)])
+        output_profile = eo_utils.single_bool_profile(
+            [deepcopy(valid_stack_profile)]
+        )
         valid_stack = mp_n_to_m_images(
             inputs=[
                 original_valid_stack[0],
@@ -792,7 +789,7 @@ def build_stack_urban(args, slurp_manager):
             func=apply_vegetationmask,
             func_parameters={
                 "vegmask_min_value": args.vegmask_min_value,
-                "veg_binary_dilation": args.veg_binary_dilation
+                "veg_binary_dilation": args.veg_binary_dilation,
             },
             context_manager=slurp_manager,
             stable_margin=margin,
@@ -810,7 +807,9 @@ def build_stack_urban(args, slurp_manager):
         watermask = read(args.watermask)
 
         input_profile = deepcopy(valid_stack_profile)
-        output_profile = eo_utils.single_bool_profile([deepcopy(valid_stack_profile)])
+        output_profile = eo_utils.single_bool_profile(
+            [deepcopy(valid_stack_profile)]
+        )
 
         valid_stack = mp_n_to_m_images(
             inputs=[
@@ -839,13 +838,11 @@ def build_stack_urban(args, slurp_manager):
         [original_valid_stack],
         margin,
         vhr_profile,
-        valid_stack_profile
+        valid_stack_profile,
     )
 
 
-def fill_constant_mask(
-    valid_stack: np.ndarray, fill_value: int
-) -> np.ndarray:
+def fill_constant_mask(valid_stack: np.ndarray, fill_value: int) -> np.ndarray:
     """
     Create a constant mask using a validity stack.
 
@@ -857,9 +854,7 @@ def fill_constant_mask(
     :return: Output mask with fill_value on valid pixels and NODATA_INT8 elsewhere.
     """
 
-    proba_buildings = np.where(
-        valid_stack == 0, fill_value, NODATA_INT8
-    )
+    proba_buildings = np.where(valid_stack == 0, fill_value, NODATA_INT8)
 
     return proba_buildings
 
@@ -875,7 +870,7 @@ def getarguments():
         action="version",
         version=f"SLURP {__version__}",
     )
-    
+
     parser.add_argument(
         "main_config", help="First JSON file, load basis arguments"
     )
@@ -1081,7 +1076,9 @@ def slurp_urbanmask(
         "output_dir": path.dirname(args.file_vhr),
     }
 
-    with slurpContextManager(params, tile_mode=True, tile_max_size=args.tile_max_size) as slurp_manager:
+    with slurpContextManager(
+        params, tile_mode=True, tile_max_size=args.tile_max_size
+    ) as slurp_manager:
 
         try:
 
@@ -1102,7 +1099,7 @@ def slurp_urbanmask(
                 original_valid_stack,
                 margin,
                 vhr_profile,
-                valid_stack_profile
+                valid_stack_profile,
             ) = build_stack_urban(args, slurp_manager)
 
             time_stack = time.time()
@@ -1137,23 +1134,24 @@ def slurp_urbanmask(
 
                 logger.info("[2] Step: RF URBAN")
 
-                predict, output_profile, time_random_forest, time_samples = nominal_case_urbanmask(
-                    args,
-                    slurp_manager,
-                    gt,
-                    ndvi,
-                    ndwi,
-                    vhr,
-                    valid_stack,
-                    original_valid_stack,
-                    files_layers,
-                    margin,
-                    t0,
-                    time_stack,
-                    vhr_profile,
-                    valid_stack_profile
+                predict, output_profile, time_random_forest, time_samples = (
+                    nominal_case_urbanmask(
+                        args,
+                        slurp_manager,
+                        gt,
+                        ndvi,
+                        ndwi,
+                        vhr,
+                        valid_stack,
+                        original_valid_stack,
+                        files_layers,
+                        margin,
+                        t0,
+                        time_stack,
+                        vhr_profile,
+                        valid_stack_profile,
+                    )
                 )
-
 
             # ==============================
             # ALL PIXELS = URBAN
@@ -1212,24 +1210,21 @@ def slurp_urbanmask(
                     stable_margin=margin,
                     binary=True,
                 )
-            
+
             slurp_manager.write_tif(
-                    data=predict,
-                    path=args.urbanmask,
-                    target_profile=output_profile
-                )
+                data=predict, path=args.urbanmask, target_profile=output_profile
+            )
 
             t1 = time.time()
 
-            logger.info(
-                "Total time (user):\t" + utils.convert_time(t1 - t0)
-            )
+            logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
         except Exception:
             logger.error("Unexpected error:", exc_info=True)
             traceback.print_exc()
 
     logger.info("End of urbanmask step\n")
+
 
 def main():
     """

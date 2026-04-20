@@ -27,7 +27,7 @@ import logging
 import time
 import traceback
 from copy import deepcopy
-from os import makedirs, path
+from os import path
 from typing import List, Optional
 
 import numpy as np
@@ -40,7 +40,7 @@ from slurp.eomultiprocessing.slurp_executor import (
     mp_n_to_m_scalars,
 )
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read, read_and_get_profile, write
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.post_process.morphology import apply_morpho
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import random_forest_utils as rf_utils
@@ -890,7 +890,7 @@ def nominal_case_predict(
         - Memory is managed and garbage collected between training and prediction steps.
     """
     if args.files_layers is None:
-        files_layers = []
+        # files_layers = []
         keys_files_layers = []
     else:
         keys_files_layers = [

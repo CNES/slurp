@@ -19,6 +19,7 @@
 # limitations under the License.
 
 """Brings together useful functions common to the different scripts"""
+
 import json
 import logging
 

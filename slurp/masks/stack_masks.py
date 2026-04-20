@@ -43,10 +43,9 @@ from skimage.measure import label
 from slurp import __version__
 from slurp.eomultiprocessing.slurp_executor import (
     mp_n_to_m_images,
-    mp_n_to_m_scalars,
 )
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
-from slurp.eomultiprocessing.utils import read, read_and_get_profile, write
+from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.post_process.morphology import apply_morpho, morpho_clean
 from slurp.tools import io_utils
 from slurp.tools import profile_utils as eo_utils
@@ -869,28 +868,29 @@ def slurp_stackmask(
                 output_profiles=output_profile,
                 output_keys=["stack", "height", "markers"],
                 func=post_process,
-                func_parameters=dict(
-                    winter_vegetation=args.winter_vegetation,
-                    value_classif_bare_ground=args.value_classif_bare_ground,
-                    value_classif_buildings=args.value_classif_buildings,
-                    value_classif_water=args.value_classif_water,
-                    value_classif_low_veg=args.value_classif_low_veg,
-                    value_classif_high_veg=args.value_classif_high_veg,
-                    value_classif_false_positive_buildings=
-                    args.value_classif_false_positive_buildings,
-                    value_classif_background=args.value_classif_background,
-                    sobel_image=args.sobel_image,
-                    regul_type=args.regul_type,
-                    building_threshold=args.building_threshold,
-                    building_erosion=args.building_erosion,
-                    erosion_radius=args.erosion_radius,
-                    bonus_gt=args.bonus_gt,
-                    malus_shadow=args.malus_shadow,
-                    binary_closing=args.binary_closing,
-                    binary_opening=args.binary_opening,
-                    remove_small_holes=args.remove_small_holes,
-                    remove_small_objects=args.remove_small_objects,
-                ),
+                func_parameters={
+                    "winter_vegetation": args.winter_vegetation,
+                    "value_classif_bare_ground": args.value_classif_bare_ground,
+                    "value_classif_buildings": args.value_classif_buildings,
+                    "value_classif_water": args.value_classif_water,
+                    "value_classif_low_veg": args.value_classif_low_veg,
+                    "value_classif_high_veg": args.value_classif_high_veg,
+                    "value_classif_false_positive_buildings": (
+                        args.value_classif_false_positive_buildings
+                    ),
+                    "value_classif_background": args.value_classif_background,
+                    "sobel_image": args.sobel_image,
+                    "regul_type": args.regul_type,
+                    "building_threshold": args.building_threshold,
+                    "building_erosion": args.building_erosion,
+                    "erosion_radius": args.erosion_radius,
+                    "bonus_gt": args.bonus_gt,
+                    "malus_shadow": args.malus_shadow,
+                    "binary_closing": args.binary_closing,
+                    "binary_opening": args.binary_opening,
+                    "remove_small_holes": args.remove_small_holes,
+                    "remove_small_objects": args.remove_small_objects,
+                },
                 context_manager=slurp_manager,
                 stable_margin=margin,
             )

@@ -19,6 +19,7 @@
 # limitations under the License.
 
 """Brings together functions used by eomultiprocessing"""
+
 import copy
 import logging
 
@@ -27,7 +28,6 @@ import numpy as np
 from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 
 logger = logging.getLogger("slurp")
-
 
 
 # Profiles

@@ -24,8 +24,8 @@ This module contains some utils function for slurp processing.
 
 import os
 from collections import namedtuple
-from typing import Any, Dict, Tuple
 from copy import deepcopy
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import rasterio
@@ -49,14 +49,22 @@ MpTile = namedtuple(
     ],
 )
 
-MAX_CACHE = 64  # Mb, cache size for rasterio reading and writing operations, by default 5% of the usable physical RAM
+MAX_CACHE = 64  # Mb, cache size for rasterio reading and writing operations,
+# by default 5% of the usable physical RAM
 
 
-def write(data: np.ndarray, img_path: str, target_profile: Dict[str, Any], binary: bool = False) -> None:
+def write(
+    data: np.ndarray,
+    img_path: str,
+    target_profile: Dict[str, Any],
+    binary: bool = False,
+) -> None:
     """Save in file with rasterio."""
     with rasterio.Env(GDAL_CACHEMAX=MAX_CACHE):
         if binary:
-            with rasterio.open(img_path, "w", nbits=1, **target_profile) as out_dataset:
+            with rasterio.open(
+                img_path, "w", nbits=1, **target_profile
+            ) as out_dataset:
                 out_dataset.write(data, indexes=1)
         else:
             with rasterio.open(img_path, "w", **target_profile) as out_dataset:
@@ -64,7 +72,11 @@ def write(data: np.ndarray, img_path: str, target_profile: Dict[str, Any], binar
 
 
 def write_window(
-    img_buffer: np.ndarray, img_path: str, target_profile: Dict[str, Any], tile: MpTile, binary: bool = False
+    img_buffer: np.ndarray,
+    img_path: str,
+    target_profile: Dict[str, Any],
+    tile: MpTile,
+    binary: bool = False,
 ) -> None:
     """Update window in file."""
     width = tile.end_x - tile.start_x + 1
@@ -72,11 +84,21 @@ def write_window(
     mode = "r+" if os.path.isfile(img_path) else "w"
     with rasterio.Env(GDAL_CACHEMAX=MAX_CACHE):
         if binary:
-            with rasterio.open(img_path, mode, nbits=1, **target_profile) as out_dataset:
-                out_dataset.write(img_buffer, window=Window(tile.start_x, tile.start_y, width, height), indexes=1)
+            with rasterio.open(
+                img_path, mode, nbits=1, **target_profile
+            ) as out_dataset:
+                out_dataset.write(
+                    img_buffer,
+                    window=Window(tile.start_x, tile.start_y, width, height),
+                    indexes=1,
+                )
         else:
             with rasterio.open(img_path, mode, **target_profile) as out_dataset:
-                out_dataset.write(img_buffer, window=Window(tile.start_x, tile.start_y, width, height), indexes=1)
+                out_dataset.write(
+                    img_buffer,
+                    window=Window(tile.start_x, tile.start_y, width, height),
+                    indexes=1,
+                )
 
 
 def read(img_path: str) -> np.ndarray:
@@ -104,9 +126,15 @@ def read_window(img_path: str, tile: MpTile) -> np.ndarray:
     row_off = tile.start_y - tile.top_margin
     with rasterio.Env(GDAL_CACHEMAX=MAX_CACHE):
         with rasterio.open(img_path, "r") as src:
-            data = src.read(1, window=Window(col_off, row_off, tile.width_margin, tile.height_margin))
+            data = src.read(
+                1,
+                window=Window(
+                    col_off, row_off, tile.width_margin, tile.height_margin
+                ),
+            )
 
     return data
+
 
 def create_image(
     profile: Dict[str, Any],
