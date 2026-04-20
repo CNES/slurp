@@ -112,7 +112,7 @@ def build_stack_stackmask(args, slurp_manager):
     key_shadowmask = read(args.shadowmask)
     key_wsf = read(args.extracted_wsf)
 
-    margin = 100  # identical to previous stable_margin
+    margin = args.margin
 
     logger.info("Stackmask inputs ready")
 
@@ -726,6 +726,9 @@ def getarguments():
         default="spawn",
         help="Multiprocessing strategy: 'fork' or 'spawn'",
     )
+    group5.add_argument(
+        "-margin", type=int, help="Margin parameter (0 by default)"
+    )
     args = parser.parse_args()
 
     arglist = []
@@ -772,6 +775,7 @@ def slurp_stackmask(
     n_workers: int,
     tile_max_size: int,
     multiproc_context: str,
+    margin: int,
     categorized_watermask: bool,
     minimal_size_water_area: int,
 ):

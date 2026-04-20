@@ -385,6 +385,10 @@ class Stack(BaseModel):
     minimal_size_water_area: Optional[int] = Field(
         default=10000, description="Minimal area (in pixels) of water bodies"
     )
+    margin: Optional[int] = Field(
+        default=0,
+        description="Margin (in pixels) for parallel computing during final stack merging",
+    )
 
 
 class Masks(BaseModel):

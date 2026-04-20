@@ -166,19 +166,13 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     :returns: SLIC segments
     """
     # computes nb of expected segments taking account NO_DATA
-    """
-    nseg = int(len(ndvi[ndvi!=NODATA_INT16]) / params["slic_seg_size"])
-    if nseg == 0:
-        logger.debug(f"Taille de segments : 0 !!  attention, risque de div par zero {ndvi.shape=}")
-    TODO : clean / choose right way.
-    print(f"Nseg - X*Y / slic_seg_size (do not take into account NODATA) : {nseg}\n"
-          f"Alternative count : {int(len(ndvi[ndvi!=NODATA_INT16]) / params['slic_seg_size'])=}")
 
-    """
     # nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
     # nseg cannot be equal to 0, because calling function already checked
     # there were valid pixels to segment...
     nseg = int(len(ndvi[ndvi != NODATA_INT16]) / params["slic_seg_size"])
+    if nseg == 0:
+        logger.debug(f"Segments number : 0 !! Divide by zero {ndvi.shape=}")
 
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)
@@ -237,31 +231,7 @@ def segmentation_task(
     return segments
 
 
-def concat_seg(previous_result, output_algo_computer, tile):
-    """
-    Concatenates SLIC segmentation in a single segmentation
-    """
-    # Computes max of previous result and adds this value to the current result :
-    # prevents from computing a map with several identical labels !!
-    num_seg = np.max(previous_result[0])
-
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = (output_algo_computer[0][:, :, :] + num_seg)
-
-    # TODO : check if we can keep only this statement
-    previous_result[0][
-        :, tile.start_y : tile.end_y + 1, tile.start_x : tile.end_x + 1
-    ] = np.where(
-        output_algo_computer[0][:, :, :] == 0,
-        0,
-        output_algo_computer[0][:, :, :] + num_seg,
-    )
-
-
 # Stats #
-
-
 def compute_stats_image(
     segments: np.ndarray,
     ndvi: np.ndarray,
@@ -290,9 +260,7 @@ def compute_stats_image(
     list
         [accumulator (sum per segment), counter (number of pixels per segment)]
     """
-
     ts_stats = ts.PyStats()
-    # nb_primitives = 3  # NDVI, NDWI, Texture
 
     # Normalize inputs in case they come as (1,H,W)
     def ensure_2d(arr):
@@ -717,8 +685,8 @@ def finalize_task(segments, valid_stack, data):
     :param np.ndarray data: final cluster data
     :returns: final mask
     """
-
     clustering = data
+
     # Load Cython module and launch C++ function
     ts_stats = ts.PyStats()
 
@@ -817,7 +785,7 @@ def clean_task(
         np.where(
             im_ndvi > min_ndvi_veg,
             LOW_VEG_CLASS,
-            UNDEFINED_VEG + LOW_VEG_CLASS,
+            UNDEFINED_VEG + LOW_TEXTURE_CODE,
         ),
         im_classif,
     )
@@ -851,7 +819,7 @@ def segmentation(
     Parameters
     ----------
     args : Namespace
-        Runtime configuration and parameters.
+    Runtime configuration and parameters.
     slurp_manager : slurpContextManager
         SLURP execution context.
     key_ndvi : list[str]
@@ -1031,7 +999,6 @@ def process_stats(
         stats[0] : sum of each primitive (NDVI, NDWI, texture) per segment
         stats[1] : count of pixels per segment
     """
-
     logger.info("Computing per-segment statistics...")
 
     params_stats = {"nb_lab": size_result}
@@ -1090,56 +1057,6 @@ def process_stats(
     # stats[1] = count per segment
     # downstream clustering uses these arrays
     return stats
-
-
-def display_infos(
-    args,
-    end_time,
-    t0,
-    time_closing,
-    time_cluster,
-    time_final,
-    time_seg,
-    time_stack,
-    time_stats,
-):
-    """
-    Display information on the time spent on each stage of the processing pipeline.
-    """
-    logger.info(
-        f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
-    )
-    logger.info(
-        "Total time (user)       :\t" + utils.convert_time(end_time - t0)
-    )
-    logger.info(
-        "- Build_stack           :\t" + utils.convert_time(time_stack - t0)
-    )
-    logger.info(
-        "- Segmentation          :\t"
-        + utils.convert_time(time_seg - time_stack)
-    )
-    logger.info(
-        "- Stats                 :\t"
-        + utils.convert_time(time_stats - time_seg)
-    )
-    logger.info(
-        "- Clustering            :\t"
-        + utils.convert_time(time_cluster - time_stats)
-    )
-    logger.info(
-        "- Finalize Cython       :\t"
-        + utils.convert_time(time_final - time_cluster)
-    )
-    logger.info(
-        "- Post-processing       :\t"
-        + utils.convert_time(time_closing - time_final)
-    )
-    logger.info(
-        "- Write final image     :\t"
-        + utils.convert_time(end_time - time_closing)
-    )
-    logger.info("***")
 
 
 # MAIN #
@@ -1428,7 +1345,6 @@ def slurp_vegetationmask(
             # =====================================================
             # BUILD STACK
             # =====================================================
-
             logger.info("[0] Step: Build stack")
 
             (
@@ -1504,6 +1420,10 @@ def slurp_vegetationmask(
                 mask_valid_indices,
             )
 
+            logger.debug(
+                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
+            )
+
             if args.autolabel:
                 clusters_veg = vegetation_labeling_with_LCM(
                     vars(args), pred_veg
@@ -1513,7 +1433,7 @@ def slurp_vegetationmask(
                     vars(args), pred_veg
                 )
 
-            pred_texture, _ = clustering_texture(
+            pred_texture, sorted_texture_centroids = clustering_texture(
                 vars(args),
                 size_result,
                 stats[0],
@@ -1541,9 +1461,7 @@ def slurp_vegetationmask(
             # final tab
             final_clusters = np.zeros(size_result)
             final_clusters[np.where(mask_valid_indices)] = clusters
-            final_clusters[np.where(mask_valid_indices == 0)] = (
-                0  # TODO : -1 or 0 ? it will be masked by valid_stack at the end
-            )
+            final_clusters[np.where(mask_valid_indices == 0)] = 0
 
             final_mask = mp_n_to_m_images(
                 inputs=[segments[0], valid_stack[0][0]],

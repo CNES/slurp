@@ -122,6 +122,9 @@ def compute_hand_mask(
         - False indicates pixels above the threshold.
     """
     mask_hand = hand_array > thresh_hand
+    # HAND (Height Above Nearest Drainage) is used to select "ground" pixels
+    # quite close to the known water areas.
+    # HAND mask are valid pixels, below an altitude "thresh_hand"
 
     # Invert mask so that low HAND values become True
     mask_hand = np.logical_not(mask_hand, out=mask_hand)
@@ -282,13 +285,13 @@ def build_samples(
         nb_samples_water (int): Target number of water samples.
         nb_samples_other (int): Target number of "other" samples.
         samples_method (str): Sampling method for water pixels: 'random', 'smart', or 'grid'.
-        nb_samples_auto (bool): Whether to automatically determine number of samples based on
-                                auto_pct.
+        nb_samples_auto (bool): Whether to automatically determine number
+                                of samples based on auto_pct.
         auto_pct (float): Percentage of valid pixels to sample if nb_samples_auto is True.
         smart_area_pct (float): Area fraction used for 'smart' sampling method.
         smart_minimum (int): Minimum number of pixels per smart sample.
-        aux_inputs (Optional[List[np.ndarray]]): Optional additional tiles to include in
-                                                    the feature stack.
+        aux_inputs (Optional[List[np.ndarray]]): Optional additional tiles
+                                                 to include in the feature stack.
 
     Returns:
         np.ndarray: Array of shape (nb_samples, n_features), where features include
@@ -343,7 +346,13 @@ def build_samples(
             nb_water_subsamples, validity_mask, valid_water_pixels
         )
     else:
-        raise ValueError("samples_method must be 'random', 'smart' or 'grid'")
+        raise Exception(
+            "Sample method not accepted : use 'random', 'smart' or 'grid'"
+        )
+    # Always use grid indexes method for ground pixels (selected in HAND mask)
+    rows_hand, cols_hand = get_grid_indexes_from_mask(
+        nb_other_subsamples, validity_mask, mask_hand
+    )
 
     # ---- OTHER SAMPLES ----
     rows_hand, cols_hand = get_random_indexes_from_masks(
@@ -876,8 +885,8 @@ def nominal_case_predict(
         - Sampling ratios are computed using valid pixels and optional auto mode.
         - The feature stack includes spectral bands, indices, and auxiliary layers.
         - Random Forest classifier is trained on the sampled pixels.
-        - Multiprocessing is used for sampling and prediction using `mp_n_to_m_scalars`
-                    and `mp_n_to_m_images`.
+        - Multiprocessing is used for sampling and prediction
+          using `mp_n_to_m_scalars` and `mp_n_to_m_images`.
         - Memory is managed and garbage collected between training and prediction steps.
     """
     if args.files_layers is None:
@@ -1004,8 +1013,8 @@ def launch_postprocess(
 
     This function:
     1. Combines the predicted mask with hand-made masks, Pekel mask, and validity mask.
-    2. Applies the `post_process` function via SLURP executor (`mp_n_to_m_images`) for
-                    parallel processing.
+    2. Applies the `post_process` function via SLURP executor (`mp_n_to_m_images`)
+       for parallel processing.
     3. Writes the final post-processed mask to `args.watermask`.
     4. Optionally writes the raw prediction in debug mode.
 
@@ -1023,8 +1032,8 @@ def launch_postprocess(
         None
 
     Notes:
-        - Uses `mp_n_to_m_images` to apply `post_process` function in a tiled/multiprocessing
-                    manner.
+        - Uses `mp_n_to_m_images` to apply `post_process` function in a
+          tiled/multiprocessing manner.
         - Writes the final mask using `slurp_manager.write_tif`.
         - Raw prediction is saved only if `args.save_mode` is set to "debug".
         - Output profiles are duplicated for post-processed and raw masks.
