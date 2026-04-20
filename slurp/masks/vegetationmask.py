@@ -1058,6 +1058,54 @@ def process_stats(
     # downstream clustering uses these arrays
     return stats
 
+def display_infos(
+    args,
+    end_time,
+    t0,
+    time_closing,
+    time_cluster,
+    time_final,
+    time_seg,
+    time_stack,
+    time_stats,
+):
+    """
+    Display information on the time spent on each stage of the processing pipeline.
+    """
+    logger.info(
+        f"**** Vegetation mask for {args.file_vhr} (saved as {args.vegetationmask}) ****"
+    )
+    logger.info(
+        "Total time (user)       :\t" + utils.convert_time(end_time - t0)
+    )
+    logger.info(
+        "- Build_stack           :\t" + utils.convert_time(time_stack - t0)
+    )
+    logger.info(
+        "- Segmentation          :\t"
+        + utils.convert_time(time_seg - time_stack)
+    )
+    logger.info(
+        "- Stats                 :\t"
+        + utils.convert_time(time_stats - time_seg)
+    )
+    logger.info(
+        "- Clustering            :\t"
+        + utils.convert_time(time_cluster - time_stats)
+    )
+    logger.info(
+        "- Finalize Cython       :\t"
+        + utils.convert_time(time_final - time_cluster)
+    )
+    logger.info(
+        "- Post-processing       :\t"
+        + utils.convert_time(time_closing - time_final)
+    )
+    logger.info(
+        "- Write final image     :\t"
+        + utils.convert_time(end_time - time_closing)
+    )
+    logger.info("***")
 
 # MAIN #
 
