@@ -1058,6 +1058,7 @@ def process_stats(
     # downstream clustering uses these arrays
     return stats
 
+
 def display_infos(
     args,
     end_time,
@@ -1106,6 +1107,7 @@ def display_infos(
         + utils.convert_time(end_time - time_closing)
     )
     logger.info("***")
+
 
 # MAIN #
 
