@@ -1,7 +1,7 @@
 {
   "main_config": "tests/main_MNH_config.json",
-  "features_test_img": "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
-  "ref_dir": "/work/scratch/data/amselln/uc_toulouse_with_MNH/ref",
-  "valid_stack": "/work/scratch/data/amselln/uc_toulouse_with_MNH/out/valid_stack.tif",
-  "aux_layer": "/work/scratch/data/amselln/uc_toulouse_with_MNH/xt_MNH.tif"
+  "features_test_img": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/xt_Toulouse_with_MNH.tif",
+  "ref_dir": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref",
+  "valid_stack": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/ref/valid_stack.tif",
+  "aux_layer": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_MNH/xt_MNH.tif"
 }
