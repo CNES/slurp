@@ -111,7 +111,7 @@
       "thresh_pekel": 50,
       "thresh_hand": 25,
       "hand_strict": false,
-      "strict_thresh": 50,
+      "thresh_pekel_pp": 30,
       "simple_ndwi_threshold": false,
       "ndwi_threshold": 0.1,
       "samples_method": "grid",

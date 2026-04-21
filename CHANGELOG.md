@@ -15,7 +15,8 @@ A new section Unreleased is opened then for next dev phase.
 ### Changed
 	- Change convention for validity mask : 0 values shall stand for "valid" pixels, and other values shall stand for user specified reasons (ex : 1 for NO_DATA in input VHR image, 2 for clouds, etc.) --> see #32
 	- Modification in waterbodies categorization algorithm : the option is now --categorized_watermask or --no_categorized_watermask. The algorithm works now fine even when some waterbodies partially intersect WBM (PR #38; issue #33)
-	- Remove EOScale (#73) : SLURP now relies on its own classes (eomultiprocessing package) inspired by Bulldozer, t o parallelize tasks
+	- Remove EOScale (#73) : SLURP now relies on its own classes (eomultiprocessing package) inspired by Bulldozer, to parallelize tasks
+	- Rename "strict_thresh" to "thresh_pekel_pp" : this threshold is used to filter potential false positive detections (water areas below that threshold)
 
 ### Fixed
 	- fix precommit (#26)

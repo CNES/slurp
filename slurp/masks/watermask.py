@@ -61,26 +61,21 @@ def compute_pekel_mask(
     pekel_img: np.ndarray,
     thresh_pekel: float,
     hand_strict: bool,
-    strict_thresh: float,
+    thresh_pekel_pp: float,
     no_pekel_filter: bool,
     pekel_nodata: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute Pekel-based water masks according to input parameters.
 
-    A primary water mask is computed using ``thresh_pekel``. Depending on
-    configuration, a secondary mask is also produced:
-      - if ``hand_strict`` is True, a stricter mask based on
-        ``strict_thresh`` is returned;
-      - otherwise, a secondary mask is computed using a default threshold
-        (30) unless ``no_pekel_filter`` is True, in which case an empty
-        mask is returned.
+    A primary water mask is computed using by learning pixels above ``thresh_pekel``.
+    Then, the final mask will be clean : all water areas below thresh_pekel_pp will be removed
 
     :param pekel_img: Input Pekel occurrence image.
     :param thresh_pekel: Threshold used to compute the main water mask.
     :param hand_strict: If True, compute a strict secondary mask.
-    :param strict_thresh: Threshold used for the strict mask when
-        ``hand_strict`` is enabled.
+    :param thresh_pekel_pp: Pekel Threshold for post-processing
+    (keep detected areas above this threshold)
     :param no_pekel_filter: If True, disables the secondary Pekel filtering.
     :param pekel_nodata: Nodata value of the Pekel image (not used internally
         but kept for interface consistency).
@@ -92,15 +87,15 @@ def compute_pekel_mask(
     mask_pekel = utils.compute_mask(pekel_img, [thresh_pekel])
 
     if hand_strict:
-        mask_pekel_strict = utils.compute_mask(pekel_img, [strict_thresh])
+        mask_pekel_strict = utils.compute_mask(pekel_img, [thresh_pekel_pp])
         return mask_pekel, mask_pekel_strict
 
     if not no_pekel_filter:
-        mask_pekel0 = utils.compute_mask(pekel_img, [30])
+        mask_pekel_pp = utils.compute_mask(pekel_img, [thresh_pekel_pp])
     else:
-        mask_pekel0 = np.zeros(pekel_img.shape, dtype=np.uint8)
+        mask_pekel_pp = np.zeros(pekel_img.shape, dtype=np.uint8)
 
-    return mask_pekel, mask_pekel0
+    return mask_pekel, mask_pekel_pp
 
 
 def compute_hand_mask(
@@ -477,7 +472,7 @@ def mask_filter(im_in, mask_ref):
 def post_process(
     im_predict,
     mask_hand,
-    mask_pekel0,
+    mask_pekel_pp,
     valid_stack,
     hand_filter,
     hand_strict,
@@ -498,7 +493,7 @@ def post_process(
         Predicted mask
     mask_hand : np.ndarray
         Hand mask
-    mask_pekel0 : np.ndarray
+    mask_pekel_pp : np.ndarray
         Pekel mask
     valid_stack : np.ndarray
         Validity mask
@@ -535,7 +530,7 @@ def post_process(
     # ---- Filter for final classification ----
     if not no_pekel_filter:
         mask = np.zeros(buffer_shape, dtype=bool)
-        mask = np.logical_or(mask, mask_pekel0)
+        mask = np.logical_or(mask, mask_pekel_pp)
         im_classif = mask_filter(im_predict, mask)
     else:
         im_classif = im_predict.copy()
@@ -757,7 +752,7 @@ def process_pekel(args, slurp_manager, margin):
     # ==============================
     # COMPUTE PEKEL MASK
     # ==============================
-    local_mask_pekel, mask_pekel0 = mp_n_to_m_images(
+    local_mask_pekel, mask_pekel_pp = mp_n_to_m_images(
         inputs=[pekel_array[0]],
         image_height=input_profile["height"],
         image_width=input_profile["width"],
@@ -767,7 +762,7 @@ def process_pekel(args, slurp_manager, margin):
         func_parameters={
             "thresh_pekel": args.thresh_pekel,
             "hand_strict": args.hand_strict,
-            "strict_thresh": args.strict_thresh,
+            "thresh_pekel_pp": args.thresh_pekel_pp,
             "no_pekel_filter": args.no_pekel_filter,
             "pekel_nodata": args.pekel_nodata,
         },
@@ -789,7 +784,7 @@ def process_pekel(args, slurp_manager, margin):
             "switching to NDWI threshold mode."
         )
 
-    return local_mask_pekel, mask_pekel0, not_enough_water_samples
+    return local_mask_pekel, mask_pekel_pp, not_enough_water_samples
 
 
 def process_hand(args, slurp_manager, margin):
@@ -848,7 +843,7 @@ def nominal_case_predict(
     local_mask_pekel,
     margin,
     mask_hand,
-    mask_pekel0,
+    mask_pekel_pp,
     vhr_profile,
 ):
     """
@@ -870,7 +865,7 @@ def nominal_case_predict(
         local_mask_pekel (np.ndarray): Mask tile of candidate water pixels.
         margin (int): Stable margin for tile processing.
         mask_hand (np.ndarray): Mask tile for valid "other" pixels.
-        mask_pekel0 (np.ndarray): Mask of candidate water pixels for reference.
+        mask_pekel_pp (np.ndarray): Mask of candidate water pixels for reference.
         vhr_profile (dict): Raster profile for the spectral bands.
 
     Returns:
@@ -1005,7 +1000,7 @@ def launch_postprocess(
     valid_stack,
     margin,
     mask_hand,
-    mask_pekel0,
+    mask_pekel_pp,
     predict_profile,
 ):
     """
@@ -1025,7 +1020,7 @@ def launch_postprocess(
         valid_stack (List[np.ndarray]): Validity mask tiles (0=valid, else=invalid).
         margin (int): Stable margin for tile processing.
         mask_hand (np.ndarray): Hand-made mask for valid "other" pixels.
-        mask_pekel0 (np.ndarray): Pekel mask for candidate water pixels.
+        mask_pekel_pp (np.ndarray): Pekel mask for candidate water pixels.
         predict_profile (dict): Raster profile of the predicted mask.
 
     Returns:
@@ -1041,7 +1036,7 @@ def launch_postprocess(
     inputs_for_classif = [
         predict[0],  # predicted RF mask
         mask_hand[0],  # hand mask
-        mask_pekel0,  # Pekel mask
+        mask_pekel_pp,  # Pekel mask
         valid_stack[0][0],  # validity mask
     ]
 
@@ -1157,9 +1152,9 @@ def getarguments():
         "-thresh_hand", type=int, help="Hand Threshold int >= 0"
     )
     group2.add_argument(
-        "-strict_thresh",
+        "-thresh_pekel_pp",
         type=float,
-        help="Pekel Threshold float if hand_strict",
+        help="Pekel Threshold for post-processing (keep detected areas above this threshold)",
     )
     group2.add_argument(
         "-save_mode",
@@ -1320,7 +1315,7 @@ def slurp_watermask(
     thresh_pekel: float,
     hand_strict: bool,
     thresh_hand: int,
-    strict_thresh: float,
+    thresh_pekel_pp: float,
     save_mode: str,
     simple_ndwi_threshold: bool,
     ndwi_threshold: float,
@@ -1415,7 +1410,7 @@ def slurp_watermask(
             # PEKEL & HAND
             # ==============================
             logger.info("[1] Step: PEKEL")
-            local_mask_pekel, mask_pekel0, not_enough_water_samples = (
+            local_mask_pekel, mask_pekel_pp, not_enough_water_samples = (
                 process_pekel(args, slurp_manager, margin)
             )
             logger.info("[2] Step: HAND")
@@ -1482,7 +1477,7 @@ def slurp_watermask(
                         local_mask_pekel,
                         margin,
                         mask_hand,
-                        mask_pekel0,
+                        mask_pekel_pp,
                         vhr_profile,
                     )
                 )
@@ -1498,7 +1493,7 @@ def slurp_watermask(
                 valid_stack,
                 margin,
                 mask_hand,
-                mask_pekel0,
+                mask_pekel_pp,
                 predict_profile,
             )
 
