@@ -82,7 +82,6 @@ def build_stack_stackmask(args, slurp_manager):
             urbanmask_list,
             shadowmask_list,
             wsf_list,
-            margin,
             image_profile,
         )
     """
@@ -112,8 +111,6 @@ def build_stack_stackmask(args, slurp_manager):
     key_shadowmask = read(args.shadowmask)
     key_wsf = read(args.extracted_wsf)
 
-    margin = args.margin
-
     logger.info("Stackmask inputs ready")
 
     return (
@@ -124,7 +121,6 @@ def build_stack_stackmask(args, slurp_manager):
         [key_urbanmask],
         [key_shadowmask],
         [key_wsf],
-        margin,
         image_profile,
     )
 
@@ -835,7 +831,6 @@ def slurp_stackmask(
                 urbanmask,
                 shadowmask,
                 wsf,
-                margin,
                 image_profile,
             ) = build_stack_stackmask(args, slurp_manager)
 
@@ -892,7 +887,7 @@ def slurp_stackmask(
                     "remove_small_objects": args.remove_small_objects,
                 },
                 context_manager=slurp_manager,
-                stable_margin=margin,
+                stable_margin=args.margin,
             )
 
             # ==============================
