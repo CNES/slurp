@@ -18,7 +18,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Brings together functions used by eoscale"""
+"""Brings together functions used by eomultiprocessing"""
+
 import copy
 import logging
 
@@ -29,13 +30,9 @@ from slurp.tools.constant import COMPRESSION, DRIVER, NODATA_INT8, NODATA_INT16
 logger = logging.getLogger("slurp")
 
 
-def concatenate_samples(output_scalars, chunk_output_scalars, tile):
-    output_scalars.append(chunk_output_scalars[0])
-
-
 # Profiles
-def single_float_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_float_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.float32
@@ -45,8 +42,8 @@ def single_float_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_bool_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_bool_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = bool
@@ -56,8 +53,8 @@ def single_bool_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint8_1b_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_uint8_1b_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
@@ -69,8 +66,8 @@ def single_uint8_1b_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint8_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_uint8_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint8
@@ -81,8 +78,8 @@ def single_uint8_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_int16_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_int16_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int16
@@ -93,8 +90,8 @@ def single_int16_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_uint16_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_uint16_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.uint16
@@ -105,8 +102,8 @@ def single_uint16_profile(input_profiles: list, map_params):
     return profile
 
 
-def single_int32_profile(input_profiles: list, map_params):
-    """Define profile for eoscale"""
+def single_int32_profile(input_profiles: list):
+    """Define profile for eomultiprocessing"""
     profile = input_profiles[0]
     profile["count"] = 1
     profile["dtype"] = np.int32
@@ -116,8 +113,8 @@ def single_int32_profile(input_profiles: list, map_params):
     return profile
 
 
-def three_uint8_profile(input_profiles: list, map_params):
-    """Define profiles for eoscale"""
+def three_uint8_profile(input_profiles: list):
+    """Define profiles for eomultiprocessing"""
     profile1 = input_profiles[0]
     profile1["count"] = 1
     profile1["dtype"] = np.uint8
@@ -134,8 +131,8 @@ def three_uint8_profile(input_profiles: list, map_params):
     return [profile1, profile2, profile3]
 
 
-def double_uint8_profile(input_profiles: list, map_params):
-    """Define profiles for eoscale"""
+def double_uint8_profile(input_profiles: list):
+    """Define profiles for eomultiprocessing"""
     profile1 = input_profiles[0]
     profile1["count"] = 1
     profile1["dtype"] = np.uint8

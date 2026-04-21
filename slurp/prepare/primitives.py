@@ -28,39 +28,53 @@ from slurp.tools.constant import NODATA_INT16
 
 
 def compute_ndxi(
-    input_buffer: list, input_profiles: list, params: dict
+    input_buffer_b1: np.ndarray,
+    input_buffer_b2: np.ndarray,
+    valid_stack: np.ndarray,
+    im_b1: int,
+    im_b2: int,
 ) -> np.ndarray:
     """
-    Compute Normalize Difference X Index.
-    Rescale to [-1000, 1000] int16 with nodata value = 32767
-    1000 * (im_b1 - im_b2) / (im_b1 + im_b2)
+    Compute Normalized Difference X Index (NDXI).
 
-    :param list input_buffer: VHR input image [im_vhr, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params: dictionary of arguments, must contain the keys "im_b1" and "im_b2"
-    :returns: NDXI
+    Formula:
+        1000 * (B1 - B2) / (B1 + B2)
+
+    The result is clipped to [-1000, 1000] and converted to int16.
+    Nodata value is set to NODATA_INT16 (32767).
+
+    Special case:
+    If reflectance values are negative, the index may slightly exceed
+    the theoretical range [-1000, 1000]. In that case, values are clipped
+    to -1000 or 1000.
+
+    :param np.ndarray input_buffer_b1: One-band image array B1
+    :param np.ndarray input_buffer_b2: One-band image array B2
+    :param np.ndarray valid_stack: Validity mask
+        Non-zero values indicate invalid pixels
+    :param int im_b1: 1-based index of band B1
+    :param int im_b2: 1-based index of band B2
+    :returns: NDXI image as np.int16 array
+    :rtype: np.ndarray
     """
-    np.seterr(divide="ignore", invalid="ignore")
-    im_ndxi = 1000.0 - (
-        2000.0 * np.float32(input_buffer[0][params["im_b2"] - 1])
-    ) / (
-        np.float32(input_buffer[0][params["im_b1"] - 1])
-        + np.float32(input_buffer[0][params["im_b2"] - 1])
-    )
-    # Special case where reflectance values are negative : we could obtain a NDVI slightly below -1
-    # ex : R: 90.07, NIR: -1.24 --> NDVI: -1.02
-    # In that special case, we prefer set the value to -1 or 1.
-    # Otherwise we should modify the validity mask, to avoid these values to be taken into account
-    # in the next steps of the classification algorithms.
-    im_ndxi[im_ndxi < -1000.0] = -1000
-    im_ndxi[im_ndxi > 1000.0] = 1000
+    # Convert selected bands to float32 for safe division
+    band_b1 = input_buffer_b1.astype(np.float32)
+    band_b2 = input_buffer_b2.astype(np.float32)
 
-    # Apply Validity Mask
-    im_ndxi[np.where(input_buffer[1][0] != 0)] = np.nan
+    denom = band_b1 + band_b2
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        im_ndxi = 1000.0 - (2000.0 * band_b2) / denom
+
+    # Clip to theoretical range
+    np.clip(im_ndxi, -1000.0, 1000.0, out=im_ndxi)
+
+    # Apply validity mask (non-zero = invalid)
+    im_ndxi[valid_stack != 0] = np.nan
+
+    # Replace NaN with NODATA value
     np.nan_to_num(im_ndxi, copy=False, nan=NODATA_INT16)
-    im_ndxi = np.int16(im_ndxi)
-
-    return im_ndxi
+    return im_ndxi.astype(np.int16)
 
 
 def std_convoluted(
@@ -98,28 +112,46 @@ def std_convoluted(
 
 
 def texture_task(
-    input_buffers: list, input_profiles: list, params: dict
+    nir_band: np.ndarray,
+    valid_stack: np.ndarray,
+    nir: int,
+    texture_rad: int,
+    min_value: float,
+    max_value: float,
 ) -> np.ndarray:
     """
-    Compute textures
+    Compute texture on NIR band.
 
-    :param list input_buffers: [im_vhr, valid_stack]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict params:
-    dictionary of arguments, must contain the keys "nir", "texture_rad",
-    "min_value" and "max_value"
-    :returns: texture image
+    :param np.ndarray nir_band:
+        nir-band image array (height, width)
+    :param np.ndarray valid_stack:
+        Validity mask (non-zero = invalid)
+    :param int nir:
+        1-based index of NIR band
+    :param int texture_rad:
+        Radius of texture window
+    :param float min_value:
+        Lower percentile clipping value
+    :param float max_value:
+        Upper percentile clipping value
+    :returns:
+        Texture image as np.uint16
+    :rtype: np.ndarray
     """
-    masked_band = np.ma.array(
-        input_buffers[0][params["nir"] - 1],
-        mask=input_buffers[1] != 0,
-    )
-    texture = std_convoluted(
-        masked_band.astype(float),
-        params["texture_rad"],
-        params["min_value"],
-        params["max_value"],
-    )
-    texture = np.where(input_buffers[1] != 0, NODATA_INT16, texture)
 
-    return texture
+    # Select NIR band (convert to float)
+    masked_band = np.ma.array(
+        nir_band.astype(float),
+        mask=valid_stack != 0,
+    )
+
+    texture = std_convoluted(
+        masked_band,
+        texture_rad,
+        min_value,
+        max_value,
+    )
+
+    texture = np.where(valid_stack != 0, NODATA_INT16, texture)
+
+    return texture.astype(np.uint16)

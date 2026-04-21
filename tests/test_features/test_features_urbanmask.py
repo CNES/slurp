@@ -7,6 +7,7 @@
 #
 """Test urban mask with differents features and different arguments values"""
 
+import json
 import sys
 
 import pytest
@@ -123,5 +124,36 @@ def test_nb_samples_ci(
         )
         + f"-nb_samples_other {nb_samples_other} -nb_samples_urban {nb_samples_urban}"
     ).split()
+    sys.argv = command
+    slurp.masks.urbanmask.main()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize(
+    "params_file",
+    [
+        "tests/config_test_mnh.json",
+    ],
+)
+def test_layers_aux_file(params_file, output_dir):
+    """Tests the urban mask computation with auxiliary raster layers
+    to ensure the -layers argument correctly ingests external files."""
+
+    # Charger le JSON
+    with open(params_file, "r") as f:
+        params = json.load(f)
+
+    command = (
+        write_command_compute_urbanmask(
+            1,
+            params["main_config"],
+            params["features_test_img"],
+            output_dir,
+            params["ref_dir"],
+            params["valid_stack"],
+        )
+        + f"-layers {params['aux_layer']} "
+    ).split()
+
     sys.argv = command
     slurp.masks.urbanmask.main()

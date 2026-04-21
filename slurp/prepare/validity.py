@@ -21,32 +21,40 @@
 
 """Brings together functions that create valid mask"""
 
+from typing import Optional
+
 import numpy as np
 
 
 def compute_valid_stack_clouds(
-    input_buffers: list, input_profiles: list, args: dict
+    im_vhr: np.ndarray,
+    mask_cloud: Optional[np.ndarray] = None,
+    nodata: float = None,
 ) -> np.ndarray:
     """
-    Calculation of the valid pixels of a given image with a cloud mask
+    Calculation of valid pixels of a given image with optional cloud mask.
 
-    :param list input_buffer: VHR input image [im_vhr, mask_cloud]
-    :param list input_profiles: image profile (not used but necessary for eoscale)
-    :param dict args: dictionary of arguments, must contain a key "nodata"
-    :returns: valid_mask (numpy array, 0 : valid, 1 : NODATA, 2 : Clouds)
+    Parameters
+    ----------
+    im_vhr : np.ndarray
+        Input VHR image tile (C, H, W) or (H, W)
+    mask_cloud : np.ndarray, optional
+        Cloud mask tile
+    nodata : numeric
+        Nodata value
+
+    Returns
+    -------
+    np.ndarray
+        valid_mask:
+            0 ? valid
+            1 ? nodata
+            2 ? cloud
     """
-    if len(input_buffers) == 1:
-        # 0 where image is valid, invalid for other values
-        # Note : we check no data on all dimensions, because in some weird cases
-        # (ex : RGB bands and NIR had been superimposed on a slightly different grid)
-        # some pixels may be valid in band 0 (Red)  and not in band 3 (NIR)
-        valid_mask = 1 - np.all(
-            input_buffers[0] != args["nodata"], axis=0
-        ).astype(int)
-    else:
-        valid_mask = 1 - np.all(
-            input_buffers[0] != args["nodata"], axis=0
-        ).astype(int)
-        valid_mask = np.where(input_buffers[1] != 0, 2, valid_mask)
+    # check NODATA on all bands : in very rare cases, we observe images
+    # with invalid data on only one band
+    valid_mask = 1 - np.all(im_vhr != nodata, axis=0).astype(int)
+    if mask_cloud is not None:
+        valid_mask = np.where(mask_cloud != 0, 2, valid_mask)
 
-    return valid_mask
+    return valid_mask.astype(np.uint8)

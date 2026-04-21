@@ -27,7 +27,7 @@ from importlib.metadata import version
 
 # version through setuptools_scm when python3 > 3.8
 try:
-    __version__ = version("slurp")
+    __version__ = version("slurp-masks")
 except Exception:  # pylint: disable=broad-except
     __version__ = "unknown"
 

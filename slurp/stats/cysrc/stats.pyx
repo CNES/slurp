@@ -120,8 +120,8 @@ cdef class PyStats:
         # Takes a segmented image as input, a clustering (labels -> class)
         # and returns a classification map (each segment of the image defined by a class)
                 
-        nbRows = segmentation.shape[1]
-        nbCols = segmentation.shape[2]
+        nbRows = segmentation.shape[0]
+        nbCols = segmentation.shape[1]
         
         cdef unsigned int[::1] seg_memview = segmentation.flatten().astype(np.uint32) 
         cdef unsigned int[::1] cluster_memview = clustering.flatten().astype(np.uint32)

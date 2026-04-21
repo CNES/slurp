@@ -20,6 +20,7 @@
 
 
 """Brings together miscellaneous display functions"""
+
 import linecache
 import logging
 import os

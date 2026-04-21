@@ -67,40 +67,46 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
     return output_array
 
 
-def morpho_clean(im_classif, params):
+def morpho_clean(
+    im_classif: np.ndarray,
+    *,
+    binary_closing: int | None = None,
+    binary_opening: int | None = None,
+    remove_small_holes: int | None = None,
+    remove_small_objects: int | None = None,
+) -> np.ndarray:
     """
-    Apply the morphology transformation passed in arguments
+    Apply morphology transformations on a classification mask.
 
-    :param np.ndarray im_classif: input array
-    :param dict params: dictionary of arguments
+    :param im_classif: input classification array
+    :param binary_closing: closing radius (optional)
+    :param binary_opening: opening radius (optional)
+    :param remove_small_holes: minimum size of small holes to remove
+    :param remove_small_objects: minimum size of small objects to remove
+    :return: transformed classification mask
     """
-
     im_classif = im_classif.astype(np.uint8)
 
-    if params["binary_closing"]:
-        # Closing can remove small dark spots (i.e. “pepper”) and connect small bright cracks.
+    if binary_closing:
         im_classif = apply_morpho(
-            im_classif, "binary_closing", params["binary_closing"]
+            im_classif, "binary_closing", binary_closing
         ).astype(np.uint8)
 
-    if params["binary_opening"]:
-        # Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks.
+    if binary_opening:
         im_classif = apply_morpho(
-            im_classif, "binary_opening", params["binary_opening"]
+            im_classif, "binary_opening", binary_opening
         ).astype(np.uint8)
 
-    if params["remove_small_holes"]:
+    if remove_small_holes:
         im_classif = apply_morpho(
-            im_classif.astype(bool),
-            "remove_small_holes",
-            params["remove_small_holes"],
+            im_classif.astype(bool), "remove_small_holes", remove_small_holes
         ).astype(np.uint8)
 
-    if params["remove_small_objects"]:
+    if remove_small_objects:
         im_classif = apply_morpho(
             im_classif.astype(bool),
             "remove_small_objects",
-            params["remove_small_objects"],
+            remove_small_objects,
         ).astype(np.uint8)
 
     return im_classif
