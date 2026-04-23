@@ -57,11 +57,11 @@
 
   "post_process":
 	{
-	    "binary_opening": 2,
-	    "binary_closing": 2,
-	    "binary_dilation": 2,
-	    "remove_small_objects": 100,
-	    "remove_small_holes": 100,
+	    "binary_opening": 3,
+	    "binary_closing": 3,
+	    "binary_dilation": 3,
+	    "remove_small_objects": 500,
+	    "remove_small_holes": 500,
 	    "area_closing": null
     },
 
@@ -81,7 +81,7 @@
 	"value_classif": 255,
 	"gt_binary_erosion": 5,
 	"nb_samples_other": 5000,
-	"nb_samples_urban": 1000,
+	"nb_samples_urban": 5000,
 	"max_depth": 8,
 	"nb_estimators": 100
      },
@@ -108,15 +108,15 @@
   "water":
     {
       "files_layers": [],
-      "thresh_pekel": 50,
+      "thresh_pekel": 80,
       "thresh_hand": 25,
       "hand_strict": false,
-      "strict_thresh": 50,
+      "thresh_pekel_pp": 30,
       "simple_ndwi_threshold": false,
       "ndwi_threshold": 0.1,
       "samples_method": "grid",
-      "nb_samples_water": 2000,
-      "nb_samples_other": 10000,
+      "nb_samples_water": 5000,
+      "nb_samples_other": 5000,
       "nb_samples_auto": false,
       "auto_pct": 0.0002,
       "smart_area_pct": 50,

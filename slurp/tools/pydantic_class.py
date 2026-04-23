@@ -247,8 +247,10 @@ class Water(BaseModel):
         default=False,
         description="Use not(pekelxx) for other (no water) samples",
     )
-    strict_thresh: Optional[int] = Field(
-        default=50, description="Pekel Threshold float if hand_strict"
+    thresh_pekel_pp: Optional[int] = Field(
+        default=30,
+        description="Pekel Threshold for post-processing"
+        " (keep detected areas above this threshold)",
     )
     simple_ndwi_threshold: Optional[bool] = Field(
         default=False,
