@@ -457,14 +457,17 @@ def mask_filter(im_in, mask_ref):
     Remove water areas in im_in not in contact
     with water areas in mask_ref.
     """
-    im_label, _ = label(im_in, connectivity=2, return_num=True)
+    im_label, nb_labels = label(im_in, connectivity=2, return_num=True)
 
-    im_label_thresh = np.copy(im_label)
-    im_label_thresh[np.logical_not(mask_ref)] = 0
-    valid_labels = np.delete(np.unique(im_label_thresh), 0)
+    if nb_labels > 1:
+        im_label_thresh = np.copy(im_label)
+        im_label_thresh[np.logical_not(mask_ref)] = 0
+        valid_labels = np.delete(np.unique(im_label_thresh), 0)
 
-    im_filtered = np.zeros(np.shape(mask_ref), dtype=np.uint8)
-    im_filtered[np.isin(im_label, valid_labels)] = 1
+        im_filtered = np.zeros(np.shape(mask_ref), dtype=np.uint8)
+        im_filtered[np.isin(im_label, valid_labels)] = 1
+    else:
+        im_filtered = im_in
 
     return im_filtered
 
@@ -516,8 +519,6 @@ def post_process(
         [im_predict, im_classif]
     """
 
-    buffer_shape = im_predict.shape
-
     # ---- Filter with Hand ----
     if hand_filter:
         if not hand_strict:
@@ -529,9 +530,9 @@ def post_process(
 
     # ---- Filter for final classification ----
     if not no_pekel_filter:
-        mask = np.zeros(buffer_shape, dtype=bool)
-        mask = np.logical_or(mask, mask_pekel_pp)
-        im_classif = mask_filter(im_predict, mask)
+        # mask_pekel_pp : filter areas with Pekel below that threshold
+        # -> probably a false positive (shadows, etc.) we need to clean
+        im_classif = mask_filter(im_predict, mask_pekel_pp)
     else:
         im_classif = im_predict.copy()
 
@@ -549,7 +550,7 @@ def post_process(
     if area_closing:
         im_classif[:, :] = apply_morpho(
             im_classif[:, :], "area_closing", area_closing
-        )
+        ).astype(np.uint8)
 
     if remove_small_holes:
         im_classif[:, :] = apply_morpho(
@@ -933,7 +934,6 @@ def nominal_case_predict(
         },
         reducer=utils.concatenate_samples,
     )
-    logger.debug("samples: \n%s\n", samples)
 
     del local_mask_pekel
     logger.info("[3.2] Step: Learn model")

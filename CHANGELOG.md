@@ -4,7 +4,9 @@ Only the first "Unreleased" section of this file corresponding of next release c
 When publication of a new release, the section "Unreleased" is blocked to the next chosen version and name of the milestone at a given date.
 A new section Unreleased is opened then for next dev phase.
 
-## 0.1 Stable version without EOScale
+## 0.1 First stable version for CO3D.
+	- Compliant with Docker environment (no more dependency to EOScale / shared memory)
+	- New convention for validity masks
 
 ### Added
 	- Analyse vegetation clustering : there are new options to fit vegetation clustering with what is observed in a global land cover map : slurp_vegetationmask -autolabel [-labeling_strategy nearest/overestimate/underestimate]. Note that the "pct_veg/low_veg/etc." are pourcentage of observed class in the global land cover map (see slurp_prepare --analyse_glcm). See #24
