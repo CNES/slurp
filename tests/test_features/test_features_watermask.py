@@ -7,6 +7,7 @@
 #
 """Test water mask with differents features and different arguments values"""
 
+import json
 import sys
 
 import pytest
@@ -212,5 +213,34 @@ def test_hand_filter_ci(
         1, main_config, features_test_img, output_dir, ref_dir, valid_stack
     )
     command = f"{cmd} -hand_filter".split()
+    sys.argv = command
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize(
+    "params_file",
+    [
+        "tests/config_test_only_water.json",
+    ],
+)
+def test_only_water(params_file, output_dir):
+    """Tests the water mask computation when recieving full water tile"""
+
+    # Charger le JSON
+    with open(params_file, "r") as f:
+        params = json.load(f)
+
+    cmd = (
+        write_command_compute_watermask(
+            1,
+            params["main_config"],
+            params["features_test_img"],
+            output_dir,
+            params["ref_dir"],
+            params["valid_stack"],
+        )
+    )
+    command = f"{cmd} -nb_samples_auto".split()
     sys.argv = command
     slurp.masks.watermask.main()
