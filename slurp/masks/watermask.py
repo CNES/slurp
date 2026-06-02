@@ -241,10 +241,7 @@ def build_samples(
     valid_stack: np.ndarray,
     mask_hand: np.ndarray,
     mask_pekel: np.ndarray,
-    vhr1: np.ndarray,
-    vhr2: np.ndarray,
-    vhr3: np.ndarray,
-    vhr4: np.ndarray,
+    vhr: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     ndwi_threshold: float,
@@ -299,7 +296,6 @@ def build_samples(
     """
     if aux_inputs is None:
         aux_inputs = []
-
     # ---- validity mask ----
     validity_mask = valid_stack == 0
 
@@ -359,7 +355,13 @@ def build_samples(
     cols = np.concatenate((cols_pekel, cols_hand))
 
     # ---- stack features ----
-    base_features = [mask_pekel, vhr1, vhr2, vhr3, vhr4, ndvi, ndwi]
+    vhr_features = [vhr[i] for i in range(vhr.shape[0])]
+    base_features = [
+        mask_pekel,
+        *vhr_features,
+        ndvi,
+        ndwi,
+    ]
     features = base_features + list(aux_inputs)
     im_stack = np.stack(features, axis=0)
 
@@ -373,10 +375,7 @@ def build_samples(
 
 def rf_prediction(
     valid_stack: np.ndarray,
-    vhr1: np.ndarray,
-    vhr2: np.ndarray,
-    vhr3: np.ndarray,
-    vhr4: np.ndarray,
+    vhr: np.ndarray,
     ndvi: np.ndarray,
     ndwi: np.ndarray,
     aux_inputs=None,
@@ -384,29 +383,7 @@ def rf_prediction(
     debug: bool = False,
 ):
     """
-    Random Forest prediction
-
-    Parameters
-    ----------
-    valid_stack : np.ndarray
-        Validity mask (1, H, W)
-    vhr : np.ndarray
-        VHR features
-    ndvi : np.ndarray
-        NDVI layer(s)
-    ndwi : np.ndarray
-        NDWI layer(s)
-    classifier : sklearn-like estimator
-        Trained classifier
-    debug : bool
-        Enable memory debug logs
-    aux_inputs : np.ndarray
-        Additional feature layers
-
-    Returns
-    -------
-    np.ndarray
-        Predicted mask (uint8)
+    Random Forest prediction on multiband VHR tensor.
     """
     # -------------------------------------------------
     # AUX INPUT NORMALIZATION
@@ -416,33 +393,54 @@ def rf_prediction(
 
     if isinstance(aux_inputs, np.ndarray):
         aux_inputs = [aux_inputs]
-    # ---- build feature stack ----------------------------------------------
-    feature_layers = [
-        vhr1,
-        vhr2,
-        vhr3,
-        vhr4,
-        ndvi,
-        ndwi,
-    ] + aux_inputs
 
-    # concatenate exactly like legacy algo
+    # -------------------------------------------------
+    # MULTIBAND FEATURE EXTRACTION
+    # -------------------------------------------------
+    vhr_features = [
+        vhr[i]
+        for i in range(vhr.shape[0])
+    ]
+
+    # -------------------------------------------------
+    # BUILD FEATURE STACK
+    # -------------------------------------------------
+    feature_layers = (
+        vhr_features
+        + [ndvi, ndwi]
+        + list(aux_inputs)
+    )
+
     im_stack = np.concatenate(
         [layer[np.newaxis, ...] for layer in feature_layers],
         axis=0,
     )
-    # valid_stack shape expected: (1, H, W)
+
+    # -------------------------------------------------
+    # VALID MASK
+    # -------------------------------------------------
     valid_mask = np.logical_not(valid_stack)
 
-    # ---- reshape for sklearn ----------------------------------------------
-    buffer_to_predict = np.transpose(im_stack[:, valid_mask])
+    # -------------------------------------------------
+    # SKLEARN BUFFER
+    # -------------------------------------------------
+    buffer_to_predict = np.transpose(
+        im_stack[:, valid_mask]
+    )
 
-    prediction = np.zeros(im_stack.shape[1:], dtype=np.uint8)
+    prediction = np.zeros(
+        im_stack.shape[1:],
+        dtype=np.uint8,
+    )
 
     if buffer_to_predict.shape[0] > 0:
-        prediction[valid_mask] = classifier.predict(buffer_to_predict)
+        prediction[valid_mask] = classifier.predict(
+            buffer_to_predict
+        )
 
-    # ---- debug -------------------------------------------------------------
+    # -------------------------------------------------
+    # DEBUG
+    # -------------------------------------------------
     utils.display_mem_usage(
         debug,
         f"RF Prediction on buffer "
@@ -905,10 +903,7 @@ def nominal_case_predict(
         valid_stack[0][0],
         mask_hand[0],
         local_mask_pekel,
-        vhr[0][0],
-        vhr[0][1],
-        vhr[0][2],
-        vhr[0][3],
+        vhr[0],
         ndvi[0][0],
         ndwi[0][0],
     ]
@@ -963,10 +958,7 @@ def nominal_case_predict(
     # -- Predict full tile -- #
     input_for_prediction = [
         valid_stack[0][0],
-        vhr[0][0],
-        vhr[0][1],
-        vhr[0][2],
-        vhr[0][3],
+        vhr[0],          # <-- tensor multibande complet
         ndvi[0][0],
         ndwi[0][0],
     ]

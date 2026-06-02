@@ -31,21 +31,58 @@ from sklearn.model_selection import train_test_split
 logger = logging.getLogger("slurp")
 
 
+import numpy as np
+
+
 def print_feature_importance(classifier, layers):
-    """Compute feature importance."""
-    feature_names = ["R", "G", "B", "NIR", "NDVI", "NDWI"] + layers
+    """
+    Print feature importance ranking.
+
+    Features are assumed to be ordered as:
+        B1..BN, NDVI, NDWI, auxiliary layers.
+    """
+
+    n_features = len(classifier.feature_importances_)
+    n_aux_layers = len(layers)
+
+    # NDVI + NDWI
+    n_indices = 2
+
+    n_bands = n_features - n_aux_layers - n_indices
+
+    if n_bands <= 0:
+        raise ValueError(
+            f"Unable to infer spectral band count: "
+            f"{n_features=} {n_aux_layers=}."
+        )
+
+    feature_names = (
+        [f"B{i}" for i in range(1, n_bands + 1)]
+        + ["NDVI", "NDWI"]
+        + list(layers)
+    )
+
+    if len(feature_names) != n_features:
+        raise ValueError(
+            f"Feature count mismatch: "
+            f"{len(feature_names)} names generated for "
+            f"{n_features} model features."
+        )
 
     importances = classifier.feature_importances_
     indices = np.argsort(importances)[::-1]
 
     std = np.std(
-        [tree.feature_importances_ for tree in classifier.estimators_], axis=0
+        [tree.feature_importances_ for tree in classifier.estimators_],
+        axis=0,
     )
 
     logger.info("Feature ranking:")
     for idx in indices:
         logger.info(
-            f" {feature_names[idx]:4s} ({importances[idx]:f}) (std={std[idx]:f})"
+            f"{feature_names[idx]:<10s} "
+            f"({importances[idx]:.6f}) "
+            f"(std={std[idx]:.6f})"
         )
 
 

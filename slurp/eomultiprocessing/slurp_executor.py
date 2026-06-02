@@ -352,19 +352,39 @@ def mp_n_to_m_images(
     )
 
 
-def _find_spatial_axes(arr: np.ndarray, h: int, w: int):
+def _find_spatial_axes(arr: np.ndarray, h: int, w: int) -> tuple[int, int]:
     """
-    Find which axes correspond to spatial dimensions (H, W)
-    regardless of axis order.
+    Find spatial axes (H, W) inside an arbitrary tensor layout.
 
-    Returns:
-        (h_axis, w_axis)
+    The function does NOT assume spatial axes are the last dimensions.
+
+    Examples
+    --------
+    (H, W)           -> (0, 1)
+    (C, H, W)        -> (1, 2)
+    (H, W, C)        -> (0, 1)
+    (T, C, H, W)     -> (2, 3)
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Input tensor.
+    h : int
+        Expected spatial height.
+    w : int
+        Expected spatial width.
+
+    Returns
+    -------
+    tuple[int, int]
+        Indices of spatial axes.
     """
 
     matches = []
 
     for i, size_i in enumerate(arr.shape):
         for j, size_j in enumerate(arr.shape):
+
             if i == j:
                 continue
 
@@ -373,12 +393,13 @@ def _find_spatial_axes(arr: np.ndarray, h: int, w: int):
 
     if not matches:
         raise ValueError(
-            f"Cannot find spatial axes matching ({h},{w}) "
+            f"Cannot find spatial axes matching ({h}, {w}) "
             f"in array shape {arr.shape}"
         )
 
-    # take first valid match
-    return matches[0]
+    # Prefer the last matching pair
+    # because spatial axes are usually deeper
+    return matches[-1]
 
 
 # ============================================================
