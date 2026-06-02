@@ -1,0 +1,6 @@
+{
+  "main_config": "tests/main_n_bands_config.json",
+  "features_test_img": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_n_bands/xt_Toulouse_with_n_bands.tif",
+  "ref_dir": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_n_bands/ref",
+  "valid_stack": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/uc_toulouse_with_n_bands/ref/valid_stack.tif"
+}
