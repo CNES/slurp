@@ -1433,7 +1433,9 @@ def slurp_watermask(
                     output_profiles=[output_profile],
                     output_keys=[path.basename(args.watermask)],
                     func=utils.compute_mask_threshold,
-                    func_parameters={"ndwi_threshold": args.ndwi_threshold},
+                    func_parameters={
+                        "ndwi_threshold": 1000 * args.ndwi_threshold
+                    },
                     context_manager=slurp_manager,
                     stable_margin=margin,
                     binary=True,
