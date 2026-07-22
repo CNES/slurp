@@ -35,17 +35,10 @@ import traceback
 from copy import deepcopy
 from os import path
 
-import inspect as _inspect
-
-import cv2
-import maxflow
 import numpy as np
-from scipy.ndimage import gaussian_filter
-from skimage import morphology, segmentation
-from skimage.draw import line as _skline
-from skimage.draw import polygon as _skpolygon
-from skimage.filters import sobel, threshold_otsu
-from skimage.measure import label, regionprops, regionprops_table
+from skimage import segmentation
+from skimage.filters import sobel
+from skimage.measure import label
 
 from slurp import __version__
 from slurp.eomultiprocessing.slurp_executor import (
@@ -130,505 +123,6 @@ def build_stack_stackmask(args, slurp_manager):
         [key_wsf],
         image_profile,
     )
-
-
-# =====================================================================                                                                       
-#   SEGMENTATION DU BATI PAR GRAPHCUT                                                          
-#                                                                       
-#   attache aux données = logits urbanmask + NDVI×MBI×MSI, coupe        
-#   minimale basée sur une régularisation : n-edges fondées sur une     
-#   carte de gradient améliorée G = moyenne des contours Di Zenzo et    
-#   d'une carte binaire de segments (LSD) ainsi qu'un a priori objet :  
-#   carte P_D par accumulation d'hypothèses de rectangles pour          
-#   régulariser la forme des bâtiments.                                 
-#                                                                       
-#   Activé via regul_type == "graphcut" : remplace la régularisation    
-#   watershed sur le bâti. La lecture / écriture des rasters ainsi que  
-#   le tuilage sont gérés par stack_masks (mp_n_to_m_images).           
-# ===================================================================== 
-
-# ===============================================================
-# PARAMÈTRES GRAPHCUT
-# ===============================================================
-VALEUR_BATI_WSF = 255
-
-MORPH_MIN_SIZE = 200
-MORPH_HOLE_THRESH = 100
-
-SEUIL = 5.0  # seuil sur l'élongation des bâtiments
-LARGEUR_MAX_PX = 40  # seuil sur la largeur max d'un bâtiment
-RECT_MIN = 0.3  # rectangularité minimale d'un bâtiment
-
-POIDS_PD = 0.5  # poids du terme objet dans la régularisation
-# seuils sur la probabilité d'attache aux données pour l'accumulation
-# de rectangles
-SEUILS_RECT = (0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70)
-TAILLE_MAX_BAT_PX = 300  # plus grand côté d'un bâtiment (px)
-REMPLISSAGE_MIN = 0.35  # aire composante / aire du rectangle orienté minimal
-
-LAMBDA_REG = 1.0  # équilibre attache/régularisation
-
-# ===============================================================
-# COMPATIBILITE SKIMAGE (min_size renommé max_size selon versions)
-# ===============================================================
-_NEW_SKIMAGE = (
-    "max_size"
-    in _inspect.signature(morphology.remove_small_objects).parameters
-)
-
-
-def graphcut_remove_small_objects(seg, taille):
-    if _NEW_SKIMAGE:
-        return morphology.remove_small_objects(seg, max_size=taille)
-    return morphology.remove_small_objects(seg, min_size=taille)
-
-
-def graphcut_remove_small_holes(seg, taille):
-    if _NEW_SKIMAGE:
-        return morphology.remove_small_holes(seg, max_size=taille)
-    return morphology.remove_small_holes(seg, area_threshold=taille)
-
-
-# ===============================================================
-# FONCTIONS D'AUTOMATISATION DES PARAMETRES
-# ===============================================================
-
-def separabilite_otsu(p, p_clip=(1, 99)):
-    """Séparabilité d'une carte de proba."""
-    x = np.asarray(p, np.float64).ravel()
-    lo, hi = np.percentile(x, p_clip)
-    x = np.clip(x, lo, hi)
-    x = (x - lo) / (hi - lo + 1e-12)
-    try:
-        thr = threshold_otsu(x)
-    except Exception:
-        thr = float(np.median(x))
-    c0, c1 = x[x <= thr], x[x > thr]
-    if c0.size == 0 or c1.size == 0:
-        return 0.0
-    w0, w1 = c0.size / x.size, c1.size / x.size
-    var_inter = w0 * w1 * (c1.mean() - c0.mean()) ** 2
-    return float(var_inter / (x.var() + 1e-12))
-
-
-def k_auto(valeurs, seuil, max_ech=200_000, eps=1e-6):
-    """Pente k automatique d'une sigmoïde centrée sur le seuil."""
-    v = np.asarray(valeurs, dtype=np.float64).ravel()
-    if v.size > max_ech:
-        idx = np.random.default_rng(0).choice(v.size, max_ech, replace=False)
-        v = v[idx]
-    bas, haut = v[v <= seuil], v[v > seuil]
-    s = 0.5 * (bas.std() + haut.std())
-    return float(2.0 / (s + eps))
-
-
-def proba_otsu(indice, sens=+1, k=None, p_clip=(1, 99)):
-    """sens=+1 : proba haute quand l'indice est grand ; sens=-1 : l'inverse."""
-    lo, hi = np.percentile(indice, p_clip)
-    x = np.clip(indice, lo, hi)
-    x = (x - lo) / (hi - lo + 1e-12)
-    try:
-        thr = threshold_otsu(x)
-    except Exception:
-        thr = float(np.median(x))
-    if k is None:
-        k = k_auto(x, thr)
-    return 1.0 / (1.0 + np.exp(-sens * k * (x - thr)))
-
-
-# ===============================================================
-# MBI / MSI
-# ===============================================================
-
-def se_lineaire(longueur, angle_deg):
-    """Elément structurant linéaire (segment) orienté, de longueur impaire."""
-    L = int(longueur)
-    if L % 2 == 0:
-        L += 1
-    se = np.zeros((L, L), dtype=bool)
-    c = L // 2
-    ang = np.deg2rad(angle_deg)
-    dx, dy = np.sin(ang), np.cos(ang)
-    x0, y0 = int(round(c - dx * c)), int(round(c - dy * c))
-    x1, y1 = int(round(c + dx * c)), int(round(c + dy * c))
-    xx, yy = _skline(x0, y0, x1, y1)
-    se[np.clip(xx, 0, L - 1), np.clip(yy, 0, L - 1)] = True
-    return se
-
-
-def tophat(b, se, mode="white"):
-    """Top-hat blanc/noir (OpenCV)."""
-    op = cv2.MORPH_TOPHAT if mode == "white" else cv2.MORPH_BLACKHAT
-    return cv2.morphologyEx(
-        b, op, se.astype(np.uint8), borderType=cv2.BORDER_REFLECT
-    )
-
-
-def profil_differentiel(b, smin, smax, pas, directions, mode):
-    """Somme des |différences| du profil de top-hat multi-échelle/direction."""
-    echelles = list(range(smin, smax + 1, pas))
-    num = np.zeros_like(b)
-    for d in directions:
-        precedent = None
-        for s in echelles:
-            th = tophat(b, se_lineaire(2 * s + 1, d), mode)
-            if precedent is not None:
-                num += np.abs(th - precedent)
-            precedent = th
-    return num / (len(echelles) * len(directions))
-
-
-def calcul_mbi(brightness, smin=2, smax=30, pas=4,
-               directions=(0, 45, 90, 135)):
-    """Morphological Building Index"""
-    b = np.ascontiguousarray(brightness, dtype=np.float32)
-    return profil_differentiel(b, smin, smax, pas, directions, "white")
-
-
-def calcul_msi(brightness, smin=2, smax=30, pas=4,
-               directions=(0, 45, 90, 135)):
-    """Morphological Shadow Index : profil différentiel de black top-hat.
-    Répond fort sur les ombres (structures sombres compactes adjacentes
-    au bâti)."""
-    b = np.ascontiguousarray(brightness, dtype=np.float32)
-
-    return profil_differentiel(b, smin, smax, pas, directions, "black")
-
-
-# ===============================================================
-# CONTOURS DI ZENZO
-# ===============================================================
-
-def contours_di_zenzo(bandes, sigma_grad=1.0, sigma_tensor=1.0):
-    """Force de contour multispectrale (tenseur de structure Di Zenzo)."""
-    gxx = gyy = gxy = None
-    for b in bandes:
-        lo, hi = np.percentile(b, (2, 98))
-        bn = np.clip((b - lo) / (hi - lo + 1e-12), 0.0, 1.0).astype(np.float32)
-        gx = gaussian_filter(bn, sigma=sigma_grad, order=(0, 1), mode="reflect")
-        gy = gaussian_filter(bn, sigma=sigma_grad, order=(1, 0), mode="reflect")
-        if gxx is None:
-            gxx, gyy, gxy = gx * gx, gy * gy, gx * gy
-        else:
-            gxx += gx * gx
-            gyy += gy * gy
-            gxy += gx * gy
-    if sigma_tensor and sigma_tensor > 0:
-        gxx = gaussian_filter(gxx, sigma_tensor, mode="reflect")
-        gyy = gaussian_filter(gyy, sigma_tensor, mode="reflect")
-        gxy = gaussian_filter(gxy, sigma_tensor, mode="reflect")
-    x = np.sqrt((gxx - gyy) ** 2 + 4.0 * gxy ** 2)
-    lambda_max = 0.5 * (gxx + gyy + x)
-    return np.sqrt(np.maximum(lambda_max, 0.0)).astype(np.float32)
-
-
-# ===============================================================
-# CARTE DE GRADIENT AMELIOREE
-# la valeur de gradient améliorée est la moyenne du module de gradient
-# rééchelonné dans [0, 1] et d'une carte binaire de segments de droite.
-# Les bords rectilignes sont renforcés, les réponses de texture
-# (intérieur des toits, végétation) qui répondent fort sur Di Zenzo
-# mais pas sur le détecteur de segments, sont réduites.
-# ===============================================================
-
-def segments_lsd(image_gris):
-    """Détection de segments de droite. LSD d'OpenCV"""
-    lo, hi = np.percentile(image_gris, (2, 98))
-    b8 = np.clip(
-        (image_gris - lo) / (hi - lo + 1e-12) * 255.0, 0, 255
-    ).astype(np.uint8)
-    lignes = cv2.createLineSegmentDetector().detect(b8)[0]
-    if lignes is None:
-        return []
-    # Selon la version d'OpenCV, detect() renvoie (N, 1, 4) ou (N, 4) :
-    # on aplatit en (N, 4) pour couvrir les deux cas.
-    lignes = np.asarray(lignes, dtype=np.float64).reshape(-1, 4)
-    return [tuple(l) for l in lignes]
-
-
-def carte_lsd(image_gris, epaisseur=1):
-    """Carte binaire des segments rastérisés, légèrement dilatée pour
-    tolérer l'imprécision de localisation (pour concorder avec Di Zenzo)"""
-    h, w = image_gris.shape
-    m = np.zeros((h, w), dtype=bool)
-    for x0, y0, x1, y1 in segments_lsd(image_gris):
-        rr, cc = _skline(int(round(y0)), int(round(x0)),
-                         int(round(y1)), int(round(x1)))
-        ok = (rr >= 0) & (rr < h) & (cc >= 0) & (cc < w)
-        m[rr[ok], cc[ok]] = True
-    m = morphology.dilation(m, np.ones((2 * epaisseur + 1,) * 2, dtype=bool))
-    return m
-
-
-def gradient_ameliore(contour, image_gris):
-    """G = moyenne(contours Di Zenzo rééchelonnés [0,1], carte LSD binaire)."""
-    lo, hi = np.percentile(contour, (1, 99))
-    c = np.clip((contour - lo) / (hi - lo + 1e-12), 0.0, 1.0).astype(np.float32)
-    return (0.5 * (c + carte_lsd(image_gris).astype(np.float32))).astype(
-        np.float32
-    )
-
-
-# ===============================================================
-# A PRIORI OBJET : CARTE P_D PAR ACCUMULATION DE RECTANGLES
-# La moyenne des cartes binaires donne P_D :
-# valeurs hautes = coeur des bâtiments (rectangles concordants à tous
-# les seuils), valeurs basses = bords ou fausses détections
-# les fausses détections d'un seul seuil sont compensées par la fusion.
-# ===============================================================
-
-def rect_oriente(coords):
-    """Sommets (r, c) du rectangle orienté englobant les pixels `coords`."""
-    # (x=col, y=lig) convention skimage != cv2
-    pts = coords[:, ::-1].astype(np.float32)
-    box = cv2.boxPoints(cv2.minAreaRect(pts))  # 4 sommets (x, y)
-    return box[:, ::-1].astype(np.float64)
-
-
-def carte_probabilite_rectangles(prob, seuils, min_size, aspect_max,
-                                 remplissage_min, cote_max_px):
-    """P_D(p) = (1/|R|) * somme des indicatrices {p dans un rectangle},
-    R = ensemble des hypothèses (une par seuil sur prob_log)"""
-    h, w = prob.shape
-    accum = np.zeros((h, w), dtype=np.float32)
-    for tau in seuils:
-        binaire = graphcut_remove_small_objects(prob >= tau, min_size)
-        lab = label(binaire, connectivity=2)
-        if lab.max() == 0:
-            continue
-        carte = np.zeros((h, w), dtype=bool)
-        for reg in regionprops(lab):
-            coins = rect_oriente(reg.coords)
-            c1 = float(np.linalg.norm(coins[1] - coins[0]))
-            c2 = float(np.linalg.norm(coins[2] - coins[1]))
-            petit, grand = min(c1, c2), max(c1, c2)
-            if petit < 2.0 or grand > cote_max_px:
-                continue  # trop fin
-            if grand / (petit + 1e-6) > aspect_max:
-                continue  # trop allongé : route probable
-            if reg.area / (petit * grand + 1e-6) < remplissage_min:
-                continue  # composante peu rectangulaire
-            rr, cc = _skpolygon(coins[:, 0], coins[:, 1], shape=(h, w))
-            carte[rr, cc] = True
-        accum += carte
-    return accum / max(len(seuils), 1)
-
-
-# ===============================================================
-# FILTRE DE FORME
-# ===============================================================
-
-def filtre_forme(seg, seuil_lwr=5.0, largeur_max_px=None, rect_min=None):
-    """Retire les composantes allongées (routes) d'un masque binaire."""
-    lab = label(seg.astype(bool), connectivity=2)
-    if lab.max() == 0:
-        return np.zeros_like(seg, dtype=bool)
-    props = regionprops_table(
-        lab,
-        properties=("label", "axis_major_length", "axis_minor_length",
-                    "extent"),
-    )
-    petit = props["axis_minor_length"]
-    grand = props["axis_major_length"]
-    lwr = grand / (petit + 1e-6)
-    est_route = lwr > seuil_lwr
-    if rect_min is not None:
-        est_route |= (props["extent"] < rect_min)
-    if largeur_max_px is not None:
-        est_route &= (petit < largeur_max_px)
-
-    lut = np.zeros(lab.max() + 1, dtype=bool)
-    lut[props["label"][~est_route]] = True
-    return lut[lab]
-
-
-# ===============================================================
-# GRAPHCUT
-# ===============================================================
-
-def graphcut_regul_buildings(
-    input_image: np.ndarray,
-    urbanmask: np.ndarray,
-    wsf: np.ndarray,
-    *,
-    value_classif_buildings: int,
-    value_classif_background: int,
-    timings=None,
-):
-    """
-
-    Parameters
-    ----------
-    input_image : np.ndarray
-        Multi-band VHR image (bands, height, width), bandes R, G, B, NIR.
-    urbanmask : np.ndarray
-        Urban probability mask (logits / probabilités urbaines).
-    wsf : np.ndarray
-        World Settlement Footprint mask (bâti = VALEUR_BATI_WSF).
-    value_classif_buildings : int
-        Output value for buildings class.
-    value_classif_background : int
-        Output value for background class.
-    timings : dict, optional
-        Dictionnaire rempli avec le temps de chaque étape.
-
-    Returns
-    -------
-    np.ndarray
-        Segmentation 2D (uint8) : value_classif_buildings pour le bâti,
-        value_classif_background ailleurs (pas de marqueurs contrairement
-        au watershed).
-    """
-    eps = 1e-12
-    t = time.time()
-
-    def top(nom):
-        nonlocal t
-        if timings is not None:
-            timings[nom] = timings.get(nom, 0.0) + time.time() - t
-        t = time.time()
-
-    # ATTACHE URBANMASK (calibration quantile sur le WSF)
-    urban = urbanmask.astype(np.float32)
-
-    # Normalisation urbanmask
-    lo_u, hi_u = np.percentile(urban, (0.5, 99.5))
-    urban_norm = np.clip((urban - lo_u) / (hi_u - lo_u + eps),
-                         0.0, 1.0).astype(np.float32)
-
-    proportion_bati = (wsf == VALEUR_BATI_WSF).sum() / wsf.size
-    proportion_bati = float(np.clip(proportion_bati, 1e-3, 1 - 1e-3))
-    seuil_urbanmask = float(np.quantile(urban_norm, 1.0 - proportion_bati))
-    k_urban = k_auto(urban_norm, seuil_urbanmask)
-    prob_urban = 1.0 / (1.0 + np.exp(-k_urban * (urban_norm - seuil_urbanmask),
-                                     dtype=np.float32))
-    top("attache urbanmask")
-
-    # ATTACHE NDVI x MBI x MSI
-    R = input_image[0].astype(np.float32)
-    G = input_image[1].astype(np.float32)
-    B = input_image[2].astype(np.float32)
-    NIR = input_image[3].astype(np.float32)
-
-    ndvi = (NIR - R) / (NIR + R + 1e-6)
-    prob_nonveg = proba_otsu(ndvi, sens=-1)
-    top("NDVI")
-
-    mbi = calcul_mbi(NIR, smin=2, smax=30, pas=4)
-    prob_mbi = proba_otsu(mbi, sens=+1)
-    top("MBI")
-
-    prob_build = prob_mbi * prob_nonveg
-
-    # L'ombre est utilisée en pénalité douce (les zones à très fort MSI
-    # sont des ombres, pas des toits)
-    msi = calcul_msi(NIR, smin=2, smax=30, pas=4)
-    prob_ombre = proba_otsu(msi, sens=+1)
-    prob_build = prob_build * (1.0 - 0.5 * prob_ombre)
-    top("MSI")
-
-    prob_build = np.clip(prob_build, 1e-4, 1 - 1e-4).astype(np.float32)
-
-    # COMBINAISON DES ATTACHES (somme de logits pondérée)
-    s_build = separabilite_otsu(prob_build)
-    s_urban = separabilite_otsu(prob_urban)
-    alpha = s_build / (s_build + s_urban + eps)
-    beta = s_urban / (s_build + s_urban + eps)
-
-    logit = lambda p: np.log(p / (1.0 - p + eps) + eps, dtype=np.float32)
-    logit_comb = alpha * logit(prob_build) + beta * logit(prob_urban)
-    prob_log = np.clip(1.0 / (1.0 + np.exp(-logit_comb)), 1e-6, 1 - 1e-6)
-    top("combinaison logits")
-
-    # T-EDGES
-    c_source = -np.log(prob_log + eps).astype(np.float32)
-    c_sink = -np.log(1.0 - prob_log + eps).astype(np.float32)
-
-    # N-EDGES
-    contour = contours_di_zenzo([R, G, B, NIR], sigma_grad=1.0,
-                                sigma_tensor=1.0)
-    top("contours Di Zenzo")
-
-    # Segments détectés sur la luminance pour enrichir les contours
-    # Di Zenzo.
-    luminance = (R + G + B) / 3.0
-    g_reg = gradient_ameliore(contour, luminance)
-    top("gradient amélioré (LSD)")
-
-    # carte P_D de rectangles
-
-    PD = carte_probabilite_rectangles(
-        prob_log.astype(np.float32), SEUILS_RECT,
-        min_size=MORPH_MIN_SIZE // 2, aspect_max=SEUIL,
-        remplissage_min=REMPLISSAGE_MIN, cote_max_px=TAILLE_MAX_BAT_PX)
-
-    sigma_pd = 1.0
-    if PD.max() > 0:
-        d = np.abs(np.diff(PD, axis=0))
-        d = d[d > 0]
-        if d.size:
-            sigma_pd = float(np.percentile(d, 90))
-    denom_pd = np.float32(1.0 / (2.0 * sigma_pd ** 2 + eps))
-    top("carte rectangles (P_D)")
-
-    sigma_reg = float(np.percentile(g_reg, 90))
-    denom = np.float32(1.0 / (2.0 * sigma_reg ** 2 + eps))
-
-    # lambda auto (médiane du contraste des t-edges)
-    lam = np.float32(LAMBDA_REG * np.median(np.abs(c_source - c_sink)))
-    lam_diag = np.float32(lam / np.sqrt(2))
-
-    # CONSTRUCTION DU GRAPHE
-
-    g = maxflow.Graph[float]()
-    nodeids = g.add_grid_nodes(g_reg.shape)
-
-    # Un seul buffer float32 réutilisé pour les 4 orientations
-    w = np.zeros(g_reg.shape, dtype=np.float32)
-    decoupes = [
-        (np.s_[:, :-1], np.s_[:, 1:], np.s_[:, :-1], lam,
-         [[0, 0, 0], [0, 1, 1], [0, 0, 0]]),
-        (np.s_[:-1, :], np.s_[1:, :], np.s_[:-1, :], lam,
-         [[0, 0, 0], [0, 1, 0], [0, 1, 0]]),
-        (np.s_[:-1, :-1], np.s_[1:, 1:], np.s_[:-1, :-1], lam_diag,
-         [[0, 0, 0], [0, 1, 0], [0, 0, 1]]),
-        (np.s_[:-1, 1:], np.s_[1:, :-1], np.s_[:-1, 1:], lam_diag,
-         [[0, 0, 0], [0, 1, 0], [1, 0, 0]]),
-    ]
-    for sl_a, sl_b, sl_out, poids, structure in decoupes:
-        w.fill(0.0)
-        edge = np.maximum(g_reg[sl_a], g_reg[sl_b])
-        np.exp(-(edge * edge) * denom, out=edge)
-        dpd = np.abs(PD[sl_a] - PD[sl_b])
-        np.exp(-(dpd * dpd) * denom_pd, out=dpd)
-        edge *= np.float32(1.0 - POIDS_PD)
-        edge += np.float32(POIDS_PD) * dpd
-        w[sl_out] = poids * edge
-        g.add_grid_edges(nodeids, weights=w, structure=np.array(structure))
-    g.add_grid_tedges(nodeids, c_source, c_sink)
-    top("construction graphe")
-
-    # COUPE MINIMALE ET SEGMENTATION
-    g.maxflow()
-    # Le coût du label "sink" entraîne que les pixels à forte
-    # proba bâti tombent côté sink, donc get_grid_segments == True <=> bâti.
-    bati = g.get_grid_segments(nodeids)
-    top("maxflow")
-
-    # NETTOYAGE MORPHOLOGIQUE
-    bati = graphcut_remove_small_objects(bati, MORPH_MIN_SIZE)
-    bati = filtre_forme(bati, seuil_lwr=SEUIL, largeur_max_px=LARGEUR_MAX_PX,
-                        rect_min=RECT_MIN)
-    bati = graphcut_remove_small_holes(bati, MORPH_HOLE_THRESH)
-    top("nettoyage morpho")
-
-    # Sortie : plus d'écriture raster (gérée par stack_masks) ; on renvoie
-    # directement la segmentation avec les valeurs de classes de stack_masks
-    # (bâti / background) au lieu du codage 0/1 du notebook.
-    seg = np.where(
-        bati, value_classif_buildings, value_classif_background
-    ).astype(np.uint8)
-    return seg
 
 
 def watershed_regul_buildings(
@@ -923,12 +417,9 @@ def post_process(
     value_classif_background : int
         Output value for background class.
     sobel_image : str
-        Image type used for watershed edge detection (unused when
-        regul_type == "graphcut").
+        Image type used for watershed edge detection.
     regul_type : str
-        Regulation mode: "all" / "building" (watershed regularization)
-        or "graphcut" (graphcut segmentation of buildings; output is a
-        segmentation only, the markers layer is left empty).
+        Regulation mode applied during watershed segmentation.
     building_threshold : int
         Percentile threshold for building detection.
     building_erosion : int
@@ -971,44 +462,29 @@ def post_process(
         vegmask[mix_textured_veg] = 22
 
     # ==============================
-    # Regularisation : watershed (all / building) ou graphcut
+    # Watershed regularisation
     # ==============================
-    if regul_type == "graphcut":
-        # Régularisation graphcut du bâti.
-        # La sortie est uniquement une segmentation bâti/background :
-        # pas de marqueurs contrairement au watershed.
-        timings = {}
-        seg = graphcut_regul_buildings(
-            input_image=input_image,
-            urbanmask=urbanmask,
-            wsf=wsf,
-            value_classif_buildings=value_classif_buildings,
-            value_classif_background=value_classif_background,
-            timings=timings,
-        )
-        markers = None
-    else:
-        seg, markers = watershed_regul_buildings(
-            input_image=input_image,
-            urbanmask=urbanmask,
-            wsf=wsf,
-            vegmask=vegmask,
-            watermask=watermask,
-            shadowmask=shadowmask,
-            sobel_image=sobel_image,
-            regul_type=regul_type,
-            building_threshold=building_threshold,
-            building_erosion=building_erosion,
-            erosion_radius=erosion_radius,
-            bonus_gt=bonus_gt,
-            malus_shadow=malus_shadow,
-            value_classif_bare_ground=value_classif_bare_ground,
-            value_classif_buildings=value_classif_buildings,
-            value_classif_low_veg=value_classif_low_veg,
-            value_classif_high_veg=value_classif_high_veg,
-            value_classif_false_positive_buildings=value_classif_false_positive_buildings,
-            value_classif_background=value_classif_background,
-        )
+    seg, markers = watershed_regul_buildings(
+        input_image=input_image,
+        urbanmask=urbanmask,
+        wsf=wsf,
+        vegmask=vegmask,
+        watermask=watermask,
+        shadowmask=shadowmask,
+        sobel_image=sobel_image,
+        regul_type=regul_type,
+        building_threshold=building_threshold,
+        building_erosion=building_erosion,
+        erosion_radius=erosion_radius,
+        bonus_gt=bonus_gt,
+        malus_shadow=malus_shadow,
+        value_classif_bare_ground=value_classif_bare_ground,
+        value_classif_buildings=value_classif_buildings,
+        value_classif_low_veg=value_classif_low_veg,
+        value_classif_high_veg=value_classif_high_veg,
+        value_classif_false_positive_buildings=value_classif_false_positive_buildings,
+        value_classif_background=value_classif_background,
+    )
     logger.debug(f"{np.unique(seg)=}")
 
     # ==============================
@@ -1063,11 +539,8 @@ def post_process(
     # ==============================
     # MARKERS
     # ==============================
-    # En mode graphcut, la sortie est juste une segmentation (pas de
-    # marqueurs) : la couche markers reste vide.
     markers_layer = np.zeros((1, h, w), dtype=np.uint8)
-    if markers is not None:
-        markers_layer[0] = markers
+    markers_layer[0] = markers
     markers_layer[0][valid_stack != 0] = NODATA_INT8
 
     return stack[0], height_layer[0], markers_layer[0]
@@ -1134,10 +607,8 @@ def getarguments():
         type=str,
         default="all",
         choices=["all", "building", "graphcut"],
-        help="Regularization type : all (watershed on building, vegetation,"
-        " bare ground), building (watershed on building only),"
-        " graphcut (graphcut segmentation of buildings instead of the"
-        " watershed regularization)",
+        help="Regularization type : all (building, vegetation, bare ground),"
+        " building (building only)",
     )
 
     group2.add_argument(
@@ -1368,15 +839,6 @@ def slurp_stackmask(
             # ==============================
 
             logger.info("[1] Step: Post processing")
-            if args.regul_type == "graphcut":
-                logger.info(
-                    "Building regularization: GRAPHCUT "
-                    "(SegmentationBati) instead of watershed"
-                )
-            else:
-                logger.info(
-                    f"Building regularization: watershed ({args.regul_type})"
-                )
 
             input_profile = deepcopy(image_profile)
             output_profile = eo_utils.three_uint8_profile(
