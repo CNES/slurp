@@ -4,6 +4,11 @@ Only the first "Unreleased" section of this file corresponding of next release c
 When publication of a new release, the section "Unreleased" is blocked to the next chosen version and name of the milestone at a given date.
 A new section Unreleased is opened then for next dev phase.
 
+## 0.2
+        - Problem with simple ndwi threshold mode #87	
+	
+
+	
 ## 0.1 First stable version for CO3D.
 	- Compliant with Docker environment (no more dependency to EOScale / shared memory)
 	- New convention for validity masks
