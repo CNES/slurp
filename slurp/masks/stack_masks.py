@@ -490,17 +490,6 @@ def post_process(
     # ==============================
     # Classes cleaning
     # ==============================
-    clean_bare_ground = (
-        morpho_clean(
-            seg == value_classif_bare_ground,
-            binary_closing=binary_closing,
-            binary_opening=binary_opening,
-            remove_small_holes=remove_small_holes,
-            remove_small_objects=remove_small_objects,
-        )
-        == 1
-    )
-    stack[0][clean_bare_ground] = value_classif_bare_ground
 
     clean_buildings = (
         morpho_clean(
@@ -514,13 +503,59 @@ def post_process(
     )
     stack[0][clean_buildings] = value_classif_buildings
 
+    if regul_type == "building":
+        # we only use watershed regularization for buildings
+        # for vegetation, we use initial mask
+
+        # TODO : add morpho clean ?
+
+        clean_bare_ground = vegmask == 11
+        stack[0][clean_bare_ground] = value_classif_bare_ground
+
+        clean_low_veg = vegmask == 21
+        stack[0][clean_low_veg] = value_classif_low_veg
+
+        clean_high_veg = vegmask == 22
+        stack[0][clean_high_veg] = value_classif_high_veg
+    else:
+        clean_bare_ground = (
+            morpho_clean(
+                seg == value_classif_bare_ground,
+                binary_closing=binary_closing,
+                binary_opening=binary_opening,
+                remove_small_holes=remove_small_holes,
+                remove_small_objects=remove_small_objects,
+            )
+            == 1
+        )
+        stack[0][clean_bare_ground] = value_classif_bare_ground
+
+        # Regularization of building and vegetation areas
+        clean_low_veg = (
+            morpho_clean(
+                seg == value_classif_low_veg,
+                binary_closing=binary_closing,
+                binary_opening=binary_opening,
+                remove_small_holes=remove_small_holes,
+                remove_small_objects=remove_small_objects,
+            )
+            == 1
+        )
+        stack[0][clean_low_veg] = value_classif_low_veg
+
+        clean_high_veg = (
+            morpho_clean(
+                seg == value_classif_high_veg,
+                binary_closing=binary_closing,
+                binary_opening=binary_opening,
+                remove_small_holes=remove_small_holes,
+                remove_small_objects=remove_small_objects,
+            )
+            == 1
+        )
+        stack[0][clean_high_veg] = value_classif_high_veg
+
     stack[0][watermask == 1] = value_classif_water
-
-    clean_low_veg = vegmask == 21
-    stack[0][clean_low_veg] = value_classif_low_veg
-
-    clean_high_veg = vegmask == 22
-    stack[0][clean_high_veg] = value_classif_high_veg
 
     stack[0][valid_stack != 0] = NODATA_INT8
 
