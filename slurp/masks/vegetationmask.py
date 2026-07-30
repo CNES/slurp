@@ -33,6 +33,10 @@ from os import path
 import numpy as np
 from skimage.segmentation import slic
 from sklearn.cluster import KMeans
+from scipy.ndimage import gaussian_filter 
+from scipy.signal import savgol_filter
+from scipy.optimize import brentq
+from scipy.interpolate import interp1d
 
 # Cython module to compute stats
 import stats as ts
@@ -156,6 +160,74 @@ def build_stack_vegetation(args, slurp_manager):
 
 # Segmentation #
 
+def kappa_automatique(grad_mag, bins=300):
+    
+    # Histogramme des différences de gradient (densité élevée sur petites diff -> zones homogènes/de bruit, faible densité sur différences élevées -> zones de bordures)
+    counts, edges = np.histogram(grad_mag.ravel(), bins=bins, density=True)
+    centers = (edges[:-1] + edges[1:]) / 2
+
+    # Lissage du PDF (probability density function)
+    p = savgol_filter(counts, window_length=11, polyorder=3)
+
+    # Flux ? (gradients*fonction de diffusion)
+    phi = centers * p
+
+    # dérivée seconde du flux qui s'annule équivaut à point d'inflexion du flux -> kappa
+    ddphi = np.gradient(np.gradient(phi, centers), centers)
+    
+    # Interpolation pour recherche de racine
+    f = interp1d(centers, ddphi, kind='cubic')
+    
+    # Trouver le maximum de phi ? le vrai point d'inflexion est après
+    idx_max_phi = np.argmax(phi)
+
+    # Chercher les changements de signe de phi'' après le max de phi
+    sign_changes = np.where(np.diff(np.sign(ddphi)))[0]
+    sign_changes_after = sign_changes[sign_changes > idx_max_phi]
+
+    a, b = centers[sign_changes_after[0]], centers[sign_changes_after[0] + 1]
+    kappa = brentq(f, a, b)
+    
+    return kappa
+
+def diffusion_anisotrope_auto(indice, gamma=0.1, max_iter=50, sigma=0.3):      
+
+    img = indice.copy()
+
+    # Calcul automatique de kappa (point d'inflexion du flux)
+    gy, gx = np.gradient(img)
+    grad_mag = np.sqrt(gx**2 + gy**2)
+    kappa = kappa_automatique(grad_mag)
+    
+    # Boucle de diffusion
+    for i in range(max_iter):
+        
+        # Image lissée
+        img_smooth = gaussian_filter(img, sigma=sigma, mode='reflect')
+
+        # Gradients de l'image lissée
+        gy_s, gx_s = np.gradient(img_smooth)
+        grad_mag_s = np.sqrt(gx_s**2 + gy_s**2)
+
+        # Fonction de diffusion de Perona-Malik
+        g = np.exp(-(grad_mag_s / kappa) ** 2)
+
+        # gradients directionnels
+        img_pad = np.pad(img, pad_width=1, mode='edge')
+        grad_n = img_pad[:-2, 1:-1] - img
+        grad_s = img_pad[2:,  1:-1] - img
+        grad_e = img_pad[1:-1, 2:]  - img
+        grad_o = img_pad[1:-1, :-2] - img
+
+        phi_n = g * grad_n
+        phi_s = g * grad_s
+        phi_e = g * grad_e
+        phi_o = g * grad_o
+
+        delta = gamma * (phi_n + phi_s + phi_e + phi_o)
+        img += delta.astype(np.int16)
+        
+    return img
 
 def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     """
@@ -165,19 +237,20 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     :param np.ndarray ndvi: ndvi of the input image
     :returns: SLIC segments
     """
+    indice_lisse = diffusion_anisotrope_auto(ndvi, gamma=0.1, max_iter=50, sigma=0.3)
     # computes nb of expected segments taking account NO_DATA
 
     # nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
     # nseg cannot be equal to 0, because calling function already checked
     # there were valid pixels to segment...
-    nseg = int(len(ndvi[ndvi != NODATA_INT16]) / params["slic_seg_size"])
+    nseg = int(len(indice_lisse[indice_lisse != NODATA_INT16]) / params["slic_seg_size"])
     if nseg == 0:
         logger.debug(f"Segments number : 0 !! Divide by zero {ndvi.shape=}")
 
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)
     res_seg = slic(
-        ndvi.astype("double"),
+        indice_lisse.astype("double"),
         compactness=float(params["slic_compactness"]),
         n_segments=nseg,
         sigma=1,
