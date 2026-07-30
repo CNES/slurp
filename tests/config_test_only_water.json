@@ -1,0 +1,6 @@
+{
+  "main_config": "tests/main_only_water_config.json",
+  "features_test_img": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/SanFrancisco/xt_SanFrancisco.tif",
+  "ref_dir": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/SanFrancisco/ref",
+  "valid_stack": "/work/CAMPUS/etudes/Masques_CO3D/Validation/Input-Data/SanFrancisco/ref/valid_stack.tif"
+}
