@@ -314,6 +314,91 @@ def edges_di_zenzo(bands, sigma_grad=1.0, sigma_tensor=1.0):
     lambda_max = 0.5 * (gxx + gyy + x)
     return np.sqrt(np.maximum(lambda_max, 0.0)).astype(np.float32)
 
+# ===============================================================
+# CHOICES FOR BANDS AND EDGE DETECTOR
+# ===============================================================
+
+def compute_mono_band(input_image: np.ndarray, image_type: str) -> np.ndarray:
+    """
+    Single band used for edge detection.
+
+    :param np.ndarray input_image: (4, H, W) stack, R G B NIR
+    :param str image_type: "ndvi", "nir" or "rgb"
+    :returns: 2D float32 array
+    """
+    red = input_image[0].astype(np.float32)
+    green = input_image[1].astype(np.float32)
+    blue = input_image[2].astype(np.float32)
+    nir = input_image[3].astype(np.float32)
+
+    if image_type == "ndvi":
+        return (nir - red) / (nir + red + 1e-6)
+    if image_type == "nir":
+        return nir
+    return 0.299 * red + 0.587 * green + 0.114 * blue
+
+
+def compute_edges(
+    input_image: np.ndarray,
+    edges_method: str,
+    edges_image: str,
+    sigma_grad: float = 1.0,
+    sigma_tensor: float = 1.0,
+) -> np.ndarray:
+    """
+    Edge map shared by the watershed and the graph cut regularizations.
+
+    :param np.ndarray input_image: (4, H, W) stack, R G B NIR
+    :param str edges_method: "sobel" or "dizenzo"
+    :param str edges_image: "ndvi", "nir", "rgb" or "multiband"
+    :returns: 2D float32 edge strength
+    """
+    if edges_method == "dizenzo":
+        if edges_image == "multiband":
+            bands = [input_image[i].astype(np.float32) for i in range(4)]
+        else:
+            bands = [compute_mono_band(input_image, edges_image)]
+        return edges_di_zenzo(
+            bands, sigma_grad=sigma_grad, sigma_tensor=sigma_tensor
+        )
+
+    if edges_image == "multiband":
+        raise ValueError(
+            "edges_image='multiband' requires edges_method='dizenzo'"
+        )
+    return sobel(compute_mono_band(input_image, edges_image))
+
+
+def buildings_from_urbanmask(
+    urbanmask: np.ndarray,
+    wsf: np.ndarray,
+    shadowmask: np.ndarray,
+    *,
+    building_threshold: int,
+    building_erosion: int,
+    erosion_radius: int,
+    bonus_gt: int,
+    malus_shadow: int,
+) -> np.ndarray:
+    """
+    Baseline building detection, without any regularization.
+
+    Same rule as the watershed marker step, used as a fallback when the
+    buildings are not regularized by the chosen method.
+
+    :returns: boolean mask of probable buildings
+    """
+    urban = urbanmask.astype(np.float32).copy()
+
+    ground_truth_eroded = apply_morpho(
+        wsf == WSF_VALUE, "binary_erosion", erosion_radius
+    )
+    threshold = np.percentile(urban, building_threshold)
+    urban[ground_truth_eroded] += bonus_gt
+    urban[shadowmask == 2] -= malus_shadow
+
+    probable = np.logical_and(ground_truth_eroded, urban > threshold)
+    return apply_morpho(probable, "binary_erosion", building_erosion)
 
 # ===============================================================
 # ENHANCED GRADIENT MAP
@@ -441,7 +526,13 @@ def graphcut_regul_buildings(
     wsf: np.ndarray,
     *,
     value_classif_buildings: int,
-    value_classif_background: int
+    value_classif_background: int,
+    edges_method: str = "dizenzo",
+    edges_image: str = "multiband",
+    lambda_reg: float = LAMBDA_REG,
+    pd_weight: float = PD_WEIGHT,
+    morph_min_size: int = MORPH_MIN_SIZE,
+    morph_hole_thresh: int = MORPH_HOLE_THRESH,
 ):
     """
 
@@ -517,17 +608,16 @@ def graphcut_regul_buildings(
     c_sink = -np.log(1.0 - prob_log + eps).astype(np.float32)
 
     # N-EDGES
-    edges = edges_di_zenzo([R, G, B, NIR], sigma_grad=1.0,
-                                sigma_tensor=1.0)
+    edges = compute_edges(input_image, edges_method, edges_image)
 
     # Segments detected on luminance to enhance edges
-    luminance = (R + G + B) / 3.0
+    luminance = compute_mono_band(input_image, "rgb")
     g_reg = enhanced_gradient(edges, luminance)
 
     # P_D map of rectangles
     PD = probability_map_rectangles(
         prob_log.astype(np.float32), RECT_THRESH,
-        min_size=MORPH_MIN_SIZE // 2, ASPECT=THRESH,
+        min_size=morph_min_size // 2, ASPECT=THRESH,
         MIN_FILLING=MIN_FILLING, MAX_SIZE_PX=MAX_SIZE_PX)
 
     sigma_pd = 1.0
@@ -542,7 +632,7 @@ def graphcut_regul_buildings(
     denom = np.float32(1.0 / (2.0 * sigma_reg ** 2 + eps))
 
     # automatic lambda (median contrast of t-edges)
-    lam = np.float32(LAMBDA_REG * np.median(np.abs(c_source - c_sink)))
+    lam = np.float32(lambda_reg * np.median(np.abs(c_source - c_sink)))
     lam_diag = np.float32(lam / np.sqrt(2))
 
     # GRAPH CONSTRUCTION
@@ -568,8 +658,8 @@ def graphcut_regul_buildings(
         np.exp(-(edge * edge) * denom, out=edge)
         dpd = np.abs(PD[sl_a] - PD[sl_b])
         np.exp(-(dpd * dpd) * denom_pd, out=dpd)
-        edge *= np.float32(1.0 - PD_WEIGHT)
-        edge += np.float32(PD_WEIGHT) * dpd
+        edge *= np.float32(1.0 - pd_weight)
+        edge += np.float32(pd_weight) * dpd
         w[sl_out] = weight * edge
         g.add_grid_edges(nodeids, weights=w, structure=np.array(structure))
     g.add_grid_tedges(nodeids, c_source, c_sink)
@@ -581,10 +671,10 @@ def graphcut_regul_buildings(
     buildings = g.get_grid_segments(nodeids)
 
     # MORPHOLOGICIAL CLEANING
-    buildings = graphcut_remove_small_objects(buildings, MORPH_MIN_SIZE)
+    buildings = graphcut_remove_small_objects(buildings, morph_min_size)
     buildings = shape_filter(buildings, thresh_lwr=THRESH, MAX_WIDTH_PX=MAX_WIDTH_PX,
                         rect_min=RECT_MIN)
-    buildings = graphcut_remove_small_holes(buildings, MORPH_HOLE_THRESH)
+    buildings = graphcut_remove_small_holes(buildings, morph_hole_thresh)
 
     # Final output
     seg = np.where(buildings, value_classif_buildings, value_classif_background).astype(np.uint8)
@@ -598,9 +688,9 @@ def watershed_regul_buildings(
     vegmask: np.ndarray,
     watermask: np.ndarray,
     shadowmask: np.ndarray,
+    edges: np.ndarray,
     *,
-    sobel_image: str,
-    regul_type: str,
+    regul_classes: str,
     building_threshold: int,
     building_erosion: int,
     erosion_radius: int,
@@ -630,10 +720,11 @@ def watershed_regul_buildings(
         Binary water mask.
     shadowmask : np.ndarray
         Shadow classification mask.
-    sobel_image : str
-        Image type used for edge detection ("ndvi", "nir", or "rgb").
-    regul_type : str
-        Regulation mode controlling which classes are enforced.
+    edges : np.ndarray
+        Precomputed edge map, see compute_edges.
+    regul_classes : str
+        Classes regularized by the watershed : "all", "building" or
+        "vegetation".
     building_threshold : int
         Percentile threshold applied to urbanmask.
     building_erosion : int
@@ -663,22 +754,10 @@ def watershed_regul_buildings(
         (segmentation_map, markers)
     """
 
-    # Mono image for edge detection
-    if sobel_image == "ndvi":
-        im_mono = (input_image[3] - input_image[0]) / (
-            input_image[3] + input_image[0]
-        )
-    elif sobel_image == "nir":
-        im_mono = input_image[3]
-    else:
-        im_mono = (
-            0.29 * input_image[0]
-            + 0.58 * input_image[1]
-            + 0.114 * input_image[2]
-        )
-
-    edges = sobel(im_mono)
     markers = np.zeros((1, input_image.shape[1], input_image.shape[2]))
+
+    regularize_veg = regul_classes in ("all", "vegetation")
+    regularize_build = regul_classes in ("all", "building")
 
     # Bare ground
     eroded_bare_ground = apply_morpho(
@@ -686,50 +765,53 @@ def watershed_regul_buildings(
     )
     markers[0][eroded_bare_ground] = (
         value_classif_bare_ground
-        if regul_type == "all"
+        if regularize_veg
         else value_classif_background
     )
 
     # Buildings
+    urban = urbanmask.astype(np.float32).copy()
     ground_truth_eroded = apply_morpho(
-        wsf == 255, "binary_erosion", erosion_radius
+        wsf == WSF_VALUE, "binary_erosion", erosion_radius
     )
-    normalized_building_threshold = np.percentile(urbanmask, building_threshold)
-    urbanmask[ground_truth_eroded] += bonus_gt
-    urbanmask[shadowmask == 2] -= malus_shadow
+    normalized_building_threshold = np.percentile(urban, building_threshold)
+    urban[ground_truth_eroded] += bonus_gt
+    urban[shadowmask == 2] -= malus_shadow
     probable_buildings = np.logical_and(
-        ground_truth_eroded, urbanmask > normalized_building_threshold
+        ground_truth_eroded, urban > normalized_building_threshold
     )
     probable_buildings = apply_morpho(
         probable_buildings, "binary_erosion", building_erosion
     )
     false_positive = np.logical_and(
-        apply_morpho(wsf == 255, "binary_dilation", 10) == 0,
-        urbanmask > normalized_building_threshold,
+        apply_morpho(wsf == WSF_VALUE, "binary_dilation", 10) == 0,
+        urban > normalized_building_threshold,
     )
-    markers[0][probable_buildings] = value_classif_buildings
-    markers[0][false_positive] = value_classif_false_positive_buildings
+    markers[0][probable_buildings] = (
+        value_classif_buildings
+        if regularize_build
+        else value_classif_background
+    )
+    markers[0][false_positive] = (
+        value_classif_false_positive_buildings
+        if regularize_build
+        else value_classif_background
+    )
 
     # Low vegetation
     eroded_low_veg = apply_morpho(
         vegmask == 21, "binary_erosion", erosion_radius
     )
     markers[0][eroded_low_veg] = (
-        value_classif_low_veg
-        if regul_type == "all"
-        else value_classif_background
+        value_classif_low_veg if regularize_veg else value_classif_background
     )
 
     # High vegetation
     eroded_high_veg = apply_morpho(
-        np.logical_or(vegmask == 23, vegmask == 22),
-        "binary_erosion",
-        erosion_radius,
+        np.isin(vegmask, (22, 23)), "binary_erosion", erosion_radius
     )
     markers[0][eroded_high_veg] = (
-        value_classif_high_veg
-        if regul_type == "all"
-        else value_classif_background
+        value_classif_high_veg if regularize_veg else value_classif_background
     )
 
     # Shadow
@@ -835,13 +917,19 @@ def post_process(
     value_classif_high_veg: int,
     value_classif_false_positive_buildings: int,
     value_classif_background: int,
-    sobel_image: str,
-    regul_type: str,
+    regul_method: str,
+    regul_classes: str,
+    edges_method: str,
+    edges_image: str,
     building_threshold: int,
     building_erosion: int,
     erosion_radius: int,
     bonus_gt: int,
     malus_shadow: int,
+    graphcut_lambda: float = LAMBDA_REG,
+    graphcut_pd_weight: float = PD_WEIGHT,
+    graphcut_min_size: int = MORPH_MIN_SIZE,
+    graphcut_hole_size: int = MORPH_HOLE_THRESH,
     binary_closing: int | None = None,
     binary_opening: int | None = None,
     remove_small_holes: int | None = None,
@@ -882,13 +970,17 @@ def post_process(
         Output value for false positive buildings.
     value_classif_background : int
         Output value for background class.
-    sobel_image : str
-        Image type used for watershed edge detection (unused when
-        regul_type == "graphcut").
-    regul_type : str
-        Regulation mode: "all" / "building" (watershed regularization)
-        or "graphcut" (graphcut segmentation of buildings; output is a
-        segmentation only, the markers layer is left empty).
+    regul_method : str
+        Regularization algorithm : "none" (morphological cleaning only),
+        "watershed" or "graphcut".
+    regul_classes : str
+        Classes concerned by the regularization : "all", "building" or
+        "vegetation". Classes that are not regularized fall back to the
+        input masks.
+    edges_method : str
+        Edge operator : "sobel" or "dizenzo".
+    edges_image : str
+        Layer used for edge detection : "ndvi", "nir", "rgb" or "multiband".
     building_threshold : int
         Percentile threshold for building detection.
     building_erosion : int
@@ -924,26 +1016,33 @@ def post_process(
     # Winter vegetation correction
     # ==============================
     if winter_vegetation:
-        mix_textured_veg = np.logical_or(
-            vegmask == 12,
-            vegmask == 13,
-        )
-        vegmask[mix_textured_veg] = 22
+        vegmask = vegmask.copy()
+        vegmask[np.isin(vegmask, (12, 13))] = 22
 
-    # ==============================
-    # Regularization : watershed (all / building) or graphcut
-    # ==============================
-    if regul_type == "graphcut":
-        # Buildings graphcut regularization
+    # ====================================
+    # Regularization watershed or graphcut
+    # ====================================
+    markers = None
+    seg = None
+
+    if regul_method == "graphcut":
         seg = graphcut_regul_buildings(
             input_image=input_image,
             urbanmask=urbanmask,
             wsf=wsf,
             value_classif_buildings=value_classif_buildings,
-            value_classif_background=value_classif_background
+            value_classif_background=value_classif_background,
+            edges_method=edges_method,
+            edges_image=edges_image,
+            lambda_reg=graphcut_lambda,
+            pd_weight=graphcut_pd_weight,
+            morph_min_size=graphcut_min_size,
+            morph_hole_thresh=graphcut_hole_size,
         )
-        markers = None
-    else:
+        seg_classes = {"buildings"}
+
+    elif regul_method == "watershed":
+        edges = compute_edges(input_image, edges_method, edges_image)
         seg, markers = watershed_regul_buildings(
             input_image=input_image,
             urbanmask=urbanmask,
@@ -951,8 +1050,8 @@ def post_process(
             vegmask=vegmask,
             watermask=watermask,
             shadowmask=shadowmask,
-            sobel_image=sobel_image,
-            regul_type=regul_type,
+            edges=edges,
+            regul_classes=regul_classes,
             building_threshold=building_threshold,
             building_erosion=building_erosion,
             erosion_radius=erosion_radius,
@@ -962,107 +1061,92 @@ def post_process(
             value_classif_buildings=value_classif_buildings,
             value_classif_low_veg=value_classif_low_veg,
             value_classif_high_veg=value_classif_high_veg,
-            value_classif_false_positive_buildings=value_classif_false_positive_buildings,
+            value_classif_false_positive_buildings=(
+                value_classif_false_positive_buildings
+            ),
             value_classif_background=value_classif_background,
         )
-    logger.debug(f"{np.unique(seg)=}")
+        if regul_classes == "all":
+            seg_classes = {"buildings", "bare_ground", "low_veg", "high_veg"}
+        elif regul_classes == "building":
+            seg_classes = {"buildings"}
+        else:
+            seg_classes = {"bare_ground", "low_veg", "high_veg"}
+
+    else:
+        seg_classes = set()
+
+    if seg is not None:
+        logger.debug(f"{np.unique(seg)=}")
 
     # ==============================
     # Classes cleaning
     # ==============================
-    #TODO : conflits
-    if regul_type == "graphcut":
-        bare_ground_src = vegmask == 11
-    else:
-        bare_ground_src = seg == value_classif_bare_ground
-    clean_bare_ground = (
-        morpho_clean(
-            bare_ground_src,
-            binary_closing=binary_closing,
-            binary_opening=binary_opening,
-            remove_small_holes=remove_small_holes,
-            remove_small_objects=remove_small_objects,
-        )
-        == 1
+
+    buildings_baseline = buildings_from_urbanmask(
+        urbanmask,
+        wsf,
+        shadowmask,
+        building_threshold=building_threshold,
+        building_erosion=building_erosion,
+        erosion_radius=erosion_radius,
+        bonus_gt=bonus_gt,
+        malus_shadow=malus_shadow,
     )
-    stack[0][clean_bare_ground] = value_classif_bare_ground
 
-    clean_buildings = (
-        morpho_clean(
-            seg == value_classif_buildings,
-            binary_closing=binary_closing,
-            binary_opening=binary_opening,
-            remove_small_holes=remove_small_holes,
-            remove_small_objects=remove_small_objects,
+    values = {
+        "bare_ground": value_classif_bare_ground,
+        "buildings": value_classif_buildings,
+        "low_veg": value_classif_low_veg,
+        "high_veg": value_classif_high_veg,
+    }
+    fallback = {
+        "bare_ground": vegmask == 11,
+        "buildings": buildings_baseline,
+        "low_veg": vegmask == 21,
+        "high_veg": np.isin(vegmask, (22, 23)),
+    }
+    vegetation_classes = ("bare_ground", "low_veg", "high_veg")
+
+    def needs_morpho(name):
+        if regul_method != "none":
+            return True
+        if regul_classes == "all":
+            return True
+        if regul_classes == "building":
+            return name == "buildings"
+        return name in vegetation_classes
+
+    cleaned = {}
+    for name in ("bare_ground", "buildings", "low_veg", "high_veg"):
+        source = (
+            (seg == values[name]) if name in seg_classes else fallback[name]
         )
-        == 1
-    )
-    stack[0][clean_buildings] = value_classif_buildings
-
-    if regul_type == "building":
-        # we only use watershed regularization for buildings
-        # for vegetation, we use initial mask
-
-        # TODO : add morpho clean ?
-
-        clean_bare_ground = vegmask == 11
-        stack[0][clean_bare_ground] = value_classif_bare_ground
-
-        clean_low_veg = vegmask == 21
-        stack[0][clean_low_veg] = value_classif_low_veg
-
-        clean_high_veg = vegmask == 22
-        stack[0][clean_high_veg] = value_classif_high_veg
-    else:
-        clean_bare_ground = (
-            morpho_clean(
-                seg == value_classif_bare_ground,
-                binary_closing=binary_closing,
-                binary_opening=binary_opening,
-                remove_small_holes=remove_small_holes,
-                remove_small_objects=remove_small_objects,
+        if needs_morpho(name):
+            source = (
+                morpho_clean(
+                    source,
+                    binary_closing=binary_closing,
+                    binary_opening=binary_opening,
+                    remove_small_holes=remove_small_holes,
+                    remove_small_objects=remove_small_objects,
+                )
+                == 1
             )
-            == 1
-        )
-        stack[0][clean_bare_ground] = value_classif_bare_ground
-
-        # Regularization of building and vegetation areas
-        clean_low_veg = (
-            morpho_clean(
-                seg == value_classif_low_veg,
-                binary_closing=binary_closing,
-                binary_opening=binary_opening,
-                remove_small_holes=remove_small_holes,
-                remove_small_objects=remove_small_objects,
-            )
-            == 1
-        )
-        stack[0][clean_low_veg] = value_classif_low_veg
-
-        clean_high_veg = (
-            morpho_clean(
-                seg == value_classif_high_veg,
-                binary_closing=binary_closing,
-                binary_opening=binary_opening,
-                remove_small_holes=remove_small_holes,
-                remove_small_objects=remove_small_objects,
-            )
-            == 1
-        )
-        stack[0][clean_high_veg] = value_classif_high_veg
+        cleaned[name] = source
+        stack[0][source] = values[name]
 
     stack[0][watermask == 1] = value_classif_water
-
     stack[0][valid_stack != 0] = NODATA_INT8
 
     # ==============================
     # HEIGHT LAYER
     # ==============================
     height_layer = np.zeros((1, h, w), dtype=np.uint8)
-    height_layer[0][clean_bare_ground] = LOW
-    height_layer[0][clean_low_veg] = LOW
-    height_layer[0][clean_buildings] = HIGH
-    height_layer[0][clean_high_veg] = HIGH
+    height_layer[0][cleaned["bare_ground"]] = LOW
+    height_layer[0][cleaned["low_veg"]] = LOW
+    height_layer[0][cleaned["buildings"]] = HIGH
+    height_layer[0][cleaned["high_veg"]] = HIGH
     height_layer[0][watermask == 1] = 0
     height_layer[0][shadowmask == 2] = 0
     height_layer[0][valid_stack != 0] = NODATA_INT8
@@ -1070,7 +1154,7 @@ def post_process(
     # ==============================
     # MARKERS
     # ==============================
-    # In graphcut mode, the markers layer stay empty
+    # Only the watershed produces markers ; the layer stays empty otherwise
     markers_layer = np.zeros((1, h, w), dtype=np.uint8)
     if markers is not None:
         markers_layer[0] = markers
@@ -1125,25 +1209,44 @@ def getarguments():
         help="Extracted Water Body Mask raster filename",
     )
 
-    group2 = parser.add_argument_group(description="*** WATERSHED OPTIONS ***")
+    group2 = parser.add_argument_group(description="*** REGULARIZATION ***")
+
     group2.add_argument(
-        "-sobel_image",
+        "-regul_method",
         type=str,
-        default="rgb",
-        choices=["rgb", "nir", "ndvi"],
-        help="Select layer on which compute sobel and perform watershed "
-        "regularization (default : rgb)",
+        default="watershed",
+        choices=["none", "watershed", "graphcut"],
+        help="Regularization algorithm : none (morphological cleaning only), "
+        "watershed (marker-based regularization), graphcut (binary graph cut "
+        "on buildings). Default : watershed",
     )
 
     group2.add_argument(
-        "-regul_type",
+        "-regul_classes",
         type=str,
         default="all",
-        choices=["all", "building", "graphcut"],
-        help="Regularization type : all (watershed on building, vegetation,"
-        " bare ground), building (watershed on building only),"
-        " graphcut (graphcut segmentation of buildings instead of the"
-        " watershed regularization)",
+        choices=["all", "building", "vegetation"],
+        help="Classes concerned by the regularization : all, building only, "
+        "or vegetation only (bare ground, low and high vegetation). Forced to "
+        "'building' when regul_method is graphcut. Default : all",
+    )
+
+    group2.add_argument(
+        "-edges_method",
+        type=str,
+        default="sobel",
+        choices=["sobel", "dizenzo"],
+        help="Edge operator : sobel (single band) or dizenzo (structure "
+        "tensor, supports multiband). Default : sobel",
+    )
+
+    group2.add_argument(
+        "-edges_image",
+        type=str,
+        default="rgb",
+        choices=["rgb", "nir", "ndvi", "multiband"],
+        help="Layer used for edge detection. 'multiband' requires "
+        "edges_method=dizenzo. Default : rgb",
     )
 
     group2.add_argument(
@@ -1199,7 +1302,33 @@ def getarguments():
         default=10000,
         help="Minimal area (in pixels) of water bodies",
     )
-
+    group3 = parser.add_argument_group(description="*** GRAPHCUT OPTIONS ***")
+    group3.add_argument(
+        "-graphcut_lambda",
+        type=float,
+        default=LAMBDA_REG,
+        help="Data term / regularization balance. Default : 1.0",
+    )
+    group3.add_argument(
+        "-graphcut_pd_weight",
+        type=float,
+        default=PD_WEIGHT,
+        help="Weight of the rectangle object prior in the regularization, "
+        "between 0 and 1. Default : 0.5",
+    )
+    group3.add_argument(
+        "-graphcut_min_size",
+        type=int,
+        default=MORPH_MIN_SIZE,
+        help="Minimum building size in pixels, morphological cleaning. "
+        "Default : 200",
+    )
+    group3.add_argument(
+        "-graphcut_hole_size",
+        type=int,
+        default=MORPH_HOLE_THRESH,
+        help="Maximum hole size filled in the buildings. Default : 100",
+    )
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument(
@@ -1287,8 +1416,14 @@ def slurp_stackmask(
     shadowmask: str,
     extracted_wsf: str,
     extracted_wbm: str,
-    sobel_image: str,
-    regul_type: str,
+    regul_method: str,
+    regul_classes: str,
+    edges_method: str,
+    edges_image: str,
+    graphcut_lambda: float,
+    graphcut_pd_weight: float,
+    graphcut_min_size: int,
+    graphcut_hole_size: int,
     building_threshold: int,
     building_erosion: int,
     erosion_radius: int,
@@ -1333,8 +1468,24 @@ def slurp_stackmask(
 
     args = argparse.Namespace(**argsdict)
 
+    if args.regul_method == "graphcut" and args.regul_classes != "building":
+        logger.warning(
+            "regul_method=graphcut only regularizes buildings ; "
+            "regul_classes forced to 'building'. The multi-class "
+            "regularization of the vegetation is handled by vegetationmask."
+        )
+        args.regul_classes = "building"
+
+    if args.edges_method == "sobel" and args.edges_image == "multiband":
+        logger.warning(
+            "edges_image=multiband requires edges_method=dizenzo ; "
+            "falling back to rgb"
+        )
+        args.edges_image = "rgb"
+
     if args.debug:
         logger.handlers[0].setLevel(logging.DEBUG)
+        logger.debug(f"{argsdict=}")
 
     params = {
         "nb_max_workers": args.n_workers,
@@ -1374,14 +1525,20 @@ def slurp_stackmask(
             # ==============================
 
             logger.info("[1] Step: Post processing")
-            if args.regul_type == "graphcut":
+            if args.regul_method == "none":
                 logger.info(
-                    "Building regularization: GRAPHCUT "
-                    "Instead of watershed"
+                    f"Regularization: morphological cleaning only "
+                    f"({args.regul_classes})"
+                )
+            elif args.regul_method == "graphcut":
+                logger.info(
+                    f"Regularization: graphcut on buildings, "
+                    f"{args.edges_method} edges on {args.edges_image}"
                 )
             else:
                 logger.info(
-                    f"Building regularization: watershed ({args.regul_type})"
+                    f"Regularization: watershed ({args.regul_classes}), "
+                    f"{args.edges_method} edges on {args.edges_image}"
                 )
 
             input_profile = deepcopy(image_profile)
@@ -1418,8 +1575,14 @@ def slurp_stackmask(
                         args.value_classif_false_positive_buildings
                     ),
                     "value_classif_background": args.value_classif_background,
-                    "sobel_image": args.sobel_image,
-                    "regul_type": args.regul_type,
+                    "regul_method": args.regul_method,
+                    "regul_classes": args.regul_classes,
+                    "edges_method": args.edges_method,
+                    "edges_image": args.edges_image,
+                    "graphcut_lambda": args.graphcut_lambda,
+                    "graphcut_pd_weight": args.graphcut_pd_weight,
+                    "graphcut_min_size": args.graphcut_min_size,
+                    "graphcut_hole_size": args.graphcut_hole_size,
                     "building_threshold": args.building_threshold,
                     "building_erosion": args.building_erosion,
                     "erosion_radius": args.erosion_radius,

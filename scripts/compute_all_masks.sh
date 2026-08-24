@@ -44,11 +44,11 @@ slurp_prepare ${CONF} -file_vhr ${VHR_IM} ${OPT_PREPARE}
 # Watermask
 slurp_watermask out/effective_used_config.json ${OPT_WATER}
 
-# Vegetationmask
-slurp_vegetationmask out/effective_used_config.json ${OPT_VEG}
-
 # Shadowmask
 slurp_shadowmask out/effective_used_config.json ${OPT_SHADOW}
+
+# Vegetationmask
+slurp_vegetationmask out/effective_used_config.json ${OPT_VEG}
 
 # Urbanmask (without post-processing)
 slurp_urbanmask out/effective_used_config.json ${OPT_URBAN}

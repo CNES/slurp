@@ -230,6 +230,101 @@ class Vegetation(BaseModel):
         default=0.0,
         description="Pourcentage of non vegetation pixels in the global land cover map",
     )
+    graphcut: Optional[bool] = Field(
+        default=False,
+        description="Refine the vegetation mask with a multi-label graph cut "
+        "(alpha-expansion) before the morphological post-processing",
+    )
+    graphcut_lambda: Optional[float] = Field(
+        default=3.0,
+        description="Relative weight of the regularisation against the data term",
+    )
+    graphcut_lambda_absolute: Optional[float] = Field(
+        None,
+        description="Absolute regularisation weight, bypassing the per-tile "
+        "calibration of graphcut_lambda",
+    )
+    graphcut_truncation: Optional[float] = Field(
+        default=0.75,
+        description="Upper bound of the semantic transition cost (0-1)",
+    )
+    graphcut_tau: Optional[float] = Field(
+        default=0.35,
+        description="Spread of the prior confusion over the neighbouring classes",
+    )
+    graphcut_texture_spread: Optional[float] = Field(
+        default=0.15,
+        description="Extent of the texture axis relative to the vegetation axis",
+    )
+    graphcut_ndvi_scale: Optional[float] = Field(
+        default=1000.0,
+        description="Factor converting the stored NDVI to physical values in [-1, 1]",
+    )
+    graphcut_ndvi_threshold: Optional[float] = Field(
+        None,
+        description="NDVI value at the centre of the vegetation sigmoid "
+        "(defaults to min_ndvi_veg)",
+    )
+    graphcut_ndvi_slope: Optional[float] = Field(
+        default=0.10,
+        description="Width of the vegetation sigmoid, in physical NDVI units",
+    )
+    graphcut_ndvi_weight: Optional[float] = Field(
+        default=0.5,
+        description="Weight of the NDVI evidence in the data term (0 disables it)",
+    )
+    graphcut_shadow_factor: Optional[float] = Field(
+        default=0.25,
+        description="Multiplicative factor applied to the data term in shadows",
+    )
+    graphcut_attribute_weights: Optional[List[float]] = Field(
+        default=[1.0, 0.3, 0.5],
+        description="Weights of NDVI, luminance and texture in the contrast term",
+    )
+    graphcut_contrast_sigma: Optional[float] = Field(
+        default=1.0,
+        description="Contrast scale of the regularisation kernel",
+    )
+    graphcut_contrast_kernel: Optional[str] = Field(
+        default="gauss",
+        description="Regularisation kernel: 'gauss' or 'cauchy'",
+    )
+    graphcut_diffusion_iterations: Optional[int] = Field(
+        default=0,
+        description="Anisotropic diffusion iterations applied to the NDVI "
+        "before computing the contrast (0 disables it)",
+    )
+    graphcut_scale_factor: Optional[int] = Field(
+        default=2,
+        description="Coarse to fine downscaling factor (1 disables the coarse stage)",
+    )
+    graphcut_refine_band: Optional[int] = Field(
+        default=0,
+        description="Radius, in pixels, of the band reoptimised at full resolution",
+    )
+    graphcut_cycles: Optional[int] = Field(
+        default=6, description="Maximum number of alpha-expansion cycles"
+    )
+    graphcut_margin: Optional[int] = Field(
+        default=64,
+        description="Stable margin of the graph cut tiles, in pixels",
+    )
+    graphcut_fill_holes: Optional[bool] = Field(
+        default=True,
+        description="Apply the hierarchical hole filling after the graph cut",
+    )
+    graphcut_hole_max_area: Optional[int] = Field(
+        default=200,
+        description="Maximum area, in pixels, of a hole filled after the graph cut",
+    )
+    graphcut_hole_max_area_shadow: Optional[int] = Field(
+        default=2000,
+        description="Maximum area, in pixels, of a shadowed hole filled",
+    )
+    graphcut_visible_bands: Optional[List[int]] = Field(
+        default=[0, 1, 2],
+        description="Indices of the visible bands in the VHR image",
+    )
 
 
 class Water(BaseModel):
@@ -391,7 +486,33 @@ class Stack(BaseModel):
         default=0,
         description="Margin (in pixels) for parallel computing during final stack merging",
     )
-
+    regul_method: Optional[str] = Field(
+        default="watershed",
+        description="Regularization algorithm : none, watershed or graphcut",
+    )
+    regul_classes: Optional[str] = Field(
+        default="all",
+        description="Classes concerned : all, building or vegetation",
+    )
+    edges_method: Optional[str] = Field(
+        default="sobel", description="Edge operator : sobel or dizenzo"
+    )
+    edges_image: Optional[str] = Field(
+        default="rgb",
+        description="Layer for edge detection : rgb, nir, ndvi or multiband",
+    )
+    graphcut_lambda: Optional[float] = Field(
+        default=1.0, description="Data term / regularization balance"
+    )
+    graphcut_pd_weight: Optional[float] = Field(
+        default=0.5, description="Weight of the rectangle object prior"
+    )
+    graphcut_min_size: Optional[int] = Field(
+        default=200, description="Minimum building size in pixels"
+    )
+    graphcut_hole_size: Optional[int] = Field(
+        default=100, description="Maximum hole size filled in the buildings"
+    )
 
 class Masks(BaseModel):
     watermask: Optional[str] = Field(
