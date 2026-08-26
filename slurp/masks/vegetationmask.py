@@ -930,7 +930,7 @@ def segmentation(
     # OPTIONAL DEBUG SAVE
     # ==========================================================
 
-    if args.save_mode in ["all", "debug"]:
+    if args.save_mode == "debug":
         output_path = args.vegetationmask.replace(".tif", "_slic.tif")
 
         slurp_manager.write_tif(
@@ -2755,7 +2755,7 @@ def graphcut_refinement(
         binary=True,
     )
 
-    if args.save_mode in ["all", "debug"]:
+    if args.save_mode == "debug":
         output_path = args.vegetationmask.replace(".tif", "_graphcut.tif")
         slurp_manager.write_tif(
             data=refined_mask[0],

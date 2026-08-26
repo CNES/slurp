@@ -678,7 +678,7 @@ def graphcut_regul_buildings(
 
     # Final output
     seg = np.where(buildings, value_classif_buildings, value_classif_background).astype(np.uint8)
-    return seg
+    return seg, prob_mbi, prob_shadow, g_reg, prob_urban, prob_build, prob_log, PD, prob_nonveg
 
 
 def watershed_regul_buildings(
@@ -1024,9 +1024,17 @@ def post_process(
     # ====================================
     markers = None
     seg = None
+    prob_mbi = None
+    prob_shadow = None
+    g_reg = None
+    prob_urban = None
+    prob_build = None
+    prob_log = None
+    PD = None
+    prob_nonveg = None
 
     if regul_method == "graphcut":
-        seg = graphcut_regul_buildings(
+        seg, prob_mbi, prob_shadow, g_reg, prob_urban, prob_build, prob_log, PD, prob_nonveg = graphcut_regul_buildings(
             input_image=input_image,
             urbanmask=urbanmask,
             wsf=wsf,
@@ -1159,9 +1167,9 @@ def post_process(
     if markers is not None:
         markers_layer[0] = markers
     markers_layer[0][valid_stack != 0] = NODATA_INT8
-
-    return stack[0], height_layer[0], markers_layer[0]
-
+    if regul_method == "graphcut":
+        return stack[0], height_layer[0], markers_layer[0], prob_mbi, prob_shadow, g_reg, prob_urban, prob_build, prob_log, PD, prob_nonveg
+    return stack[0], height_layer[0], markers_layer[0], edges
 
 def getarguments():
     """Parse command line arguments."""
@@ -1543,60 +1551,129 @@ def slurp_stackmask(
 
             input_profile = deepcopy(image_profile)
             output_profile = eo_utils.three_uint8_profile(
-                [deepcopy(image_profile)]
-            )
-
-            stack, height, markers = mp_n_to_m_images(
-                inputs=[
-                    image[0][0],  # vhr1
-                    image[0][1],  # vhr2
-                    image[0][2],  # vhr3
-                    image[0][3],  # vhr4
-                    validstack[0][0],
-                    watermask[0][0],
-                    vegmask[0][0],
-                    urbanmask[0][0],
-                    shadowmask[0][0],
-                    wsf[0][0],
-                ],
-                image_height=input_profile["height"],
-                image_width=input_profile["width"],
-                output_profiles=output_profile,
-                output_keys=["stack", "height", "markers"],
-                func=post_process,
-                func_parameters={
-                    "winter_vegetation": args.winter_vegetation,
-                    "value_classif_bare_ground": args.value_classif_bare_ground,
-                    "value_classif_buildings": args.value_classif_buildings,
-                    "value_classif_water": args.value_classif_water,
-                    "value_classif_low_veg": args.value_classif_low_veg,
-                    "value_classif_high_veg": args.value_classif_high_veg,
-                    "value_classif_false_positive_buildings": (
-                        args.value_classif_false_positive_buildings
-                    ),
-                    "value_classif_background": args.value_classif_background,
-                    "regul_method": args.regul_method,
-                    "regul_classes": args.regul_classes,
-                    "edges_method": args.edges_method,
-                    "edges_image": args.edges_image,
-                    "graphcut_lambda": args.graphcut_lambda,
-                    "graphcut_pd_weight": args.graphcut_pd_weight,
-                    "graphcut_min_size": args.graphcut_min_size,
-                    "graphcut_hole_size": args.graphcut_hole_size,
-                    "building_threshold": args.building_threshold,
-                    "building_erosion": args.building_erosion,
-                    "erosion_radius": args.erosion_radius,
-                    "bonus_gt": args.bonus_gt,
-                    "malus_shadow": args.malus_shadow,
-                    "binary_closing": args.binary_closing,
-                    "binary_opening": args.binary_opening,
-                    "remove_small_holes": args.remove_small_holes,
-                    "remove_small_objects": args.remove_small_objects,
-                },
-                context_manager=slurp_manager,
-                stable_margin=args.margin,
-            )
-
+                    [deepcopy(image_profile)]
+                )
+            if args.regul_method == "graphcut":
+                mbi_profile=deepcopy(image_profile)
+                mbi_profile.update({"driver": "GTiff",
+                        "dtype": "float32",
+                        "count": 1,
+                        "compress": "deflate"})
+                msi_profile=deepcopy(mbi_profile)
+                edges_profile=deepcopy(mbi_profile)
+                urban_profile=deepcopy(mbi_profile)
+                build_profile=deepcopy(mbi_profile)
+                log_profile=deepcopy(mbi_profile)
+                PD_profile=deepcopy(mbi_profile)
+                nonveg_profile=deepcopy(mbi_profile)
+                output_profile = output_profile + [mbi_profile, msi_profile, edges_profile, urban_profile, build_profile, log_profile, PD_profile, nonveg_profile]
+                stack, height, markers, prob_mbi, prob_shadow, g_reg, prob_urban, prob_build, prob_log, PD, prob_nonveg = mp_n_to_m_images(
+                        inputs=[
+                            image[0][0],  # vhr1
+                            image[0][1],  # vhr2
+                            image[0][2],  # vhr3
+                            image[0][3],  # vhr4
+                            validstack[0][0],
+                            watermask[0][0],
+                            vegmask[0][0],
+                            urbanmask[0][0],
+                            shadowmask[0][0],
+                            wsf[0][0],
+                        ],
+                        image_height=input_profile["height"],
+		        image_width=input_profile["width"],
+                        output_profiles=output_profile,
+                        output_keys=["stack", "height", "markers", "prob_mbi", "prob_shadow", "g_reg", "prob_urban", "prob_build", "prob_log", "PD", "prob_nonveg"],
+                        func=post_process,
+                        func_parameters={
+                            "winter_vegetation": args.winter_vegetation,
+                            "value_classif_bare_ground": args.value_classif_bare_ground,
+                            "value_classif_buildings": args.value_classif_buildings,
+                            "value_classif_water": args.value_classif_water,
+                            "value_classif_low_veg": args.value_classif_low_veg,
+                            "value_classif_high_veg": args.value_classif_high_veg,
+                            "value_classif_false_positive_buildings": (
+                                args.value_classif_false_positive_buildings
+                            ),
+                            "value_classif_background": args.value_classif_background,
+                            "regul_method": args.regul_method,
+                            "regul_classes": args.regul_classes,
+                            "edges_method": args.edges_method,
+                            "edges_image": args.edges_image,
+                            "graphcut_lambda": args.graphcut_lambda,
+                            "graphcut_pd_weight": args.graphcut_pd_weight,
+                            "graphcut_min_size": args.graphcut_min_size,
+                            "graphcut_hole_size": args.graphcut_hole_size,
+                            "building_threshold": args.building_threshold,
+                            "building_erosion": args.building_erosion,
+                            "erosion_radius": args.erosion_radius,
+                            "bonus_gt": args.bonus_gt,
+                            "malus_shadow": args.malus_shadow,
+                            "binary_closing": args.binary_closing,
+                            "binary_opening": args.binary_opening,
+                            "remove_small_holes": args.remove_small_holes,
+                            "remove_small_objects": args.remove_small_objects,
+                        },
+                        context_manager=slurp_manager,
+                        stable_margin=args.margin,
+                   )
+            else:
+                edges_profile=deepcopy(image_profile)
+                edges_profile.update({"driver": "GTiff",
+                        "dtype": "float32",
+                        "count": 1,
+                        "compress": "deflate"})
+                output_profile = output_profile + [edges_profile]
+                stack, height, markers, edges = mp_n_to_m_images(
+                        inputs=[
+                            image[0][0],  # vhr1
+                            image[0][1],  # vhr2
+                            image[0][2],  # vhr3
+                            image[0][3],  # vhr4
+                            validstack[0][0],
+                            watermask[0][0],
+                            vegmask[0][0],
+                            urbanmask[0][0],
+                            shadowmask[0][0],
+                            wsf[0][0],
+                        ],
+                        image_height=input_profile["height"],
+		        image_width=input_profile["width"],
+                        output_profiles=output_profile,
+                        output_keys=["stack", "height", "markers", "edges"],
+                        func=post_process,
+                        func_parameters={
+                            "winter_vegetation": args.winter_vegetation,
+                            "value_classif_bare_ground": args.value_classif_bare_ground,
+                            "value_classif_buildings": args.value_classif_buildings,
+                            "value_classif_water": args.value_classif_water,
+                            "value_classif_low_veg": args.value_classif_low_veg,
+                            "value_classif_high_veg": args.value_classif_high_veg,
+                            "value_classif_false_positive_buildings": (
+                                args.value_classif_false_positive_buildings
+                            ),
+                            "value_classif_background": args.value_classif_background,
+                            "regul_method": args.regul_method,
+                            "regul_classes": args.regul_classes,
+                            "edges_method": args.edges_method,
+                            "edges_image": args.edges_image,
+                            "graphcut_lambda": args.graphcut_lambda,
+                            "graphcut_pd_weight": args.graphcut_pd_weight,
+                            "graphcut_min_size": args.graphcut_min_size,
+                            "graphcut_hole_size": args.graphcut_hole_size,
+                            "building_threshold": args.building_threshold,
+                            "building_erosion": args.building_erosion,
+                            "erosion_radius": args.erosion_radius,
+                            "bonus_gt": args.bonus_gt,
+                            "malus_shadow": args.malus_shadow,
+                            "binary_closing": args.binary_closing,
+                            "binary_opening": args.binary_opening,
+                            "remove_small_holes": args.remove_small_holes,
+                            "remove_small_objects": args.remove_small_objects,
+                        },
+                        context_manager=slurp_manager,
+                        stable_margin=args.margin,
+                   )
             # ==============================
             # WRITE STACK
             # ==============================
@@ -1643,6 +1720,62 @@ def slurp_stackmask(
                     target_profile=output_profile[2],
                 )
 
+                if args.regul_method == "graphcut":
+                    
+                    slurp_manager.write_tif(
+                        data=prob_mbi,
+                        path=base + "_mbi.tif",
+                        target_profile=output_profile[3],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=prob_shadow,
+                        path=base + "_msi.tif",
+                        target_profile=output_profile[4],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=g_reg,
+                        path=base + "_edges.tif",
+                        target_profile=output_profile[5],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=prob_urban,
+                        path=base + "_urban.tif",
+                        target_profile=output_profile[6],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=prob_build,
+                        path=base + "_build.tif",
+                        target_profile=output_profile[7],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=prob_log,
+                        path=base + "_log.tif",
+                        target_profile=output_profile[8],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=PD,
+                        path=base + "_PD.tif",
+                        target_profile=output_profile[9],
+                    )
+
+                    slurp_manager.write_tif(
+                        data=prob_nonveg,
+                        path=base + "_nonveg.tif",
+                        target_profile=output_profile[10],
+                    )
+
+                else:
+                    slurp_manager.write_tif(
+                        data=g_reg,
+                        path=base + "_edges.tif",
+                        target_profile=output_profile[3],
+                    )                 
             t1 = time.time()
 
             logger.info(f"**** Stack masks saved as {args.stackmask} ****")
