@@ -523,6 +523,7 @@ def shape_filter(seg, thresh_lwr=5.0, MAX_WIDTH_PX=None, rect_min=None):
 def graphcut_regul_buildings(
     input_image: np.ndarray,
     urbanmask: np.ndarray,
+    shadowmask: np.ndarray,
     wsf: np.ndarray,
     *,
     value_classif_buildings: int,
@@ -587,9 +588,12 @@ def graphcut_regul_buildings(
     prob_build = prob_mbi * prob_nonveg
 
     # The shadow is used as a mild penalty (areas with very high MSI are shadows)
-    msi = msi_calculation(NIR, smin=2, smax=30, step=4)
-    prob_shadow = proba_otsu(msi, direction=+1)
-    prob_build = prob_build * (1.0 - 0.5 * prob_shadow)
+    #msi = msi_calculation(NIR, smin=2, smax=30, step=4)
+    #prob_shadow = proba_otsu(msi, direction=+1)
+    prob_shadow = (~np.isin(np.asarray(shadowmask), [1, 2])).astype(np.uint8)
+
+    #prob_build = prob_build * (1.0 - 0.5 * prob_shadow)
+    prob_build = prob_build * prob_shadow
 
     prob_build = np.clip(prob_build, 1e-4, 1 - 1e-4).astype(np.float32)
 
@@ -1037,6 +1041,7 @@ def post_process(
         seg, prob_mbi, prob_shadow, g_reg, prob_urban, prob_build, prob_log, PD, prob_nonveg = graphcut_regul_buildings(
             input_image=input_image,
             urbanmask=urbanmask,
+            shadowmask=shadowmask,
             wsf=wsf,
             value_classif_buildings=value_classif_buildings,
             value_classif_background=value_classif_background,
