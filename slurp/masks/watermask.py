@@ -99,30 +99,34 @@ def compute_pekel_mask(
 
 
 def compute_hand_mask(
-    hand_array: np.ndarray,
-    thresh_hand: int,
+    hand_array: np.ndarray, thresh_hand: int, hand_nodata: int
 ) -> np.ndarray:
     """
     Compute a HAND-based mask using an elevation threshold.
 
     Pixels with HAND values lower than or equal to ``thresh_hand`` are
     considered valid (True in the output mask). Higher values are rejected.
+    HAND No Data values are also rejected.
 
     :param hand_array: Input HAND (Height Above Nearest Drainage) raster
         as a NumPy array.
     :param thresh_hand: Threshold applied to the HAND values.
+    :param hand_nodata: HAND NO DATA value
     :return: Boolean mask where:
         - True indicates pixels below or equal to the threshold
           (potentially valid areas),
-        - False indicates pixels above the threshold.
+        - False indicates pixels above the threshold or marked as NO DATA in
+          the input HAND mask.
     """
-    mask_hand = hand_array > thresh_hand
+
     # HAND (Height Above Nearest Drainage) is used to select "ground" pixels
     # quite close to the known water areas.
     # HAND mask are valid pixels, below an altitude "thresh_hand"
+    # NO DATA pixels are also discarded.
 
-    # Invert mask so that low HAND values become True
-    mask_hand = np.logical_not(mask_hand, out=mask_hand)
+    mask_hand = np.logical_and(
+        hand_array < thresh_hand, hand_array != hand_nodata
+    )
 
     return mask_hand
 
@@ -349,11 +353,6 @@ def build_samples(
         nb_other_subsamples, validity_mask, mask_hand
     )
 
-    # ---- OTHER SAMPLES ----
-    rows_hand, cols_hand = get_random_indexes_from_masks(
-        nb_other_subsamples, validity_mask, mask_hand
-    )
-
     # ---- merge indices ----
     rows = np.concatenate((rows_pekel, rows_hand))
     cols = np.concatenate((cols_pekel, cols_hand))
@@ -458,7 +457,6 @@ def mask_filter(im_in, mask_ref):
     with water areas in mask_ref.
     """
     im_label, nb_labels = label(im_in, connectivity=2, return_num=True)
-
     if nb_labels > 1:
         im_label_thresh = np.copy(im_label)
         im_label_thresh[np.logical_not(mask_ref)] = 0
@@ -811,6 +809,7 @@ def process_hand(args, slurp_manager, margin):
     # ==============================
 
     hand_array, hand_profile = read_and_get_profile(args.extracted_hand)
+    args.hand_nodata = hand_profile["nodata"]
 
     input_profile = deepcopy(hand_profile)
     output_profile = eo_utils.single_float_profile([deepcopy(hand_profile)])
@@ -825,13 +824,24 @@ def process_hand(args, slurp_manager, margin):
         output_profiles=[output_profile],
         output_keys=["hand_mask"],
         func=compute_hand_mask,
-        func_parameters={"thresh_hand": args.thresh_hand},
+        func_parameters={
+            "thresh_hand": args.thresh_hand,
+            "hand_nodata": args.hand_nodata,
+        },
         context_manager=slurp_manager,
         stable_margin=margin,
         binary=False,
     )
 
-    return mask_hand
+    not_enough_ground_samples = False
+    # Check Hand mask : if there are too few valid pixels, we propose to threshold NDWI
+    if len(np.where(mask_hand)[0]) < args.nb_samples_other:
+        not_enough_ground_samples = True
+        logger.warning(
+            "** WARNING ** not enough ground samples are found in Hand : return a simple mask"
+        )
+
+    return mask_hand, not_enough_ground_samples
 
 
 def nominal_case_predict(
@@ -1414,14 +1424,20 @@ def slurp_watermask(
                 process_pekel(args, slurp_manager, margin)
             )
             logger.info("[2] Step: HAND")
-            mask_hand = process_hand(args, slurp_manager, margin)
+            mask_hand, not_enough_ground_samples = process_hand(
+                args, slurp_manager, margin
+            )
 
             # ==============================
             # SIMPLE NDWI THRESHOLD
             # ==============================
 
-            if args.simple_ndwi_threshold:
-                logger.info("[3] Step: NDWI THRESHOLD")
+            if args.simple_ndwi_threshold or not_enough_ground_samples:
+                # Corner case with (almost) only water : we cannot learn "ground"
+                # and therefore we filter NDWI and adapt post-processing
+                logger.info(
+                    "[3] Step: NDWI THRESHOLD (not enough ground samples)"
+                )
                 input_profile = deepcopy(ndwi_profile)
                 output_profile = eo_utils.single_uint8_profile(
                     [deepcopy(ndwi_profile)]
@@ -1439,13 +1455,20 @@ def slurp_watermask(
                     binary=True,
                 )
                 predict_profile = output_profile
+                # deactivate HAND and PEKEL post-processing in the case of a simple NDWI threshold
+                args.hand_filter = False
+                args.no_pekel_filter = True
 
             # ==============================
-            # RANDOM FOREST MODE
+            # Random FOREST MODE
             # ==============================
 
             elif not_enough_water_samples:
-                logger.info("[3] Step: NDWI THRESHOLD")
+                logger.info(
+                    "[3] Step: NDWI THRESHOLD (not enough water samples)"
+                )
+                # Corner case with (almost) only ground : we cannot learn "water"
+                # and therefore we filter NDWI and adapt post-processing
                 input_profile = deepcopy(ndwi_profile)
                 output_profile = eo_utils.single_uint8_profile(
                     [deepcopy(ndwi_profile)]
@@ -1463,6 +1486,8 @@ def slurp_watermask(
                     binary=True,
                 )
                 predict_profile = output_profile
+                args.hand_filter = False
+                args.no_pekel_filter = True
 
             else:
                 logger.info("[3] Step: RF WATER")
