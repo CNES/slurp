@@ -117,6 +117,7 @@ def compute_stats(
     height = data_map.shape[2]
 
     nb_total = width * height
+    nb_pixel_mainland = nb_total
     unique, counts = np.unique(data_map, return_counts=True)
 
     veg, low_veg, high_veg, non_veg = 0, 0, 0, 0
@@ -125,6 +126,7 @@ def compute_stats(
     low_vegetation_classes = [20, 30, 40, 90, 100]
     high_vegetation_classes = [10, 95]
     non_vegetation_classes = [70, 80]
+    water_classes = [80]
     logger.debug("Count nb of pixels per class")
 
     for v, c in zip(unique, counts, strict=False):
@@ -141,24 +143,35 @@ def compute_stats(
         if v in high_vegetation_classes:
             high_veg += c
 
+        if v in water_classes:
+            nb_pixel_mainland -= c
+
         if v in non_vegetation_classes:
             non_veg += c
 
-    nb_clusters_veg, nb_clusters_low_veg = get_advices(
-        veg, low_veg, high_veg, nb_total
-    )
+    if nb_pixel_mainland > 0:
+        nb_clusters_veg, nb_clusters_low_veg = get_advices(
+            veg, low_veg, high_veg, nb_pixel_mainland
+        )
+        veg_ratio = veg / nb_pixel_mainland
+        low_veg_ratio = low_veg / nb_pixel_mainland
+        high_veg_ratio = high_veg / nb_pixel_mainland
+        non_veg_ratio = non_veg / nb_pixel_mainland
 
-    veg_ratio = veg / nb_total
-    low_veg_ratio = low_veg / nb_total
-    high_veg_ratio = high_veg / nb_total
-    non_veg_ratio = non_veg / nb_total
+        logger.info(f"Vegetation (% area) \t: {100*veg_ratio:.2f}%")
+        logger.info(f"Low vegetation (% area) \t: {100*low_veg_ratio:.2f}%")
+        logger.info(f"High vegetation (% area) \t: {100*high_veg_ratio:.2f}%")
 
-    logger.info(f"Vegetation (% area) \t: {100*veg_ratio:.2f}%")
-    logger.info(f"Low vegetation (% area) \t: {100*low_veg_ratio:.2f}%")
-    logger.info(f"High vegetation (% area) \t: {100*high_veg_ratio:.2f}%")
+        logger.info(f"VEG_CLUSTERS : {nb_clusters_veg}")
+        logger.info(f"LOW_VEG_CLUSTERS : {nb_clusters_low_veg}")
 
-    logger.info(f"VEG_CLUSTERS : {nb_clusters_veg}")
-    logger.info(f"LOW_VEG_CLUSTERS : {nb_clusters_low_veg}")
+    else:
+        nb_clusters_veg = 0
+        nb_clusters_low_veg = 0
+        veg_ratio = 0
+        low_veg_ratio = 0
+        high_veg_ratio = 0
+        non_veg_ratio = 0
 
     return (
         nb_clusters_veg,
