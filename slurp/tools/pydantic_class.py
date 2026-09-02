@@ -259,7 +259,7 @@ class Water(BaseModel):
     )
     ndwi_threshold: Optional[float] = Field(
         default=100,
-        description="Threshold used when Pekel is empty in the area",
+        description="Threshold on NDWI (in [-1000 ; 1000]) used when Pekel is empty in the area",
     )
     samples_method: Optional[str] = Field(
         default="grid",

@@ -525,7 +525,6 @@ def post_process(
             logger.warning(
                 "\nWARNING: hand_filter and hand_strict are incompatible."
             )
-
     # ---- Filter for final classification ----
     if not no_pekel_filter:
         # mask_pekel_pp : filter areas with Pekel below that threshold
@@ -533,8 +532,23 @@ def post_process(
         im_classif = mask_filter(im_predict, mask_pekel_pp)
     else:
         im_classif = im_predict.copy()
+        logger.debug("Pekel filter is deactivated")
 
     # ---- Morphological operations ----
+    if remove_small_objects:
+        im_classif[:, :] = apply_morpho(
+            im_classif[:, :].astype(bool),
+            "remove_small_objects",
+            remove_small_objects,
+        ).astype(np.uint8)
+
+    if remove_small_holes:
+        im_classif[:, :] = apply_morpho(
+            im_classif[:, :].astype(bool),
+            "remove_small_holes",
+            remove_small_holes,
+        ).astype(np.uint8)
+
     if binary_closing:
         im_classif[:, :] = apply_morpho(
             im_classif[:, :].astype(bool), "binary_closing", binary_closing
@@ -548,20 +562,6 @@ def post_process(
     if area_closing:
         im_classif[:, :] = apply_morpho(
             im_classif[:, :], "area_closing", area_closing
-        ).astype(np.uint8)
-
-    if remove_small_holes:
-        im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool),
-            "remove_small_holes",
-            remove_small_holes,
-        ).astype(np.uint8)
-
-    if remove_small_objects:
-        im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool),
-            "remove_small_objects",
-            remove_small_objects,
         ).astype(np.uint8)
 
     # ---- Add nodata ----
@@ -1433,8 +1433,6 @@ def slurp_watermask(
             # ==============================
 
             if args.simple_ndwi_threshold or not_enough_ground_samples:
-                # Corner case with (almost) only water : we cannot learn "ground"
-                # and therefore we filter NDWI and adapt post-processing
                 logger.info(
                     "[3] Step: NDWI THRESHOLD (not enough ground samples)"
                 )
@@ -1455,9 +1453,13 @@ def slurp_watermask(
                     binary=True,
                 )
                 predict_profile = output_profile
-                # deactivate HAND and PEKEL post-processing in the case of a simple NDWI threshold
+
                 args.hand_filter = False
-                args.no_pekel_filter = True
+
+                if not_enough_ground_samples:
+                    # Corner case with (almost) only water : we cannot learn "ground"
+                    # and therefore we filter NDWI and adapt post-processing
+                    args.no_pekel_filter = True
 
             # ==============================
             # Random FOREST MODE
@@ -1480,12 +1482,14 @@ def slurp_watermask(
                     output_profiles=[output_profile],
                     output_keys=[path.basename(args.watermask)],
                     func=utils.compute_mask_threshold,
-                    func_parameters={"ndwi_threshold": 1000},
+                    func_parameters={"ndwi_threshold": args.ndwi_threshold},
                     context_manager=slurp_manager,
                     stable_margin=margin,
                     binary=True,
                 )
                 predict_profile = output_profile
+
+                # deactivate HAND and PEKEL post-processing in the case of a simple NDWI threshold
                 args.hand_filter = False
                 args.no_pekel_filter = True
 
