@@ -7,6 +7,7 @@ A new section Unreleased is opened then for next dev phase.
 ## Unreleased (several bug fixes)
 ### Fixed
 	- fix #83 : stackmask will process water bodies categorization before other steps of post-process.
+	- fix #91 : retrieve some corrections made for water areas with only water (#45)
 
 
 ## 0.1 First stable version for CO3D.
