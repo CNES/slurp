@@ -26,11 +26,11 @@ import logging
 import numpy as np
 from skimage.morphology import (
     area_closing,
-    binary_closing,
-    binary_dilation,
-    binary_erosion,
-    binary_opening,
+    closing,
+    dilation,
     disk,
+    erosion,
+    opening,
     remove_small_holes,
     remove_small_objects,
 )
@@ -50,17 +50,21 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
     if key == "area_closing":
         output_array = area_closing(input_array, value, connectivity=2)
     elif key == "binary_closing":
-        output_array = binary_closing(input_array, disk(value))
+        output_array = closing(input_array.astype(bool), disk(value))
     elif key == "binary_dilation":
-        output_array = binary_dilation(input_array, disk(value))
+        output_array = dilation(input_array.astype(bool), disk(value))
     elif key == "binary_erosion":
-        output_array = binary_erosion(input_array, disk(value))
+        output_array = erosion(input_array.astype(bool), disk(value))
     elif key == "binary_opening":
-        output_array = binary_opening(input_array, disk(value))
+        output_array = opening(input_array.astype(bool), disk(value))
     elif key == "remove_small_holes":
-        output_array = remove_small_holes(input_array, value, connectivity=2)
+        output_array = remove_small_holes(
+            input_array, connectivity=2, max_size=value
+        )
     elif key == "remove_small_objects":
-        output_array = remove_small_objects(input_array, value, connectivity=2)
+        output_array = remove_small_objects(
+            input_array, connectivity=2, max_size=value
+        )
     else:
         raise NotImplementedError(f"The key {key} is not implemented")
 
