@@ -75,22 +75,7 @@ UNDEFINED_TEXTURE_CLASS = VEG_CODE + MIDDLE_TEXTURE_CODE
 # MISCELLANEOUS FUNCTIONS #
 
 def apply_map(pred, map_centroids):
-    return np.asarray(map_centroids)[np.asarray(pred, dtype=np.intp)]
-
-
-def rank_of_centroids(centroids: np.ndarray) -> np.ndarray:
-    """
-    Rank of each cluster once sorted by increasing centroid value.
-
-    Replaces ``[sorted_values.index(v) for v in values]`` which silently
-    returned the same rank twice when two centroids were exactly equal (one
-    cluster then became unreachable in the label mapping).
-    """
-    centroids = np.asarray(centroids).ravel()
-    order = np.argsort(centroids, kind="stable")
-    ranks = np.empty(order.size, dtype=np.int64)
-    ranks[order] = np.arange(order.size)
-    return ranks
+    return np.array([map_centroids[n] for n in pred])
 
 
 def as_bool_mask(mask) -> np.ndarray:
@@ -211,11 +196,9 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
     # nseg = int(ndvi.shape[2] * ndvi.shape[1] / params["slic_seg_size"])
     # nseg cannot be equal to 0, because calling function already checked
     # there were valid pixels to segment...
-    nb_valid = int(np.count_nonzero(ndvi != NODATA_INT16))
-    nseg = nb_valid // int(params["slic_seg_size"])
-    if nseg < 1:
+    nseg = int(len(ndvi[ndvi != NODATA_INT16]) / params["slic_seg_size"])
+    if nseg == 0:
         logger.debug(f"Segments number : 0 !! Divide by zero {ndvi.shape=}")
-        nseg = 1
 
     # Note : we read NDVI image.
     # Estimation of the max number of segments (ie : each segment is > 100 pixels)
@@ -225,7 +208,6 @@ def compute_segmentation(params: dict, ndvi: np.ndarray) -> np.ndarray:
         n_segments=nseg,
         sigma=1,
         channel_axis=None,
-        start_label=1,
     )
 
     return res_seg
@@ -381,28 +363,26 @@ def clustering_vegetation(
         random_state=712,
     )
 
-    valid = as_bool_mask(mask_valid_indices)
-
     ndvi = stats[0:size_result]
     ndwi = stats[size_result : 2 * size_result]
+    ndvi = ndvi[np.where(mask_valid_indices)]
+    ndwi = ndwi[np.where(mask_valid_indices)]
+    vec_predic = np.stack((ndvi, ndwi), axis=1)
     logger.debug(f"Before NODATA removal {ndvi.shape=}")
-    ndvi = ndvi[valid]
-    ndwi = ndwi[valid]
-    vec_predic = np.stack((ndvi, ndwi), axis=1).astype(np.float32, copy=False)
     logger.debug(
-        f"{int(valid.sum())=} -> after NODATA removal {ndvi.shape=}"
+        f"{len(np.where(mask_valid_indices)[0])=} -> after NODATA removal {ndvi.shape=}"
     )
 
     pred_veg = kmeans_rad_indices.fit_predict(vec_predic)
 
-    ndvi_values = kmeans_rad_indices.cluster_centers_[:, 0]
+    ndvi_values = [v[0] for v in kmeans_rad_indices.cluster_centers_]
     sorted_ndvi = np.sort(ndvi_values).tolist()
 
-    sorted_clusters = rank_of_centroids(ndvi_values)
+    sorted_clusters = np.array([sorted_ndvi.index(v) for v in ndvi_values])
     logger.debug(
         f"1st clustering : NDVI centroids : {sorted_ndvi} {sorted_clusters=}"
     )
-    pred_veg_sorted = sorted_clusters[pred_veg]
+    pred_veg_sorted = apply_map(pred_veg, sorted_clusters)
 
     return pred_veg_sorted, sorted_ndvi
 
@@ -439,16 +419,12 @@ def clustering_texture(
         mean_texture[np.where(clustering >= UNDEFINED_VEG)]
     )
     """
-    valid = as_bool_mask(mask_valid_indices)
-    veg_values = mean_texture[valid]
-
-    is_veg = clustering >= UNDEFINED_VEG
-    texture_values = veg_values[is_veg]
+    veg_values = mean_texture[np.where(mask_valid_indices)]
+    texture_values = veg_values[np.where(clustering >= UNDEFINED_VEG)]
 
     threshold_max = np.percentile(texture_values, params["filter_texture"])
-    data_textures = np.minimum(texture_values, threshold_max).astype(
-        np.float32, copy=False
-    )
+    data_textures = np.transpose(texture_values)
+    data_textures[data_textures > threshold_max] = threshold_max
 
     kmeans_texture = KMeans(
         n_clusters=NB_CLUSTERS,
@@ -459,13 +435,17 @@ def clustering_texture(
     )
     pred_texture = kmeans_texture.fit_predict(data_textures.reshape(-1, 1))
 
-    centroids_texture = kmeans_texture.cluster_centers_[:, 0]
-    sorted_texture = np.sort(centroids_texture).tolist()
+    texture_values = [v[0] for v in kmeans_texture.cluster_centers_]
+    sorted_texture = np.sort(texture_values).tolist()
 
-    sorted_clusters = rank_of_centroids(centroids_texture)
+    sorted_clusters = np.array(
+        [sorted_texture.index(v) for v in texture_values]
+    )
     logger.debug(f"2nd clustering : Texture centroids : {sorted_texture}")
-    textures = np.zeros(clustering.shape[0], dtype=np.uint8)
-    textures[is_veg] = sorted_clusters[pred_texture]
+    textures = np.zeros(size_result).astype(np.uint8)
+    textures[np.where(clustering >= UNDEFINED_VEG)] = apply_map(
+        pred_texture, sorted_clusters
+    )
     # textures = [ 0  0  0    8 8 8 7 8 7   1 3 2 3  1 1 .. ]
     #              (nonveg)  (textured veg)  (smooth veg)
     return textures, sorted_clusters
@@ -485,7 +465,7 @@ def frac_veg_from_segments(segments, params: dict):
     nb_segments = segments.shape[0]
     # for each index of cluster from 8 (NB_CLUSTERS) to 0, compute ratio of segments over this index
     ratios_surfaces = [
-        np.count_nonzero(segments >= i) / nb_segments
+        np.where(segments >= i)[0].shape[0] / nb_segments
         for i in range(NB_CLUSTERS - 1, -1, -1)
     ]
 
@@ -516,7 +496,7 @@ def frac_veg_from_segments(segments, params: dict):
                 index_cluster_veg = ratios_surfaces.index(clusters_under[-1])
 
     ratios_surfaces_non_veg = [
-        np.count_nonzero(segments <= i) / nb_segments
+        np.where(segments <= i)[0].shape[0] / nb_segments
         for i in range(NB_CLUSTERS)
     ]
 
@@ -735,7 +715,7 @@ def finalize_task(segments, valid_stack, data):
     # (the nomenclature never exceeds 23) and restored to the dtype expected by
     # the Cython kernel here. On a large scene that table weighs tens of
     # megabytes and was pickled in float64 for every single tile.
-    clustering = np.ascontiguousarray(data, dtype=np.float64)
+    clustering = data
 
     # Load Cython module and launch C++ function
     ts_stats = ts.PyStats()
@@ -755,7 +735,6 @@ def clean_task(
     remove_small_holes: int,
     binary_dilation: int,
     min_ndvi_veg: float,
-    apply_ndvi_filter: bool = True,
 ) -> np.ndarray:
     """
     Post-processing : remove small holes/objects, apply binary dilation
@@ -773,22 +752,12 @@ def clean_task(
     remove_small_holes : int
     binary_dilation : int
     min_ndvi_veg : float
-    apply_ndvi_filter : bool
-        Re-apply the per-pixel NDVI threshold at the end. Must be disabled when
-        the graph cut ran before : the refinement decides in shadows and in low
-        contrast areas precisely because the raw NDVI is not trustworthy there,
-        and thresholding again undoes it pixel per pixel.
 
     Returns
     -------
     np.ndarray
         Final processed mask.
     """
-
-    output_shape = np.asarray(im_classif).shape
-    im_classif = np.squeeze(np.asarray(im_classif)).copy()
-    im_ndvi = np.squeeze(np.asarray(im_ndvi))
-    valid = np.squeeze(np.asarray(valid_stack)) == 0
 
     # --- Remove small objects (high vegetation consistency)
     if remove_small_objects:
@@ -840,31 +809,31 @@ def clean_task(
             )
         ] = LOW_VEG_CLASS
 
-    if apply_ndvi_filter:
-        im_classif = np.where(
-            im_classif == LOW_VEG_CLASS,
-            np.where(
-                im_ndvi > min_ndvi_veg,
-                LOW_VEG_CLASS,
-                UNDEFINED_VEG + LOW_TEXTURE_CODE,
-            ),
-            im_classif,
-        )
+    # --- NDVI filtering
+    im_classif = np.where(
+        im_classif == LOW_VEG_CLASS,
+        np.where(
+            im_ndvi > min_ndvi_veg,
+            LOW_VEG_CLASS,
+            UNDEFINED_VEG + LOW_TEXTURE_CODE,
+        ),
+        im_classif,
+    )
 
-        im_classif = np.where(
-            im_classif > LOW_VEG_CLASS,
-            np.where(
-                im_ndvi > min_ndvi_veg,
-                VEG_CODE + MIDDLE_TEXTURE_CODE,
-                UNDEFINED_VEG + MIDDLE_TEXTURE_CODE,
-            ),
-            im_classif,
-        )
+    im_classif = np.where(
+        im_classif > LOW_VEG_CLASS,
+        np.where(
+            im_ndvi > min_ndvi_veg,
+            VEG_CODE + MIDDLE_TEXTURE_CODE,
+            UNDEFINED_VEG + MIDDLE_TEXTURE_CODE,
+        ),
+        im_classif,
+    )
 
     # --- Apply nodata mask
-    im_classif = np.where(valid, im_classif, NODATA_INT8).astype(np.uint8)
+    im_classif = np.where(valid_stack == 0, im_classif, NODATA_INT8)
 
-    return im_classif.reshape(output_shape)
+    return im_classif
 
 
 def segmentation(
@@ -1010,10 +979,6 @@ def postprocess(
                 "remove_small_holes": args.remove_small_holes,
                 "binary_dilation": args.binary_dilation,
                 "min_ndvi_veg": args.min_ndvi_veg,
-                # the graph cut already arbitrated the ambiguous pixels
-                "apply_ndvi_filter": not bool(
-                    getattr(args, "graphcut", False)
-                ),
             },
             context_manager=slurp_manager,
             stable_margin=margin,
@@ -1090,14 +1055,29 @@ def process_stats(
 
     np.seterr(divide="ignore", invalid="ignore")
 
-    valid = as_bool_mask(mask_valid_indices)
-    counts = stats[1][valid]
+    # NDVI
+    mean_ndvi = stats[0][:size_result]
+    mean_ndvi[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_ndvi[np.where(mask_valid_indices)] = (
+        mean_ndvi[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
 
-    for offset, name in enumerate(("NDVI", "NDWI", "texture")):
-        mean = stats[0][offset * size_result : (offset + 1) * size_result]
-        mean[~valid] = NODATA_INT16
-        mean[valid] = mean[valid] / counts
-        logger.debug(f"{name} means computed on {counts.size} segments")
+    # NDWI
+    mean_ndwi = stats[0][size_result : 2 * size_result]
+    mean_ndwi[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_ndwi[np.where(mask_valid_indices)] = (
+        mean_ndwi[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
+
+    # Texture
+    mean_texture = stats[0][2 * size_result : 3 * size_result]
+    mean_texture[np.where(mask_valid_indices == 0)] = NODATA_INT16
+    mean_texture[np.where(mask_valid_indices)] = (
+        mean_texture[np.where(mask_valid_indices)]
+        / stats[1][np.where(mask_valid_indices)]
+    )
 
     # ======================================================
     # RETURN
@@ -3330,13 +3310,8 @@ def slurp_vegetationmask(
                 mask_valid_indices,
             )
 
-            # index of the first cluster labelled as vegetation, clipped so
-            # that an inconsistent nb_clusters_veg cannot raise an IndexError
-            index_first_veg = -min(
-                max(int(args.nb_clusters_veg), 1), len(sorted_ndvi_centroids)
-            )
             logger.debug(
-                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[index_first_veg]=}"
+                f"NDVI of 1st vegetation cluster {sorted_ndvi_centroids[-args.nb_clusters_veg]=}"
             )
 
             if args.autolabel:
@@ -3374,10 +3349,9 @@ def slurp_vegetationmask(
             logger.info("[5] Step: Finalize mask")
 
             # final tab
-            # uint8 : the nomenclature never exceeds 23 and this table is
-            # shipped to every worker for every tile
-            final_clusters = np.zeros(size_result, dtype=np.uint8)
-            final_clusters[as_bool_mask(mask_valid_indices)] = clusters
+            final_clusters = np.zeros(size_result)
+            final_clusters[np.where(mask_valid_indices)] = clusters
+            final_clusters[np.where(mask_valid_indices == 0)] = 0
 
             final_mask = mp_n_to_m_images(
                 inputs=[segments[0], valid_stack[0][0]],
@@ -3403,11 +3377,9 @@ def slurp_vegetationmask(
 
             time_final = time.time()
 
-            # An explicit min_ndvi_veg coming from the configuration is no
-            # longer silently overwritten by the centroid of the clustering.
-            if getattr(args, "min_ndvi_veg", None) is None:
-                args.min_ndvi_veg = sorted_ndvi_centroids[index_first_veg]
-            logger.debug(f"NDVI filter threshold: {args.min_ndvi_veg}")
+            vars(args)["min_ndvi_veg"] = sorted_ndvi_centroids[
+                -args.nb_clusters_veg
+            ]
 
             # =====================================================
             # GRAPH CUT REFINEMENT
