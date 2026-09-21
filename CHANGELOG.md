@@ -5,6 +5,9 @@ When publication of a new release, the section "Unreleased" is blocked to the ne
 A new section Unreleased is opened then for next dev phase.
 
 ## Unreleased (several bug fixes)
+	### Changed
+	- Waterbodies categorization is now made at the end of watermask computation (#90)
+	
 ### Fixed
 	- fix #83 : stackmask will process water bodies categorization before other steps of post-process.
 

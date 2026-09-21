@@ -650,26 +650,6 @@ def getarguments():
         "(to take into account trees with no leaves)",
     )
 
-    group2.add_argument(
-        "--categorized_watermask",
-        dest="categorized_watermask",
-        action="store_true",
-        help="Compute a categorized watermask based on the WBM file",
-    )
-    group2.add_argument(
-        "--no_categorized_watermask",
-        dest="categorized_watermask",
-        action="store_false",
-        help="Don't compute the categorize watermask",
-    )
-
-    group2.add_argument(
-        "-minimal_size_water_area",
-        type=int,
-        default=10000,
-        help="Minimal area (in pixels) of water bodies",
-    )
-
     group4 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group4.add_argument("-stackmask", help="Output Final mask filename")
     group4.add_argument(
@@ -777,8 +757,8 @@ def slurp_stackmask(
     tile_max_size: int,
     multiproc_context: str,
     margin: int,
-    categorized_watermask: bool,
-    minimal_size_water_area: int,
+    categorized_watermask: bool,  # move
+    minimal_size_water_area: int,  # move
 ):
 
     keys = [

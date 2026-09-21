@@ -47,6 +47,12 @@ from slurp.tools import random_forest_utils as rf_utils
 from slurp.tools import utils
 from slurp.tools.constant import NODATA_INT8
 
+# Values from Copernicus WaterBodyMask
+SEA = 1
+LAKE = 2
+RIVER = 3
+
+
 logger = logging.getLogger("slurp")
 
 try:
@@ -1076,18 +1082,80 @@ def launch_postprocess(
         stable_margin=margin,
     )
 
-    # ---- write final mask ----
-    slurp_manager.write_tif(
-        data=im_classif, path=args.watermask, target_profile=output_profile[0]
+    return im_classif, im_predict
+
+
+def infer_waterbodies_type(wbm, watermask, params):
+    """
+    Clean and apply watershed regulation for the watermask
+
+    :param np.ndarray wbm: WBM file from post_process function
+    :param np.ndarray watermask: Watermask created by the dedicated script
+    :param dict params: dictionary of arguments
+    :return: categorized mask
+    """
+    nb_iter = 2
+
+    # Clean watermask
+    # 1) apply morpho operation (opening)
+    # 2) remove holes
+    # 3) only keep significant water bodies
+    clean_watermask = watermask == 1
+    for _ in range(nb_iter):
+        clean_watermask = apply_morpho(clean_watermask, "binary_opening", 2)
+
+    clean_watermask = apply_morpho(
+        clean_watermask,
+        "remove_small_holes",
+        params["remove_small_holes"],
+    )
+    clean_watermask = apply_morpho(
+        clean_watermask,
+        "remove_small_objects",
+        params["minimal_size_water_area"],
     )
 
-    # ---- write raw prediction in debug mode ----
-    if args.save_mode == "debug":
-        slurp_manager.write_tif(
-            data=im_predict,
-            path=args.watermask.replace(".tif", "_raw_predict.tif"),
-            target_profile=output_profile[0],
-        )
+    # 2nd step: segmentation
+    # label image regions
+    label_image = label(clean_watermask)
+    logger.debug(
+        f"Infer waterbodies type --> {len(np.unique(label_image))} water bodies found"
+    )
+
+    categorized_watermask = np.zeros_like(label_image)
+
+    list_classes = {
+        SEA: params["value_classif_sea"],
+        LAKE: params["value_classif_lake"],
+        RIVER: params["value_classif_river"],
+        0: params["value_classif_water"],
+    }
+    # loop on all water bodies
+    val_uniques = np.unique(label_image)
+    for val in val_uniques:
+        mask_val = label_image == val
+        # values from WBM covered by value 'val' in label_image
+        if 1 in clean_watermask[mask_val]:
+            # water body
+            sub_set_wbm = wbm[mask_val]
+            kind_waterbodies = np.unique(sub_set_wbm)
+            # We select water body type by priority order
+            # sea > lake > river > (other) water
+            main_wb = choose_wb(kind_waterbodies)
+            categorized_watermask[mask_val] = list_classes[main_wb]
+
+    return categorized_watermask
+
+
+def choose_wb(kind_waterbodies):
+    if SEA in kind_waterbodies:
+        return SEA
+    elif LAKE in kind_waterbodies:
+        return LAKE
+    elif RIVER in kind_waterbodies:
+        return RIVER
+    else:
+        return 0
 
 
 def getarguments():
@@ -1275,9 +1343,33 @@ def getarguments():
         type=int,
         help="The minimum area, in pixels, of a water body to be kept",
     )
+    group4.add_argument(
+        "--categorized_watermask",
+        dest="categorized_watermask",
+        action="store_true",
+        help="Compute a categorized watermask based on the WBM file",
+    )
+    group4.add_argument(
+        "--no_categorized_watermask",
+        dest="categorized_watermask",
+        action="store_false",
+        help="Don't compute the categorize watermask",
+    )
+
+    group4.add_argument(
+        "-minimal_size_water_area",
+        type=int,
+        default=10000,
+        help="Minimal area (in pixels) of water bodies",
+    )
 
     group5 = parser.add_argument_group(description="*** OUTPUT FILE ***")
     group5.add_argument("-watermask", help="Output classification filename")
+    group5.add_argument(
+        "-watermask_cat",
+        default="",
+        help="Output watermask with categories filename",
+    )
     group5.add_argument(
         "-value_classif",
         type=int,
@@ -1348,10 +1440,13 @@ def slurp_watermask(
     remove_small_holes: int,
     remove_small_objects: int,
     watermask: str,
+    watermask_cat: str,
     value_classif: int,
     n_workers: int,
     tile_max_size: int,
     multiproc_context: str,
+    categorized_watermask: bool,
+    minimal_size_water_area: int,
 ):
     """
     Main API to compute water mask using slurpContextManager
@@ -1365,6 +1460,7 @@ def slurp_watermask(
         "resources",
         "post_process",
         "water",
+        "stack",  # for sea, lake, river values
     ]
 
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
@@ -1515,7 +1611,7 @@ def slurp_watermask(
             # POST PROCESS
             # ==============================
             logger.info("[4] Step: POST PROCESS")
-            launch_postprocess(
+            im_classif, im_predict = launch_postprocess(
                 args,
                 slurp_manager,
                 predict,
@@ -1526,7 +1622,49 @@ def slurp_watermask(
                 predict_profile,
             )
 
+            output_profile = eo_utils.single_uint8_profile(
+                [deepcopy(predict_profile)]
+            )
+
+            # ---- write final mask ----
+            slurp_manager.write_tif(
+                data=im_classif,
+                path=args.watermask,
+                target_profile=output_profile,
+            )
+
+            # ---- write raw prediction in debug mode ----
+            if args.save_mode == "debug":
+                slurp_manager.write_tif(
+                    data=im_predict,
+                    path=args.watermask.replace(".tif", "_raw_predict.tif"),
+                    target_profile=output_profile,
+                )
+
             t1 = time.time()
+
+            # ==============================
+            # CATEGORIZE WATERMASK
+            # ==============================
+            if args.categorized_watermask and args.watermask_cat != "":
+                # Categorize watermask
+                # -> classify detected waterbodies according
+                # to Copernicus Water Bodies Mask
+                # ====================
+                key_wbm = read(args.extracted_wbm)
+                wbm = key_wbm[0]
+
+                categorized = infer_waterbodies_type(
+                    wbm,
+                    im_classif,
+                    vars(args),
+                )
+
+                slurp_manager.write_tif(
+                    data=categorized,
+                    path=args.watermask_cat,
+                    target_profile=output_profile,
+                )
 
             logger.info("Total time (user):\t" + utils.convert_time(t1 - t0))
 
