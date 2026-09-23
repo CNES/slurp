@@ -135,7 +135,7 @@ def build_stack_stackmask(args, slurp_manager):
 # =====================================================================                                                                       
 #   BUILDING SEGMENTATION WITH GRAPHCUT                                                          
 #                                                                       
-#   Data term = logits urbanmask + NDVI×MBI×MSI, minimal cut        
+#   Data term = logits urbanmask + NDVI×MBIxShadow, minimal cut        
 #   based on regularization : n-edges derived from an enhanced gradient
 #   map G = average of Di Zenzo edges detector and a binary segment map (LSD)    
 #   and an object prior : ainsi qu'un a priori objet : map P_D                                  

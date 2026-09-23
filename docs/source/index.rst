@@ -18,6 +18,7 @@ obtain into a single multiclass mask.
 
    SLURP configuration <slurp_config>
    Tutorial <tutorial>
+   Advanced use: improve multiclass mask regularization <graphcut>
    CLI Usage <usage_cli>
    API Usage <usage_api>
    API Documentation <apidoc/modules>
