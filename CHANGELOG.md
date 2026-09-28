@@ -4,6 +4,11 @@ Only the first "Unreleased" section of this file corresponding of next release c
 When publication of a new release, the section "Unreleased" is blocked to the next chosen version and name of the milestone at a given date.
 A new section Unreleased is opened then for next dev phase.
 
+## Unreleased (several bug fixes)
+### Fixed
+	- fix #83 : stackmask will process water bodies categorization before other steps of post-process.
+
+
 ## 0.1 First stable version for CO3D.
 	- Compliant with Docker environment (no more dependency to EOScale / shared memory)
 	- New convention for validity masks

@@ -19,6 +19,7 @@
 # limitations under the License.
 
 
+
 """Compute vegetation mask of VHR image."""
 
 import argparse

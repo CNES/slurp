@@ -54,7 +54,6 @@ from slurp.eomultiprocessing.slurp_executor import (
 from slurp.eomultiprocessing.slurp_manager import slurpContextManager
 from slurp.eomultiprocessing.utils import read, read_and_get_profile
 from slurp.post_process.morphology import apply_morpho, morpho_clean
-from slurp.tools import io_utils
 from slurp.tools import profile_utils as eo_utils
 from slurp.tools import utils
 from slurp.tools.constant import HIGH, LOW, NODATA_INT8
@@ -690,7 +689,7 @@ def watershed_regul_buildings(
     urbanmask: np.ndarray,
     wsf: np.ndarray,
     vegmask: np.ndarray,
-    watermask: np.ndarray,
+    categorized_watermask: np.ndarray,
     shadowmask: np.ndarray,
     edges: np.ndarray,
     *,
@@ -720,8 +719,8 @@ def watershed_regul_buildings(
         World Settlement Footprint mask used as building ground truth.
     vegmask : np.ndarray
         Vegetation classification mask.
-    watermask : np.ndarray
-        Binary water mask.
+    categorized_watermask: np.ndarray
+        Categorized water mask.
     shadowmask : np.ndarray
         Shadow classification mask.
     edges : np.ndarray
@@ -825,7 +824,7 @@ def watershed_regul_buildings(
     markers[0][eroded_shadow] = value_classif_background
 
     # Water
-    markers[0][watermask == 1] = value_classif_background
+    markers[0][categorized_watermask != 0] = value_classif_background
 
     seg = segmentation.watershed(edges, markers[0].astype(np.uint8))
     return seg, markers
@@ -841,26 +840,29 @@ def infer_waterbodies_type(wbm, watermask, params):
     :return: categorized mask
     """
     nb_iter = 2
+
+    # Clean watermask
+    # 1) apply morpho operation (opening)
+    # 2) remove holes
+    # 3) only keep significant water bodies
     clean_watermask = watermask == 1
     for _ in range(nb_iter):
         clean_watermask = apply_morpho(clean_watermask, "binary_opening", 2)
 
-    # remove small objects in order to reduce the segmentation
-    watermask_remove = apply_morpho(
+    clean_watermask = apply_morpho(
+        clean_watermask,
+        "remove_small_holes",
+        params["remove_small_holes"],
+    )
+    clean_watermask = apply_morpho(
         clean_watermask,
         "remove_small_objects",
         params["minimal_size_water_area"],
     )
 
-    watermask_remove = apply_morpho(
-        watermask_remove,
-        "remove_small_holes",
-        params["minimal_size_water_area"],
-    )
-
     # 2nd step: segmentation
     # label image regions
-    label_image = label(watermask_remove)
+    label_image = label(clean_watermask)
     logger.debug(
         f"Infer waterbodies type --> {len(np.unique(label_image))} water bodies found"
     )
@@ -871,14 +873,14 @@ def infer_waterbodies_type(wbm, watermask, params):
         SEA: params["value_classif_sea"],
         LAKE: params["value_classif_lake"],
         RIVER: params["value_classif_river"],
-        0: 0,  # params["value_classif_water"]
+        0: params["value_classif_water"],
     }
     # loop on all water bodies
     val_uniques = np.unique(label_image)
     for val in val_uniques:
         mask_val = label_image == val
         # values from WBM covered by value 'val' in label_image
-        if 1 in watermask_remove[mask_val]:
+        if 1 in clean_watermask[mask_val]:
             # water body
             sub_set_wbm = wbm[mask_val]
             kind_waterbodies = np.unique(sub_set_wbm)
@@ -907,7 +909,7 @@ def post_process(
     vhr3: np.ndarray,
     vhr4: np.ndarray,
     valid_stack: np.ndarray,
-    watermask: np.ndarray,
+    categorized_watermask: np.ndarray,
     vegmask: np.ndarray,
     urbanmask: np.ndarray,
     shadowmask: np.ndarray,
@@ -938,6 +940,7 @@ def post_process(
     binary_opening: int | None = None,
     remove_small_holes: int | None = None,
     remove_small_objects: int | None = None,
+    minimal_size_water_area: int | None = None,
 ):
     """
     Perform SLURP post-processing to generate final classification layers.
@@ -948,8 +951,8 @@ def post_process(
         Four spectral bands of the VHR image.
     valid_stack : np.ndarray
         Validity mask defining nodata regions.
-    watermask : np.ndarray
-        Binary water mask.
+    categorized_watermask : np.ndarray
+        Categorized water mask.
     vegmask : np.ndarray
         Vegetation classification mask.
     urbanmask : np.ndarray
@@ -1679,35 +1682,16 @@ def slurp_stackmask(
                         context_manager=slurp_manager,
                         stable_margin=args.margin,
                    )
+
             # ==============================
             # WRITE STACK
             # ==============================
 
-            if args.categorized_watermask:
-
-                key_wbm = read(args.extracted_wbm)
-                wbm = key_wbm[0]
-                water = watermask[0][0]
-
-                categorized = infer_waterbodies_type(
-                    wbm,
-                    water,
-                    vars(args),
-                )
-
-                stack[:] = np.where(categorized != 0, categorized, stack)
-                io_utils.save_image(
-                    stack,
-                    args.stackmask,
-                    crs=output_profile[0]["crs"],
-                    transform=output_profile[0]["transform"],
-                )
-            else:
-                slurp_manager.write_tif(
-                    data=stack,
-                    path=args.stackmask,
-                    target_profile=output_profile[0],
-                )
+            slurp_manager.write_tif(
+                data=stack,
+                path=args.stackmask,
+                target_profile=output_profile[0],
+            )
 
             if args.debug:
 
