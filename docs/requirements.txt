@@ -1,3 +1,5 @@
-myst_parser
+myst-parser
 tabulate
-sphinx_rtd_theme
+sphinx-rtd-theme
+setuptools         
+wheel              
