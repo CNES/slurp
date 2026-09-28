@@ -82,7 +82,6 @@ Regularization pipeline
 -----------------------
 
 
-
 Here are examples of command lines to perform both watershed and graphcut regularization.
 
 .. code-block:: console

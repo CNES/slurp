@@ -20,7 +20,8 @@ import os
 import sys
 
 # The full version, including alpha/beta/rc tags
-from pkg_resources import get_distribution
+#from pkg_resources import get_distribution
+from importlib import metadata
 
 import docs.source.json_to_md as generate_md
 
@@ -39,7 +40,8 @@ author = "Y. TANGUY et al - CNES"
 
 
 try:
-    version = get_distribution("slurp").version
+    #version = get_distribution("slurp").version
+    version = metadata.version
     release = version
 except Exception:
     print("WARNING: cannot find slurp version")
