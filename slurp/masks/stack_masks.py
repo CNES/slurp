@@ -1064,7 +1064,7 @@ def post_process(
             urbanmask=urbanmask,
             wsf=wsf,
             vegmask=vegmask,
-            watermask=watermask,
+            categorized_watermask=categorized_watermask,
             shadowmask=shadowmask,
             edges=edges,
             regul_classes=regul_classes,
@@ -1152,7 +1152,9 @@ def post_process(
         cleaned[name] = source
         stack[0][source] = values[name]
 
-    stack[0][watermask == 1] = value_classif_water
+    stack[0] = np.where(
+        categorized_watermask != 0, categorized_watermask, stack[0]
+    )
     stack[0][valid_stack != 0] = NODATA_INT8
 
     # ==============================
@@ -1163,7 +1165,7 @@ def post_process(
     height_layer[0][cleaned["low_veg"]] = LOW
     height_layer[0][cleaned["buildings"]] = HIGH
     height_layer[0][cleaned["high_veg"]] = HIGH
-    height_layer[0][watermask == 1] = 0
+    height_layer[0][categorized_watermask != 0] = 0
     height_layer[0][shadowmask == 2] = 0
     height_layer[0][valid_stack != 0] = NODATA_INT8
 
@@ -1528,7 +1530,7 @@ def slurp_stackmask(
             (
                 image,
                 validstack,
-                watermask,
+                categorized_watermask,
                 vegmask,
                 urbanmask,
                 shadowmask,
@@ -1582,7 +1584,7 @@ def slurp_stackmask(
                             image[0][2],  # vhr3
                             image[0][3],  # vhr4
                             validstack[0][0],
-                            watermask[0][0],
+                            categorized_watermask[0][0],
                             vegmask[0][0],
                             urbanmask[0][0],
                             shadowmask[0][0],
@@ -1639,7 +1641,7 @@ def slurp_stackmask(
                             image[0][2],  # vhr3
                             image[0][3],  # vhr4
                             validstack[0][0],
-                            watermask[0][0],
+                            categorized_watermask[0][0],
                             vegmask[0][0],
                             urbanmask[0][0],
                             shadowmask[0][0],
