@@ -1530,7 +1530,7 @@ def slurp_stackmask(
             (
                 image,
                 validstack,
-                categorized_watermask,
+                watermask,
                 vegmask,
                 urbanmask,
                 shadowmask,
@@ -1563,6 +1563,26 @@ def slurp_stackmask(
             output_profile = eo_utils.three_uint8_profile(
                     [deepcopy(image_profile)]
                 )
+            if args.categorized_watermask:
+                # Categorize watermask
+                # -> classify detected waterbodies according
+                # to Copernicus Water Bodies Mask
+                # ====================
+                key_wbm = read(args.extracted_wbm)
+                wbm = key_wbm[0]
+                water = watermask[0][0]
+
+                categorized = infer_waterbodies_type(
+                    wbm,
+                    water,
+                    vars(args),
+                )
+                wmask = categorized
+            else:
+                # Keep all detected water areas
+                wmask = np.where(
+                    watermask[0][0] == 1, args.value_classif_water, 0
+                )
             if args.regul_method == "graphcut":
                 mbi_profile=deepcopy(image_profile)
                 mbi_profile.update({"driver": "GTiff",
@@ -1584,7 +1604,7 @@ def slurp_stackmask(
                             image[0][2],  # vhr3
                             image[0][3],  # vhr4
                             validstack[0][0],
-                            categorized_watermask[0][0],
+                            wmask,
                             vegmask[0][0],
                             urbanmask[0][0],
                             shadowmask[0][0],
@@ -1641,7 +1661,7 @@ def slurp_stackmask(
                             image[0][2],  # vhr3
                             image[0][3],  # vhr4
                             validstack[0][0],
-                            categorized_watermask[0][0],
+                            wmask,
                             vegmask[0][0],
                             urbanmask[0][0],
                             shadowmask[0][0],

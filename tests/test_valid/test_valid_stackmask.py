@@ -71,6 +71,45 @@ def compute_stackmask(
     ), f"The file {output_image} has not been created. Error during stackmask computation ?"
     return output_image
 
+def compute_stackmask_graphcut(
+    file, main_config, output_dir, data_dir, ref_dir, nb_workers
+):
+    """Computes the graphcut stack mask and validates output."""
+    output_image = get_output_path(file, "stack_graphcut", output_dir, remove=True)
+
+    masks_folder = os.path.join(
+        data_dir, "stack", os.path.basename(file).replace(".tif", "")
+    )
+    watermask = os.path.join(masks_folder, "watermask.tif")
+    vegetationmask = os.path.join(masks_folder, "vegetationmask.tif")
+    urbanmask = os.path.join(masks_folder, "urbanmask.tif")
+    shadowmask = os.path.join(masks_folder, "shadowmask.tif")
+    wsf = os.path.join(masks_folder, "wsf.tif")
+    valid_stack = get_aux_path(file, "valid_stack", ref_dir)
+
+    command = (
+        f"slurp_stackmasks -regul_method graphcut -regul_classes building "
+        f"-edges_method dizenzo -edges_image multiband {main_config} "
+        f"-file_vhr {file} -n_workers {nb_workers} "
+        f"-stackmask {output_image} "                     
+        f"-vegetationmask {vegetationmask} "
+        f"-watermask {watermask} "
+        f"-urbanmask {urbanmask} "
+        f"-shadow {shadowmask} -wsf {wsf} -valid {valid_stack} "
+    )
+
+    if os.path.exists(os.path.join(masks_folder, "wbm.tif")):
+        wbm = os.path.join(masks_folder, "wbm.tif")
+        command += f" -wbm {wbm} --categorized_watermask"  
+
+    sys.argv = command.split()
+    slurp.masks.stack_masks.main()
+
+    assert os.path.exists(
+        output_image
+    ), f"The file {output_image} has not been created. Error during stackmask computation ?"
+    return output_image
+
 
 @pytest.mark.ci
 def test_computation_stackmask_ci(
@@ -110,3 +149,7 @@ def test_computation_and_validation_stackmask(
             input_file, main_config, output_dir, data_dir, ref_dir, 1
         )
         validate_mask(output_image, "Stack", ref_dir)
+        output_image_graphcut = compute_stackmask_graphcut(
+            input_file, main_config, output_dir, data_dir, ref_dir, 1
+        )
+        validate_mask(output_image_graphcut, "Stack", ref_dir)
