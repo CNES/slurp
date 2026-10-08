@@ -58,9 +58,13 @@ def apply_morpho(input_array: np.ndarray, key: str, value: int) -> np.ndarray:
     elif key == "binary_opening":
         output_array = opening(input_array, disk(value))
     elif key == "remove_small_holes":
-        output_array = remove_small_holes(input_array, value, connectivity=2)
+        output_array = remove_small_holes(
+            input_array, max_size=value, connectivity=2
+        )
     elif key == "remove_small_objects":
-        output_array = remove_small_objects(input_array, value, connectivity=2)
+        output_array = remove_small_objects(
+            input_array, max_size=value, connectivity=2
+        )
     else:
         raise NotImplementedError(f"The key {key} is not implemented")
 
@@ -99,14 +103,14 @@ def morpho_clean(
 
     if remove_small_holes:
         im_classif = apply_morpho(
-            im_classif, "remove_small_holes", remove_small_holes
-        )  # .astype(np.uint8)
+            im_classif.astype(np.bool), "remove_small_holes", remove_small_holes
+        ).astype(np.uint8)
 
     if remove_small_objects:
         im_classif = apply_morpho(
-            im_classif,
+            im_classif.astype(np.bool),
             "remove_small_objects",
             remove_small_objects,
-        )  # .astype(np.uint8)
+        ).astype(np.uint8)
 
     return im_classif

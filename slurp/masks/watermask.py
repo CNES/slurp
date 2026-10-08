@@ -535,34 +535,35 @@ def post_process(
         logger.debug("Pekel filter is deactivated")
 
     # ---- Morphological operations ----
-    if remove_small_objects:
+
+    if binary_closing:
         im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool),
-            "remove_small_objects",
-            remove_small_objects,
-        ).astype(np.uint8)
+            im_classif[:, :], "binary_closing", binary_closing
+        )
+
+    if binary_opening:
+        im_classif[:, :] = apply_morpho(
+            im_classif[:, :], "binary_opening", binary_opening
+        )
 
     if remove_small_holes:
         im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool),
+            im_classif[:, :].astype(np.bool),
             "remove_small_holes",
             remove_small_holes,
         ).astype(np.uint8)
 
-    if binary_closing:
+    if remove_small_objects:
         im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool), "binary_closing", binary_closing
-        ).astype(np.uint8)
-
-    if binary_opening:
-        im_classif[:, :] = apply_morpho(
-            im_classif[:, :].astype(bool), "binary_opening", binary_opening
+            im_classif[:, :].astype(np.bool),
+            "remove_small_objects",
+            remove_small_objects,
         ).astype(np.uint8)
 
     if area_closing:
         im_classif[:, :] = apply_morpho(
             im_classif[:, :], "area_closing", area_closing
-        ).astype(np.uint8)
+        )
 
     # ---- Add nodata ----
     im_classif[valid_stack != 0] = NODATA_INT8
