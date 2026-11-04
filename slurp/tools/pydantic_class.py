@@ -313,6 +313,14 @@ class Water(BaseModel):
     value_classif: Optional[int] = Field(
         default=1, description="Output classification value (default is 1)"
     )
+    categorized_watermask: Optional[bool] = Field(
+        default=False,
+        description="If true, stack_mask will infer water body category "
+        "(lake, river, sea, unknown) from a general water body mask",
+    )
+    minimal_size_water_area: Optional[int] = Field(
+        default=10000, description="Minimal area (in pixels) of water bodies"
+    )
 
 
 class Stack(BaseModel):
@@ -378,14 +386,6 @@ class Stack(BaseModel):
     )
     binary_opening: Optional[int] = Field(
         default=2, description="Size of disk structuring element"
-    )
-    categorized_watermask: Optional[bool] = Field(
-        default=False,
-        description="If true, stack_mask will infer water body category "
-        "(lake, river, sea, unknown) from a general water body mask",
-    )
-    minimal_size_water_area: Optional[int] = Field(
-        default=10000, description="Minimal area (in pixels) of water bodies"
     )
     margin: Optional[int] = Field(
         default=0,
