@@ -4,12 +4,13 @@ Only the first "Unreleased" section of this file corresponding of next release c
 When publication of a new release, the section "Unreleased" is blocked to the next chosen version and name of the milestone at a given date.
 A new section Unreleased is opened then for next dev phase.
 
-## Unreleased (several bug fixes)
-	### Changed
+
+## 0.2
+### Changed
 	- Waterbodies categorization is now made at the end of watermask computation (#90)
-	
 ### Fixed
 	- fix #83 : stackmask will process water bodies categorization before other steps of post-process.
+	- fix #94 : compatible Python 3.12 / scikit-image 0.26 : update some calls to scikit-image morphological operations
 
 
 ## 0.1 First stable version for CO3D.
