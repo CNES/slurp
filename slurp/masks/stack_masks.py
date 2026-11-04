@@ -38,7 +38,6 @@ from os import path
 import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
-from skimage.measure import label
 
 from slurp import __version__
 from slurp.eomultiprocessing.slurp_executor import (
@@ -278,79 +277,6 @@ def watershed_regul_buildings(
     return seg, markers
 
 
-def infer_waterbodies_type(wbm, watermask, params):
-    """
-    Clean and apply watershed regulation for the watermask
-
-    :param np.ndarray wbm: WBM file from post_process function
-    :param np.ndarray watermask: Watermask created by the dedicated script
-    :param dict params: dictionary of arguments
-    :return: categorized mask
-    """
-    nb_iter = 2
-
-    # Clean watermask
-    # 1) apply morpho operation (opening)
-    # 2) remove holes
-    # 3) only keep significant water bodies
-    clean_watermask = watermask == 1
-    for _ in range(nb_iter):
-        clean_watermask = apply_morpho(clean_watermask, "binary_opening", 2)
-
-    clean_watermask = apply_morpho(
-        clean_watermask,
-        "remove_small_holes",
-        params["remove_small_holes"],
-    )
-    clean_watermask = apply_morpho(
-        clean_watermask,
-        "remove_small_objects",
-        params["minimal_size_water_area"],
-    )
-
-    # 2nd step: segmentation
-    # label image regions
-    label_image = label(clean_watermask)
-    logger.debug(
-        f"Infer waterbodies type --> {len(np.unique(label_image))} water bodies found"
-    )
-
-    categorized_watermask = np.zeros_like(label_image)
-
-    list_classes = {
-        SEA: params["value_classif_sea"],
-        LAKE: params["value_classif_lake"],
-        RIVER: params["value_classif_river"],
-        0: params["value_classif_water"],
-    }
-    # loop on all water bodies
-    val_uniques = np.unique(label_image)
-    for val in val_uniques:
-        mask_val = label_image == val
-        # values from WBM covered by value 'val' in label_image
-        if 1 in clean_watermask[mask_val]:
-            # water body
-            sub_set_wbm = wbm[mask_val]
-            kind_waterbodies = np.unique(sub_set_wbm)
-            # We select water body type by priority order
-            # sea > lake > river > (other) water
-            main_wb = choose_wb(kind_waterbodies)
-            categorized_watermask[mask_val] = list_classes[main_wb]
-
-    return categorized_watermask
-
-
-def choose_wb(kind_waterbodies):
-    if SEA in kind_waterbodies:
-        return SEA
-    elif LAKE in kind_waterbodies:
-        return LAKE
-    elif RIVER in kind_waterbodies:
-        return RIVER
-    else:
-        return 0
-
-
 def post_process(
     vhr1: np.ndarray,
     vhr2: np.ndarray,
@@ -382,7 +308,6 @@ def post_process(
     binary_opening: int | None = None,
     remove_small_holes: int | None = None,
     remove_small_objects: int | None = None,
-    minimal_size_water_area: int | None = None,
 ):
     """
     Perform SLURP post-processing to generate final classification layers.
@@ -517,10 +442,18 @@ def post_process(
     )
     stack[0][clean_buildings] = value_classif_buildings
 
+    # affect value of categorized watermask (7,8,9)
     stack[0] = np.where(
         categorized_watermask != 0, categorized_watermask, stack[0]
     )
+    # ... or default water value if watermask has not been categorized
+    stack[0][categorized_watermask == 1] = value_classif_water
 
+    """
+    = np.where(
+        categorized_watermask != 0, categorized_watermask, stack[0]
+    )
+    """
     clean_low_veg = vegmask == 21
     stack[0][clean_low_veg] = value_classif_low_veg
 
@@ -583,7 +516,9 @@ def getarguments():
     group1.add_argument("-file_vhr", help="Input 4 bands VHR image")
     group1.add_argument("-valid", dest="valid_stack", help="Validity mask")
     group1.add_argument("-vegetationmask", help="Vegetation mask")
-    group1.add_argument("-watermask", help="Water mask")
+    group1.add_argument(
+        "-watermask", help="Water mask or categorized water mask"
+    )
     group1.add_argument("-urbanmask", help="Urban mask probabilities")
     group1.add_argument("-shadowmask", help="Shadow mask")
     group1.add_argument(
@@ -757,8 +692,6 @@ def slurp_stackmask(
     tile_max_size: int,
     multiproc_context: str,
     margin: int,
-    categorized_watermask: bool,  # move
-    minimal_size_water_area: int,  # move
 ):
 
     keys = [
@@ -830,6 +763,7 @@ def slurp_stackmask(
                 [deepcopy(image_profile)]
             )
 
+            """
             if args.categorized_watermask:
                 # Categorize watermask
                 # -> classify detected waterbodies according
@@ -850,6 +784,7 @@ def slurp_stackmask(
                 wmask = np.where(
                     watermask[0][0] == 1, args.value_classif_water, 0
                 )
+            """
 
             stack, height, markers = mp_n_to_m_images(
                 inputs=[
@@ -858,7 +793,7 @@ def slurp_stackmask(
                     image[0][2],  # vhr3
                     image[0][3],  # vhr4
                     validstack[0][0],
-                    wmask,
+                    watermask[0][0],
                     vegmask[0][0],
                     urbanmask[0][0],
                     shadowmask[0][0],
@@ -891,7 +826,6 @@ def slurp_stackmask(
                     "binary_opening": args.binary_opening,
                     "remove_small_holes": args.remove_small_holes,
                     "remove_small_objects": args.remove_small_objects,
-                    "minimal_size_water_area": args.minimal_size_water_area,
                 },
                 context_manager=slurp_manager,
                 stable_margin=args.margin,
