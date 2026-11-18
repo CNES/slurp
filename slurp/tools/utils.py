@@ -68,6 +68,8 @@ def parse_args(keys, logs_to_file, main_config):
     """
     argsdict = io_utils.read_json(main_config, keys)
 
+    print(f"DBG > in parse_args {argsdict=} ")
+
     # Read the list back from the JSON file
     with open("args_list.json", "r") as f:
         cli_params = json.load(f)

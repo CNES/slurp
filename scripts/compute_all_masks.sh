@@ -54,4 +54,4 @@ slurp_shadowmask out/effective_used_config.json ${OPT_SHADOW}
 slurp_urbanmask out/effective_used_config.json ${OPT_URBAN}
 
 # Stack
-slurp_stackmasks out/effective_used_config.json ${OPT_STACK} -stackmask ${LAND_USE_MASK}
+slurp_stackmasks out/effective_used_config.json ${OPT_STACK} -stackmask ${LAND_USE_MASK} -watermask out/watermask_cat.tif

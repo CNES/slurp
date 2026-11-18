@@ -1346,15 +1346,9 @@ def getarguments():
     )
     group4.add_argument(
         "--categorized_watermask",
-        dest="categorized_watermask",
-        action="store_true",
+        choices=["true", "false"],
+        default=None,
         help="Compute a categorized watermask based on the WBM file",
-    )
-    group4.add_argument(
-        "--no_categorized_watermask",
-        dest="categorized_watermask",
-        action="store_false",
-        help="Don't compute the categorize watermask",
     )
 
     group4.add_argument(
@@ -1368,7 +1362,6 @@ def getarguments():
     group5.add_argument("-watermask", help="Output classification filename")
     group5.add_argument(
         "-watermask_cat",
-        default="",
         help="Output watermask with categories filename",
     )
     group5.add_argument(
@@ -1455,15 +1448,15 @@ def slurp_watermask(
     """
 
     keys = [
+        "stack",  # for sea, lake, river values
         "input",
         "aux_layers",
         "masks",
         "resources",
         "post_process",
         "water",
-        "stack",  # for sea, lake, river values
     ]
-
+    # args en entrée : watermask_cat vide
     argsdict, cli_params = utils.parse_args(keys, logs_to_file, main_config)
 
     for param in cli_params:
@@ -1647,7 +1640,10 @@ def slurp_watermask(
             # ==============================
             # CATEGORIZE WATERMASK
             # ==============================
-            if args.categorized_watermask and args.watermask_cat != "":
+            if (
+                args.categorized_watermask == "true"
+                or args.categorized_watermask is True
+            ) and args.watermask_cat != "":
                 # Categorize watermask
                 # -> classify detected waterbodies according
                 # to Copernicus Water Bodies Mask

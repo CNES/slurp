@@ -219,6 +219,22 @@ def test_hand_filter_ci(
 
 @pytest.mark.features
 @pytest.mark.parametrize(
+    "config_file",
+    [
+        "tests/config_test_estuaire.json",
+    ],
+)
+def test_categorize_water_bodies(config_file, output_dir):
+    """Tests the water mask computation when recieving full water tile"""
+
+    cmd = f"watermask.py {config_file} "
+    command = f"{cmd} --categorized_watermask true -watermask_cat out/watermask_cat.tif".split()
+    sys.argv = command  # f"{cmd}".split() # mand
+    slurp.masks.watermask.main()
+
+
+@pytest.mark.features
+@pytest.mark.parametrize(
     "params_file",
     [
         "tests/config_test_only_water.json",
@@ -231,15 +247,13 @@ def test_only_water(params_file, output_dir):
     with open(params_file, "r") as f:
         params = json.load(f)
 
-    cmd = (
-        write_command_compute_watermask(
-            1,
-            params["main_config"],
-            params["features_test_img"],
-            output_dir,
-            params["ref_dir"],
-            params["valid_stack"],
-        )
+    cmd = write_command_compute_watermask(
+        1,
+        params["main_config"],
+        params["features_test_img"],
+        output_dir,
+        params["ref_dir"],
+        params["valid_stack"],
     )
     command = f"{cmd} -nb_samples_auto".split()
     sys.argv = command

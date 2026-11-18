@@ -421,6 +421,11 @@ class Masks(BaseModel):
         default="out/stackmask.tif",
         description="Output classification filename",
     )
+    watermask_cat: Optional[str] = Field(
+        default="out/watermask_cat.tif",
+        description="For watermask computation: Output categorized watermask filename. "
+        "If that mask is the input of stackmask, then waterbodies will be categorized as well",
+    )
 
 
 class AuxLayers(BaseModel):

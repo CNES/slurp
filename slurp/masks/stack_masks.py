@@ -449,11 +449,6 @@ def post_process(
     # ... or default water value if watermask has not been categorized
     stack[0][categorized_watermask == 1] = value_classif_water
 
-    """
-    = np.where(
-        categorized_watermask != 0, categorized_watermask, stack[0]
-    )
-    """
     clean_low_veg = vegmask == 21
     stack[0][clean_low_veg] = value_classif_low_veg
 
@@ -762,29 +757,6 @@ def slurp_stackmask(
             output_profile = eo_utils.three_uint8_profile(
                 [deepcopy(image_profile)]
             )
-
-            """
-            if args.categorized_watermask:
-                # Categorize watermask
-                # -> classify detected waterbodies according
-                # to Copernicus Water Bodies Mask
-                # ====================
-                key_wbm = read(args.extracted_wbm)
-                wbm = key_wbm[0]
-                water = watermask[0][0]
-
-                categorized = infer_waterbodies_type(
-                    wbm,
-                    water,
-                    vars(args),
-                )
-                wmask = categorized
-            else:
-                # Keep all detected water areas
-                wmask = np.where(
-                    watermask[0][0] == 1, args.value_classif_water, 0
-                )
-            """
 
             stack, height, markers = mp_n_to_m_images(
                 inputs=[
