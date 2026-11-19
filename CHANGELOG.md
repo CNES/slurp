@@ -5,6 +5,10 @@ When publication of a new release, the section "Unreleased" is blocked to the ne
 A new section Unreleased is opened then for next dev phase.
 
 
+## 0.2.1
+### Fixed
+	- #91 Affect NODATA in categorized watermask
+
 ## 0.2
 ### Changed
 	- Waterbodies categorization is now made at the end of watermask computation (#90).
