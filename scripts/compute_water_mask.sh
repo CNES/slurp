@@ -29,6 +29,8 @@ mkdir out
 # /!\ Adapt path depending on where your global Pekel database (resp. HAND) is located
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/PEKEL/data2021/occurrence/occurrence.vrt -out "out/pekel.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 otbcli_Superimpose -inr ${VHR_IM} -inm /work/datalake/static_aux/MASQUES/HAND_MERIT/hnd.vrt -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
+otbcli_Superimpose -inr ${VHR_IM} -inm /work/CAMPUS/etudes/Masques_CO3D/Data/WBM/wbm.vrt -out "out/wbm.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+
 slurp_prepare $CONF -file_vhr $VHR_IM -mode water $OPT_PREPARE
 
 slurp_watermask out/effective_used_config.json $OPT_WATER -watermask $WATER_MASK

@@ -16,14 +16,15 @@
 	    "extracted_wbm" : "out/wbm.tif",
 	    "file_texture": "out/texture.tif",
 	    "mnh": null,
-		"file_cloud_gml": null
+            "file_cloud_gml": null
 	},
 	"masks": {
 		"watermask": "out/watermask.tif",
 		"urbanmask": "out/urbanmask.tif",
 		"vegetationmask": "out/vegetationmask.tif",
 		"shadowmask": "out/shadowmask.tif",
-		"stackmask": "out/stackmask.tif"
+	        "stackmask": "out/stackmask.tif",
+                "watermask_cat": "out/watermask_cat.tif"
 	},
 
 	"resources": {
@@ -126,7 +127,8 @@
       "nb_estimators": 100,
       "no_pekel_filter": false,
       "hand_filter": false,
-      "value_classif": 1
+	"value_classif": 1,
+	"categorized_watermask": true
     },
 
   "stack":
@@ -149,7 +151,6 @@
 	"minimal_size_water_area": 10000,
 	"binary_closing":0,
 	"binary_opening":0,
-	"categorized_watermask": true,
 	"margin": 0
     }
 }

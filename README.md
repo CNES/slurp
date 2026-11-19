@@ -83,12 +83,16 @@ mkdir out
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Global Surface Water Pekel occurrence file> -out "out/pekel.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Heigh Above Nearest Drainage map>  -out "out/hand.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" 
 otbcli_Superimpose -inr <your VHR image.tif> -inm <path to World Settlement Footprint map> -out "out/wsf.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
+# Optional : superimpose water body mask, to infer water bodies types in watermask.py
+otbcli_Superimpose -inr <your VHR image.tif> -inm <path to Copernicus Water Body Mask> -out "out/wbm.tif?&gdal:co:TILED=YES&gdal:co:COMPRESS=DEFLATE" uint8 -interpolator nn
 
 # Prepare : computes primitives (NDVI / NDWI / textures)
 slurp_prepare <your_slurp_conf.json> -file_vhr <your VHR image.tif>
 
 # Watermask : learn from Pekel database and predict water occurrence
 slurp_watermask out/effective_used_config.json
+# or to compute watermask.tif and also a categorized watermask 
+slurp_watermask out/effective_used_config.json --categorized_watermask true -watermask_cat out/watermask_cat.tif
 
 # Vegetationmask : segment image and apply clustering method to detect low/high vegetation
 slurp_vegetationmask out/effective_used_config.json
@@ -101,6 +105,8 @@ slurp_urbanmask out/effective_used_config.json
 
 # Stack : regularize all the previous masks together
 slurp_stackmasks out/effective_used_config.json 
+# or, to stack categorized watermask instead of the raw watermask :
+slurp_stackmasks out/effective_used_config.json  -watermask_cat out/watermask_cat.tif
 ```
 
 <div id="algorithm-description"></div>
@@ -148,6 +154,9 @@ The predicted mask is cleaned with Pekel, possibly with HAND (Height Above Neare
 
 It is possible to adapt a lot of parameters (see `slurp_watermask -h`) to adapt learning parameters, add other features (`-layers <features in an other raster>`), etc.
 
+Water mask algorithm can also class water bodies types thanks to a Copernicus Waterbody Mask (wbm) layer. To do so, the `categorized_watermask` option must be activated (either in the .json config file or in command-line) and a `watermask_cat` file name must be given. In such a case, both watermask.tif (0 and 1 values) and a watermask_cat.tif (7, 8, 9 for sea, lake, river and 3 for unknown water area) will be written.
+
+
 ### Vegetation mask
 Vegetation mask are computed with an unsupervised clustering algorithm. First some primitives are computed from VHR image (NDVI, NDWI2, textures).
 Then a segmentation is processed (SLIC) and segments are dispatched in several clusters depending on their features.
@@ -169,7 +178,7 @@ The algorithm regularizes urban mask with a watershed algorithm based on buildin
 
 This algorithm first computes a gradient on the image and fills a marker layer with known classes. Then a watershed step helps to adjust contours along gradient image, thus regularizing buildings shapes.
 
-The stack algorithm can also categorize water bodies (lake, river, sea) if you provide a general water body mask as an input.
+The stack algorithm can either use a watermask or a categorized watermask. In the latter case, you should provide the watermask_cat.tif in command-line.
 
 You can override the JSON with CLI arguments. For example : `slurp_stackmasks <JSON file> -file_vhr <VHR input image> -remove_small_objects 500 -binary_closing 3`
 

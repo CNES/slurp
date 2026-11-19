@@ -59,9 +59,11 @@ def compute_stackmask(
         f"-vegetationmask {vegetationmask} -watermask {watermask} "
         f"-urbanmask {urbanmask} -shadow {shadowmask} -wsf {wsf} -valid {valid_stack} -log_f "
     )
+    """
     if os.path.exists(os.path.join(masks_folder, "wbm.tif")):
         wbm = os.path.join(masks_folder, "wbm.tif")
         command = command + f"-wbm {wbm} --categorized_watermask"
+    """
 
     sys.argv = command.split()
     slurp.masks.stack_masks.main()

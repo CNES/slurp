@@ -313,6 +313,14 @@ class Water(BaseModel):
     value_classif: Optional[int] = Field(
         default=1, description="Output classification value (default is 1)"
     )
+    categorized_watermask: Optional[bool] = Field(
+        default=False,
+        description="If true, stack_mask will infer water body category "
+        "(lake, river, sea, unknown) from a general water body mask",
+    )
+    minimal_size_water_area: Optional[int] = Field(
+        default=10000, description="Minimal area (in pixels) of water bodies"
+    )
 
 
 class Stack(BaseModel):
@@ -379,14 +387,6 @@ class Stack(BaseModel):
     binary_opening: Optional[int] = Field(
         default=2, description="Size of disk structuring element"
     )
-    categorized_watermask: Optional[bool] = Field(
-        default=False,
-        description="If true, stack_mask will infer water body category "
-        "(lake, river, sea, unknown) from a general water body mask",
-    )
-    minimal_size_water_area: Optional[int] = Field(
-        default=10000, description="Minimal area (in pixels) of water bodies"
-    )
     margin: Optional[int] = Field(
         default=0,
         description="Margin (in pixels) for parallel computing during final stack merging",
@@ -420,6 +420,11 @@ class Masks(BaseModel):
     stackmask: Optional[str] = Field(
         default="out/stackmask.tif",
         description="Output classification filename",
+    )
+    watermask_cat: Optional[str] = Field(
+        default="out/watermask_cat.tif",
+        description="For watermask computation: Output categorized watermask filename. "
+        "If that mask is the input of stackmask, then waterbodies will be categorized as well",
     )
 
 

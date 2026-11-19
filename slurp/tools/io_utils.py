@@ -46,6 +46,7 @@ def read_json(main_config_file: str, keys: list) -> dict:
         full_args = config.model_dump()
         argsdict = full_args[keys[0]]
         for key in keys[1:]:
+            print(f"DBG> {key=}")
             argsdict.update(full_args[key])
 
     except FileNotFoundError:
