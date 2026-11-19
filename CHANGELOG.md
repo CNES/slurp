@@ -7,7 +7,7 @@ A new section Unreleased is opened then for next dev phase.
 
 ## 0.2
 ### Changed
-	- Waterbodies categorization is now made at the end of watermask computation (#90)
+	- Waterbodies categorization is now made at the end of watermask computation (#90).
 ### Fixed
 	- fix #83 : stackmask will process water bodies categorization before other steps of post-process.
 	- fix #94 : compatible Python 3.12 / scikit-image 0.26 : update some calls to scikit-image morphological operations
