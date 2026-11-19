@@ -1656,6 +1656,8 @@ def slurp_watermask(
                     im_classif,
                     vars(args),
                 )
+                # Affect NODATA in the final categorized mask
+                categorized[valid_stack[0][0] != 0] = NODATA_INT8
 
                 slurp_manager.write_tif(
                     data=categorized,
